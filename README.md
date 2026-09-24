@@ -1,1 +1,1 @@
-# graduate-lifecycle-audit-system
+# InnoGrad
