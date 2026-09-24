@@ -1,0 +1,17 @@
+# Local agent tooling and project configuration
+/.serena/
+
+# Environment files; keep example templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# OS, editor, log, and temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.log
+*.tmp
