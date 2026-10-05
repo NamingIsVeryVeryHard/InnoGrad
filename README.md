@@ -87,6 +87,6 @@ InnoGrad/
 
 欢迎通过 [Issues](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues) 提供培养业务场景、需求建议和文档反馈。提交前请查看已有讨论，说明具体使用情境、遇到的问题和预期结果。
 
-任务进展见[项目看板](https://github.com/orgs/NamingIsVeryVeryHard/projects/1)（需访问权限）。
+任务进展见[项目看板](https://github.com/orgs/NamingIsVeryVeryHard/projects/1)。
 
 文档或代码修改可通过 Pull Request 提交，并关联相关 Issue、说明验证结果。详细约定见[协作流程](docs/mgmt/project_workflow.md)。涉及学生材料的示例请先脱敏。
