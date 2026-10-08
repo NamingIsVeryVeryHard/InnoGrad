@@ -77,12 +77,15 @@ flowchart LR
 | [产品范围](docs/requirements/product_scope.md) | 各业务领域的功能、边界及验证要求 |
 | [平台基础与建设边界](docs/software/platform_reuse.md) | Inno-Agent 的可复用能力与需要建设的业务能力 |
 | [协作流程](docs/mgmt/project_workflow.md) | 任务管理、需求反馈、缺陷记录和评审约定 |
+| [团队 Skills 与 GitHub Projects](.agents/README.md) | 共享 skills、成员授权与项目操作约定 |
+| [贡献指南](CONTRIBUTING.md) | 从认领任务到提交 PR 的参与步骤 |
 
 ## 仓库结构
 
 ```text
 InnoGrad/
 ├── README.md
+├── CONTRIBUTING.md       # 贡献指南
 ├── AGENTS.md             # 仓库协作约定
 ├── apps/
 │   ├── web/              # 多角色 Web 应用
@@ -107,6 +110,8 @@ InnoGrad/
 应用、算法、复盘、测试和持续集成目录目前为预留结构。审核、档案、画像和规则等业务按模块组织，具体实现随需求设计补充。
 
 ## 参与贡献
+
+首次参与请阅读[贡献指南](CONTRIBUTING.md)，了解任务认领、团队 skills、权限与 PR 评审流程。
 
 欢迎通过 [Issues](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues) 提供培养业务场景、需求建议和文档反馈。提交前请查看已有讨论，说明具体使用情境、遇到的问题和预期结果。
 

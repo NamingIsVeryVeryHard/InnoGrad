@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "repository": "https://github.com/addyosmani/agent-skills",
+      "revision": "1401c8b8030e023baeebb31781a6653fe8e93026",
+      "license": "MIT",
+      "attribution": "Copyright (c) 2025 Addy Osmani",
+      "modified": false,
+      "files": [
+        {
+          "path": ".agents/skills/spec-driven-development/SKILL.md",
+          "sourcePath": "skills/spec-driven-development/SKILL.md",
+          "sha256": "c4b97ce3d7f24be0e67fd612c7595f65504872e3a9f8d338d098b2363fdb66ef"
+        },
+        {
+          "path": ".agents/skills/planning-and-task-breakdown/SKILL.md",
+          "sourcePath": "skills/planning-and-task-breakdown/SKILL.md",
+          "sha256": "ed0f90cc5951ddd4bcab7f871f64efec93a49af9279ef93bc470da77ad8da3f7"
+        },
+        {
+          "path": ".agents/skills/documentation-and-adrs/SKILL.md",
+          "sourcePath": "skills/documentation-and-adrs/SKILL.md",
+          "sha256": "359b22460045583b0233ec3f80223459c4096b0fa513f5c29ade9c3985207d65"
+        },
+        {
+          "path": ".agents/skills/git-workflow-and-versioning/SKILL.md",
+          "sourcePath": "skills/git-workflow-and-versioning/SKILL.md",
+          "sha256": "b7465d187935c52546d39fdc7bd6ac36d94eda25a9500ef8c18b767d2eb116ea"
+        },
+        {
+          "path": ".agents/skills/code-review-and-quality/SKILL.md",
+          "sourcePath": "skills/code-review-and-quality/SKILL.md",
+          "sha256": "2db1e850379f255fd3091ef278cde24cd6c7d2ba23e360cc52ea522c40d4396e"
+        },
+        {
+          "path": ".agents/skills/incremental-implementation/SKILL.md",
+          "sourcePath": "skills/incremental-implementation/SKILL.md",
+          "sha256": "df66536610071727feae1ca95f3c391c248ad828041750ccd3699cce763aa00b"
+        },
+        {
+          "path": ".agents/skills/test-driven-development/SKILL.md",
+          "sourcePath": "skills/test-driven-development/SKILL.md",
+          "sha256": "7c0c6ac057c19d7f8be65d9f49c3a638703b868f4625c78b70da5439d5d74fca"
+        },
+        {
+          "path": ".agents/skills/context-engineering/SKILL.md",
+          "sourcePath": "skills/context-engineering/SKILL.md",
+          "sha256": "8b736cb9e55b82b265ab6ff78349c0e826e8a6df550deddf665b7fb3ff858b63"
+        },
+        {
+          "path": ".agents/references/definition-of-done.md",
+          "sourcePath": "references/definition-of-done.md",
+          "sha256": "d1c75d2ae65d2c7a9cd01f93fa8de63e00e75f2fe5d08be224d576157054dcee"
+        },
+        {
+          "path": ".agents/references/testing-patterns.md",
+          "sourcePath": "references/testing-patterns.md",
+          "sha256": "f0bf05acd0edcadc27297ad5b74f104c8103ccfedba1a05cd6d6ae4af8364c56"
+        },
+        {
+          "path": ".agents/references/security-checklist.md",
+          "sourcePath": "references/security-checklist.md",
+          "sha256": "37774056502fe8970dcd2fd27dca5fa31f2a55232649fc3056c89c3af7d62755"
+        },
+        {
+          "path": ".agents/references/performance-checklist.md",
+          "sourcePath": "references/performance-checklist.md",
+          "sha256": "40f564d1e62341e277c01ba42c42d95264b9ef3b8e5a23249dc6e121a7e70067"
+        },
+        {
+          "path": ".agents/licenses/addyosmani-agent-skills-LICENSE",
+          "sourcePath": "LICENSE",
+          "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/trailofbits/skills",
+      "revision": "82fe8226252622fa807643bdca1710901198553a",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Trail of Bits, gh-cli skill",
+      "modified": false,
+      "files": [
+        {
+          "path": ".agents/skills/gh-cli/SKILL.md",
+          "sourcePath": "plugins/gh-cli/skills/gh-cli/SKILL.md",
+          "sha256": "3810c9ff56ae9a26f4c6c1e0d058a946cd97e800441630208007a0983b9cfc49"
+        },
+        {
+          "path": ".agents/skills/gh-cli/agents/openai.yaml",
+          "sourcePath": "plugins/gh-cli/skills/gh-cli/agents/openai.yaml",
+          "sha256": "e54fa71494218daa4b9dd532cd89978b539604071ae725f8ba2b32bd51788860"
+        },
+        {
+          "path": ".agents/skills/gh-cli/assets/trail-of-bits-mark.svg",
+          "sourcePath": "plugins/gh-cli/skills/gh-cli/assets/trail-of-bits-mark.svg",
+          "sha256": "4bf74c789b38dcf6ad762c136b6832363d27ae19fbaa9a18ec18d66ecce6ca05"
+        },
+        {
+          "path": ".agents/licenses/trailofbits-skills-LICENSE",
+          "sourcePath": "LICENSE",
+          "sha256": "7abe19ec9bb73b36141b999b861d24ad855e808bafe0f81e84cce28556f6c297"
+        }
+      ]
+    }
+  ]
+}
