@@ -34,7 +34,7 @@
 
 ### 交付文件与顺序
 
-下表文档已形成草案，尚待业务评审。五项任务已加入 GitHub Issues 与 Project；任务卡包含做法、验收标准、验证方法、依赖和适用 skill。前四项处于“待评审”，评审并提交仓库的任务处于“进行中”，已开展本地一致性与链接检查。草案集中维护在[第二周交付分支](https://github.com/NamingIsVeryVeryHard/InnoGrad/tree/codex/week2-requirements)，评审与修订沿用对应 Issue，任务状态以 Project 为准。
+下表文档已形成草案，尚待业务评审。五项任务已加入 GitHub Issues 与 Project；任务卡包含做法、验收标准、验证方法、依赖和适用 skill。前四项处于“待评审”，评审并提交仓库的任务处于“进行中”，已开展本地一致性与链接检查。草案集中维护在[第二周交付分支](https://github.com/NamingIsVeryVeryHard/InnoGrad/tree/docs/week2-requirements)，评审与修订沿用对应 Issue，任务状态以 Project 为准。
 
 | 任务 | 交付文件 | 前置条件 | 验收标准 |
 | --- | --- | --- | --- |
