@@ -58,6 +58,8 @@
 
 Skills 提供操作指引；执行 GitHub 操作仍需要可用的 `gh`、账号授权和相应资源权限。这里共享的是 skill 文件，未安装 Trail of Bits 的 Claude Code hooks。
 
+`gh-cli` 正文中的 `plugins/gh-cli/README.md` 与 `plugins/gh-cli/hooks/` 指向上游目录。查看实现时使用固定版本的[插件说明](https://github.com/trailofbits/skills/blob/82fe8226252622fa807643bdca1710901198553a/plugins/gh-cli/README.md)与[hooks 目录](https://github.com/trailofbits/skills/tree/82fe8226252622fa807643bdca1710901198553a/plugins/gh-cli/hooks)。
+
 ## GitHub Projects 操作约定
 
 - 仓库：[`NamingIsVeryVeryHard/InnoGrad`](https://github.com/NamingIsVeryVeryHard/InnoGrad)。

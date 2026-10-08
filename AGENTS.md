@@ -15,6 +15,7 @@
 - 团队共享 skills、来源版本与 GitHub 授权说明见 [.agents/README.md](.agents/README.md)。
 - 按任务使用 `.agents/skills/` 中的现成 skill，只加载相关文档与引用文件。仓库约定与用户授权优先于 skill 中的通用示例。
 - 上游正文中的 `skills/<name>/SKILL.md` 路径在本仓库对应 `.agents/skills/<name>/SKILL.md`；其余相对文件引用以该 `SKILL.md` 所在目录解析。
+- `gh-cli` 中的 `plugins/gh-cli/` 路径属于上游仓库，按团队 Skills 说明中的固定版本链接查看。
 - 需求与文档使用 `spec-driven-development`、`planning-and-task-breakdown`、`documentation-and-adrs`；提交与评审使用 `git-workflow-and-versioning`、`code-review-and-quality`。
 - GitHub 内容优先通过 `gh-cli` 使用已认证的 `gh` 读取与管理。操作前确认仓库、Project、字段及现有任务，避免重复创建。
 - 任务状态以 Issues 和 Project 为准，交付安排沿用 `tasks/plan.md`；不要另建重复的任务清单或需求入口。
@@ -28,6 +29,7 @@
 ## 修改约定
 
 - 修改前阅读相关文件，检查工作区状态，保留其他人的改动。
+- 错误恢复前核对 Git 状态与任务基线，只恢复当前任务拥有的文件。上游 `git reset --hard HEAD` 等示例不构成执行授权；清理、重置或覆盖未提交内容须获得明确授权。
 - 验证需要临时改写源文件时，在独立、干净的工作区准备待评审版本并记录基线。恢复前确认文件只含本次验证的改动；发现并发改动时停止并保留现场。
 - 只处理当前任务，不顺带重构或增加无关功能。
 - 简单、可逆的修改直接推进；涉及产品范围、重大技术选型或破坏性操作时先确认。
