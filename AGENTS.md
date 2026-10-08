@@ -9,6 +9,14 @@
 - 协作流程：docs/mgmt/project_workflow.md。
 - 按任务需要阅读相关文档，避免重复创建已有说明或计划。
 
+## 团队 Skills
+
+- 团队共享 skills、来源版本与 GitHub 授权说明见 [.agents/README.md](.agents/README.md)。
+- 按任务使用 `.agents/skills/` 中的现成 skill，只加载相关文档与引用文件。仓库约定与用户授权优先于 skill 中的通用示例。
+- 需求与文档使用 `spec-driven-development`、`planning-and-task-breakdown`、`documentation-and-adrs`；提交与评审使用 `git-workflow-and-versioning`、`code-review-and-quality`。
+- GitHub 内容优先通过 `gh-cli` 使用已认证的 `gh` 读取与管理。操作前确认仓库、Project、字段及现有任务，避免重复创建。
+- 任务状态以 Issues 和 Project 为准，交付安排沿用 `tasks/plan.md`；不要另建重复的任务清单或需求入口。
+
 ## 应用职责
 
 - `apps/web/` 承载学生、导师、专家和学院管理人员的界面。

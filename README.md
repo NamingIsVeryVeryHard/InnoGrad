@@ -77,6 +77,7 @@ flowchart LR
 | [产品范围](docs/requirements/product_scope.md) | 各业务领域的功能、边界及验证要求 |
 | [平台基础与建设边界](docs/software/platform_reuse.md) | Inno-Agent 的可复用能力与需要建设的业务能力 |
 | [协作流程](docs/mgmt/project_workflow.md) | 任务管理、需求反馈、缺陷记录和评审约定 |
+| [团队 Skills 与 GitHub Projects](.agents/README.md) | 共享 skills、成员授权与项目操作约定 |
 
 ## 仓库结构
 
