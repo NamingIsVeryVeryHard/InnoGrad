@@ -3,6 +3,7 @@
 ## 项目入口
 
 - 项目概况与当前状态：README.md。
+- 合作者参与步骤：[CONTRIBUTING.md](CONTRIBUTING.md)。
 - 问题定义：docs/requirements/problem_definition.md。
 - 功能范围：docs/requirements/product_scope.md。
 - 应用职责与平台边界：docs/software/platform_reuse.md。

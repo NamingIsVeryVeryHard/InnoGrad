@@ -4,6 +4,8 @@
 
 正式文档保存在仓库中，通过 README 导航。Issues 记录任务和讨论，Project 展示任务进展。
 
+首次参与请阅读[贡献指南](../../CONTRIBUTING.md)，了解任务认领、交付和 PR 评审步骤。
+
 使用 Codex 参与协作时，按[团队 Skills 与 GitHub Projects](../../.agents/README.md)配置个人 GitHub 授权。共享 skills 随仓库同步，成员权限分别管理。
 
 ## 任务管理
@@ -14,15 +16,19 @@
 
 ## 项目看板
 
-以下三个主要视图共享同一组 Issues 和任务状态。Project 公开可读，编辑与管理需要相应权限。
+以下视图共享同一组 Issues 和任务状态。Project 公开可读，编辑与管理需要相应权限。视图与状态使用中文名称，字段保留英文。
 
 | 视图 | 布局与筛选 | 用法 |
 | --- | --- | --- |
-| Kanban | Board，按 Status 分列 | 使用 Backlog、Ready、In progress、In review、Done 跟踪任务进展 |
-| Team planning | Table，按 Status 分组、按 Assignees 筛选，显示负责人、状态和标签 | 查看各成员的工作与任务状态 |
-| Bug tracker | Table，筛选 `label:bug`，显示状态与负责人 | 跟踪真实发现的缺陷；没有缺陷时保持为空 |
+| 项目看板 | Board，按 Status 分列 | 查看全部任务，从待规划到已完成跟踪进展 |
+| 迭代计划 | Table，按 Status 分组、按 Assignees 切片 | 查看任务负责人、迭代、优先级、故事点和里程碑 |
+| 当前迭代 | Board，筛选 `Sprint:@current` | 查看本周任务 |
+| 缺陷跟踪 | Table，筛选 `label:bug` | 跟踪真实发现的缺陷；没有缺陷时保持为空 |
+| 优先级看板 | Board，按 Priority 分列 | 按 P0、P1、P2 查看任务 |
+| 路线图 | Roadmap，使用 Sprint 的起止日期 | 查看各任务所属迭代的排期 |
+| 我的任务 | Table，筛选 `assignee:@me` | 查看分配给当前用户的任务 |
 
-将需要跟踪的 Issues 加入 Project，按实际进展更新状态。任务开始时设为 In progress，提交评审时设为 In review，通过验收后设为 Done；真实缺陷使用 `bug` 标签。
+将需要跟踪的 Issues 加入 Project，按实际进展更新状态。待讨论的任务放入“待规划”，验收条件与前置条件明确并选入 Sprint 后设为“待开始”；任务开始时设为“进行中”，提交评审时设为“待评审”，通过验收后设为“已完成”。真实缺陷使用 `bug` 标签。
 
 ## Issue 与反馈的处理
 
