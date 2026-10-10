@@ -4,6 +4,10 @@
 
 正式文档保存在仓库中，通过 README 导航。Issues 记录任务和讨论，Project 展示任务进展。
 
+首次参与请阅读[贡献指南](../../CONTRIBUTING.md)，了解任务认领、交付和 PR 评审步骤。
+
+使用 Codex 参与协作时，按[团队 Skills 与 GitHub Projects](../../.agents/README.md)配置个人 GitHub 授权。共享 skills 随仓库同步，成员权限分别管理。
+
 ## 任务管理
 
 每项任务使用一个 Issue，说明目标、交付内容、验收方式和前置条件，并链接相关文档或产品范围编号。创建前先查看已有任务，避免重复。
