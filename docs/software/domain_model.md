@@ -121,7 +121,7 @@ classDiagram
     class RuleVersion {
         Id ruleVersionId
         Text versionNo
-        Text sourceRefs
+        Text sourceDescription
         Text applicability
         DateTime effectiveFrom
         DateTime effectiveUntil
@@ -204,6 +204,7 @@ classDiagram
         Id responseId
         Text explanation
         Text source
+        Status status
         Id respondedBy
         DateTime respondedAt
     }
@@ -221,7 +222,8 @@ classDiagram
     NodeSchedule "0..*" --> "1..*" RuleVersion : 可适用规则
     RuleSet "1" *-- "1..*" RuleVersion : 规则版本
     RuleVersion "1" *-- "0..*" RuleItem : 检查项与量表
-    StudentRecord "1" -- "0..*" Material : 拥有资料
+    RuleVersion "0..*" --> "0..*" MaterialVersion : 制度来源版本
+    StudentRecord "0..1" -- "0..*" Material : 学生资料归属
     Material "1" *-- "1..*" MaterialVersion : 材料版本
     MaterialVersion "1" -- "0..*" EvidenceRef : 定位证据
     SubmissionPackage "0..*" --> "1..*" MaterialVersion : 固定使用版本
@@ -239,7 +241,7 @@ classDiagram
     HumanReview "0..*" --> "0..*" EvidenceRef : 人工依据
     HumanReview "1" -- "0..*" RevisionRequest : 提出整改
     RevisionRequest "1" -- "0..*" RevisionResponse : 逐项回复
-    RevisionResponse "0..*" --> "1" SubmissionPackage : 关联补交包
+    RevisionResponse "0..*" --> "0..1" SubmissionPackage : 正式回复关联补交包
     AuditTask "1" -- "0..*" FormalDecision : 正式结果与更正版本
     FormalDecision "0..*" --> "1" AuditRound : 确认对应轮次
     AuditTask "0..*" --> "0..1" AuditTask : 重新办理的原任务
@@ -251,19 +253,21 @@ classDiagram
 | --- | --- | --- |
 | `NodeType` | 招生、年度报告、资格、开题、中期、预答辩或论文形式审查等节点定义 | FR-3.1 至 FR-3.7 |
 | `NodeSchedule` | 对特定人群生效的节点要求、材料清单和截止安排；确定时区及适用期间 | FR-2.3、FR-11.3 |
-| `RuleSet`、`RuleVersion` | 制度或评价依据及其版本；来源可关联制度原件，记录适用对象、时间和发布状态 | FR-2.1、FR-2.2、FR-1.4 |
+| `RuleSet`、`RuleVersion` | 制度或评价依据及其版本；通过关系固定制度原件的 `MaterialVersion`，`sourceDescription` 仅作来源说明，记录适用对象、时间和发布状态 | FR-2.1、FR-2.2、FR-1.4 |
 | `RuleItem` | 具体检查项，区分确定规则与专业判断；条件、所需证据和阈值或量表必须有依据 | FR-2.1、FR-3、FR-5.3 |
-| `Material`、`MaterialVersion` | 学生或申请资料及历次原件；来源含原始提供者与接收依据，`submittedBy` 为实际系统操作者，另保存接收时间、内容校验信息及解析状态 | FR-4.1、FR-4.2 |
+| `Material`、`MaterialVersion` | 学生或申请资料、培养制度及历次原件；学生资料须关联所属档案，制度原件可不关联学生，按培养单位授权范围管理。来源含原始提供者与接收依据，`submittedBy` 为实际系统操作者，另保存接收时间、内容校验信息及解析状态 | FR-4.1、FR-4.2、FR-2.1、FR-1.4 |
 | `EvidenceRef` | 指向确定材料版本的证据位置，说明原文、OCR 或人工补充、观察期间及核实状态 | FR-4.2、FR-1.4、FR-7.2 |
 | `SubmissionPackage` | 一次正式提交或补交使用的材料版本集合，保存回执与可后补缺项；`submittedBy` 保存实际提交人，代办需核验对应授权 | FR-4.3、FR-5.6 |
 | `AuditTask` | 某人在某节点或活动中的审核办理单元，记录目的、状态、并发版本及撤销理由；可关联原任务以重新办理 | FR-5.1、FR-5.8、FR-6.4 |
 | `AuditRound` | 一次固定材料包与规则依据的检查和复核过程；提交、补交或更换依据时形成新轮次 | FR-4.3、FR-5.3、FR-5.7 |
 | `AIFinding` | 一条辅助判断，保留对应规则项、执行来源、覆盖范围、依据和不确定性；缺证据可无引用 | FR-5.3、FR-10.3 |
 | `HumanReview` | 人工复核判断，记录作者、时间、理由、证据与发布状态；可以修正 AI，也可在转人工后独立形成 | FR-5.5、FR-5.7 |
-| `RevisionRequest`、`RevisionResponse` | 人工整改项与补交回复；`source` 保留原始反馈人和来源，`respondedBy` 为实际系统记录人。正式回复关联新材料包，未正式提交的回复仍为草稿，问题关闭须经过复核 | FR-5.6、FR-5.7 |
+| `RevisionRequest`、`RevisionResponse` | 人工整改项与补交回复；`source` 保留原始反馈人和来源，`respondedBy` 为实际系统记录人。`status` 区分草稿与正式回复，草稿可无材料包，正式回复必须关联一个新材料包，问题关闭须经过复核 | FR-5.6、FR-5.7 |
 | `FormalDecision` | 经授权人员确认的正式结果；记录确认人、理由、轮次及效力与发布状态，更正版本关联前一结果 | FR-5.8、FR-6.3、FR-6.4 |
 
 **多重性说明：** 未提交任务可以没有轮次；每个轮次固定一个材料包。正式提交或补交形成新材料包与轮次，仅更换规则时新轮次可继续使用原材料包。培养节点任务关联一个节点安排，其他活动任务可不关联节点而在第 4 图中关联机会。轮次使用一组固定规则版本，规则项分属于具体版本；规则草稿可尚无检查项，发布前须至少有一项完整、经核对的检查或评价项。预审意见可没有正式轮次，但必须关联预审执行、规则和材料版本；初审执行可有多次重试，只有核验可用结果成为有效意见，执行关系见第 5 图。一个任务可以保留多份历次正式结论，但同一结论序列只允许一份当前有效结果。
+
+规则草稿可暂未关联来源原件；由上传制度形成的规则版本，在发布前必须关联实际使用的制度原件版本。一个规则版本可依据多份制度，同一制度原件版本也可供多个规则版本引用。制度原件更新不得替换旧规则版本的来源关联。补交草稿可以没有材料包；正式回复必须关联一个已接受的补交包，保存草稿不创建正式轮次或表示整改完成。
 
 ## 3. 培养档案、成长画像与指导
 
@@ -386,6 +390,8 @@ classDiagram
     Achievement "0..*" --> "0..*" EvidenceRef : 成果证明
     StudentRecord "1" -- "0..*" FormalDecision : 节点与活动结果
     PlanItem "0..*" --> "0..*" FormalDecision : 完成依据
+    PlanItem "0..*" --> "0..*" CourseRecord : 课程完成依据
+    PlanItem "0..*" --> "0..*" Achievement : 成果完成依据
     StudentRecord "1" -- "0..*" ProfileSnapshot : 历次画像
     ProfileSnapshot "1" *-- "0..*" CapabilityAssessment : 能力评价项
     ProfileSnapshot "0..*" --> "0..*" Achievement : 成果账本来源
@@ -420,6 +426,8 @@ classDiagram
 | `CorrectionRequest` | 对业务记录的质疑、证明、核实责任与处理结果；代录外部请求保留原提供者与来源，`submittedBy` 为实际记录人；目标可关联课程、材料或正式结论等对象 | FR-4.2、FR-6.4 |
 
 **多重性说明：** 学生可保留多版计划与画像，但同一适用期间的当前版本必须可识别。尚未完成评价的画像可没有能力项；已作能力判断的项需有认可口径与可定位证据，缺证据时只保留待评价状态。成绩或成果没有证明可暂为待核实。一次反馈可以不导致修正；修正后仍保留原画像。更正请求对不同目标类型采用统一关联，正式结论更正另需确认授权。
+
+计划条目未完成或待核实时可以没有完成依据。标为已完成时，须按该条目的要求关联同一学生的已核实课程、已核实成果或当前有效正式结论；三类依据不必同时具备。一条要求可由多项记录共同满足，同一记录也可在规则允许时支持多条要求；待核实记录或未满足要求的记录不能据此标记完成。
 
 ## 4. 机会、评选、匹配与帮扶
 
@@ -663,7 +671,10 @@ classDiagram
 | 检查场景 | 模型应支持的记录与关系 |
 | --- | --- |
 | 学生提交年度报告、管理端复核与归档 | 同一 `AuditTask` 保存历次 `AuditRound`，每轮有固定 `SubmissionPackage` 与规则，回复指向补交包；代办另保留来源与实际记录人，正式结果关联当前轮次和人工复核 |
+| 保存不完整补交后正式提交 | 草稿 `RevisionResponse` 关联原整改项，可无 `SubmissionPackage`；接受正式补交后关联一个新材料包并创建新轮次，问题仍须复核后关闭 |
 | 规则发布后继续旧任务 | 新旧 `RuleVersion` 同时保留，旧轮次仍引用原版；改用新版须形成新轮次并记录原因 |
+| 制度原件更新后查看旧规则来源 | 旧 `RuleVersion` 仍关联原制度的 `MaterialVersion`；新原件不替换旧关联，来源不可访问时明确提示原因 |
+| 用课程或成果满足培养计划 | `PlanItem` 关联符合要求的已核实 `CourseRecord` 或 `Achievement`，可继续定位证明；没有节点结论也能记录课程或成果完成，未核实或不满足要求时保持待核实或待完成 |
 | AI 失败转人工 | 失败 `AgentJob` 和核验结果可保留；轮次可以没有有效 `AIFinding`，但仍可保存真实人工依据和授权结论 |
 | 更正原结论与画像 | `CorrectionRequest` 记录原因及核实，`FormalDecision` 与 `ProfileSnapshot` 保留更正链，来源版本明确，下游显示待更新 |
 | 材料跨节点使用与版本更新 | 同一 `MaterialVersion` 可被多个材料包引用，新版不改变旧包；各证据始终定位原版 |

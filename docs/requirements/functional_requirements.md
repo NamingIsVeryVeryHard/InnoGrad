@@ -609,7 +609,7 @@
 - **输出：** 学期进度视图、缺项和待办，能打开对应规则和本人依据。
 - **异常：** 档案或计划缺失时提示待补充；不因数据缺失显示为已失败；计划变更标明版本。
 - **验收场景：** 给定一门课程已核实、一个开题任务仅完成初审，课程显示已完成，开题仍显示待复核而非已通过。
-- **领域对象：** `TrainingPlan`、`PlanItem`、`CourseRecord`、`FormalDecision`、`Reminder`。
+- **领域对象：** `TrainingPlan`、`PlanItem`、`CourseRecord`、`Achievement`、`FormalDecision`、`Reminder`。
 
 ### FR-11.3 查看节点提醒与待办
 
