@@ -34,7 +34,7 @@ export function extractionSchema(rules) {
       field: choice(rules.fields.map(f => f.id)),
       value: { oneOf: [{ type: 'string', minLength: 1 }, { type: 'number', minimum: 0 }] },
       qualifier: choice(['exact', 'lower_bound', 'approximate']),
-      numeric_token: nullableText, evidence,
+      numeric_token: {type:['string','null'],pattern:"^(?:[0-9０-９]+(?:[,，][0-9０-９]{3})*(?:[.．][0-9０-９]+)?|[零〇一二两三四五六七八九十百千万]+)$"}, evidence,
     })),
     items: array(object({
       item_id: text, kind: choice(rules.item_kinds), title: text,

@@ -35,6 +35,8 @@ node scripts/cli.mjs build --bundle local-runs/input/bundle.json --extraction lo
 node scripts/cli.mjs demo --out local-runs/synthetic
 ~~~
 
+若调用服务已提供包含 configuration、schema、bundle 的完整阶段任务包，Agent 直接用这些数据完成该阶段并只返回 JSON：不再读文件、不调用工具、不运行 npm 或脚本。准备、校验与构建由调用服务负责。未提供完整任务包的离线流程仍按上述命令准备、读取必要 references 并执行脚本。
+
 装载后的 Agent 不应调用 workflow 再递归调用平台；它直接执行抽取与评价。业务服务通过 scripts/workflow.mjs 的 runPortraitWorkflow 调用 InnoAgent，每个学生使用新建的独立工作区和 session，并强制 /skill:graduate-portrait。外部服务也可执行 `node scripts/cli.mjs workflow --bundle <明确路径> --out <明确路径>`。
 
 build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 仅由 remote 真实请求记录；本地 build 不接受该模式。重放只表示本次离线运行，不能伪称新模型调用；合成、整理及重放模式的 model 必须为空。合成 demo 明确标为 synthetic/offline_replay。

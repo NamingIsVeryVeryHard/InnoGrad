@@ -5,6 +5,11 @@ const ajv = new Ajv({ strict: true, allErrors: true });
 const compiled = new Map();
 export const compact = value => value.normalize('NFKC').replace(/\s+/gu, '');
 const fail = message => { throw new Error(message); };
+function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
+export function repairFeedback(error){
+  const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE'}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
+  return '本地校验错误（仅路径与类别）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
+}
 
 export function validateShape(schema, data, label) {
   const key = JSON.stringify(schema);
@@ -15,7 +20,8 @@ export function validateShape(schema, data, label) {
   const validate = compiled.get(key);
   if (!validate(data)) {
     // Paths and error categories suffice; source data and provider responses stay out of logs.
-    fail(label + ': ' + validate.errors.map(e => e.instancePath + ' ' + e.keyword).join('; '));
+    const error=new Error(label + ': ' + validate.errors.map(e => e.instancePath + ' ' + e.keyword).join('; '));
+    error.validation_issues=validate.errors.map(e=>({path:e.instancePath,category:'SCHEMA_'+e.keyword.toUpperCase()}));throw error;
   }
 }
 
@@ -78,7 +84,8 @@ export function validateExtraction(bundle, extraction, rules) {
   sameScope(bundle, extraction);
   unique(extraction.items.map(i => i.item_id), 'item_id');
   unique(extraction.coverage.map(c => c.kind), 'coverage');
-  for (const fact of extraction.facts) {
+  for (const [factIndex,fact] of extraction.facts.entries()) {
+    atPath('/facts/'+factIndex,()=>{
     const field = rules.fields.find(f => f.id === fact.field);
     if (typeof fact.value !== field.type) fail('fact value type mismatch: ' + field.id);
     validateEvidence(bundle, fact.evidence);
@@ -105,16 +112,19 @@ export function validateExtraction(bundle, extraction, rules) {
     } else if (fact.numeric_token !== null || fact.qualifier !== 'exact') {
       fail('text facts must use exact qualifier and no numeric token');
     }
+    });
   }
-  for (const item of extraction.items) {
+  for (const [itemIndex,item] of extraction.items.entries()) {
+    atPath('/items/'+itemIndex,()=>{
     validateEvidence(bundle, item.evidence);
     if (bundle.period === null && item.period_status === 'in_scope') fail('period unconfirmed: cannot claim in-scope item');
     if (item.kind === 'paper' && !['planned', 'in_progress', 'under_review', 'accepted', 'published', 'unknown'].includes(item.status)) {
       fail('paper requires a publication status');
     }
     if (item.kind !== 'paper' && ['under_review', 'accepted', 'published'].includes(item.status)) fail('invalid non-paper status');
+    });
   }
-  for (const coverage of extraction.coverage) validateEvidence(bundle, coverage.evidence, coverage.status === 'complete');
+  for (const [coverageIndex,coverage] of extraction.coverage.entries()) atPath('/coverage/'+coverageIndex,()=>validateEvidence(bundle, coverage.evidence, coverage.status === 'complete'));
   return extraction;
 }
 
