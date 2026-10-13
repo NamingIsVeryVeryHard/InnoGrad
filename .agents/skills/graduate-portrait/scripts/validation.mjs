@@ -25,8 +25,9 @@ export function validateShape(schema, data, label) {
   }
 }
 
-export function unique(values, label) {
-  if (new Set(values).size !== values.length) fail(label + ': duplicate identifier');
+export function unique(values, label, pointer) {
+  const seen=new Set();
+  for(const [index,value]of values.entries()){if(seen.has(value)){const error=new Error(label+': duplicate identifier');if(pointer)error.validation_issues=[{path:pointer(index),category:'DUPLICATE_IDENTIFIER'}];throw error;}seen.add(value);}
 }
 
 function sameScope(bundle, input) {
@@ -83,7 +84,7 @@ export function validateExtraction(bundle, extraction, rules) {
   validateShape(extractionSchema(rules), extraction, 'extraction');
   sameScope(bundle, extraction);
   unique(extraction.items.map(i => i.item_id), 'item_id');
-  unique(extraction.coverage.map(c => c.kind), 'coverage');
+  unique(extraction.coverage.map(c => c.kind), 'coverage', index=>'/coverage/'+index+'/kind');
   for (const [factIndex,fact] of extraction.facts.entries()) {
     atPath('/facts/'+factIndex,()=>{
     const field = rules.fields.find(f => f.id === fact.field);
