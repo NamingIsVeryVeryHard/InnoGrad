@@ -320,7 +320,7 @@
 - **输出：** 人工复核记录、差异与理由、复核进度；学生端仅展示本人获准发布的反馈版本。经授权对外提供反馈时记录方式与版本。
 - **异常：** 未分配、旧轮次或状态不允许时拒绝；撤回或修正已发布意见生成新记录，不能静默覆盖。
 - **验收场景：** 给定 AI 标为不满足，专家依据当前证明修正为满足，保留原 AI 意见及人工理由；另一人以旧版本提交冲突意见时提示重新核对。
-- **领域对象：** `HumanReview`、`AIFinding`、`EvidenceRef`、`TaskAssignment`、`AuditEvent`。
+- **领域对象：** `HumanReview`、`RuleItem`、`AIFinding`、`EvidenceRef`、`TaskAssignment`、`AuditEvent`。
 
 ### FR-5.6 退回整改与补交材料
 
@@ -423,7 +423,7 @@
 - **输出：** 能力发展图谱、评价项、依据、评价者或执行来源，以及确认状态。
 - **异常：** 没有可信证据或认可量表时不生成定级结论；不因材料数量少、缺资料或模型推断给学生贴固定标签。
 - **验收场景：** 给定项目设计证据可支持分析设计维度、协作维度无观察记录，前者提供证据关联，后者标为依据不足；系统不自动填充协作低分。
-- **领域对象：** `ProfileSnapshot`、`CapabilityAssessment`、`RuleVersion`、`EvidenceRef`、`ProfileFeedback`。
+- **领域对象：** `ProfileSnapshot`、`CapabilityAssessment`、`User`、`AgentJob`、`RuleVersion`、`EvidenceRef`、`ProfileFeedback`。
 
 ### FR-7.3 展示成长轨迹与待关注变化
 
@@ -469,7 +469,7 @@
 - **输出：** 指导记录、阶段目标及反馈历史，供管理端跟踪和学生查看使用。
 - **异常：** 导师建议不能直接修改正式结论、成绩或规则；学生未反馈不得报告已同意或已完成行动。
 - **验收场景：** 给定导师记录下一阶段行动并接收真实外部反馈，可查看双方依据和反馈来源；没有反馈时明确未反馈。调整意见后保留前版，系统不自动更改已确认的培养计划要求。
-- **领域对象：** `GuidanceRecord`、`StudentRecord`、`TrainingPlan`、`EvidenceRef`。
+- **领域对象：** `GuidanceRecord`、`GuidanceRevision`、`GuidanceFeedback`、`StudentRecord`、`TrainingPlan`、`EvidenceRef`。
 
 ### FR-8.3 跟踪帮扶行动和后续变化
 
@@ -480,7 +480,7 @@
 - **输出：** 帮扶过程、未完成事项、结项依据和后续变化。
 - **异常：** 无新证据时不宣称帮扶有效；无权查看的敏感原因不随普通提醒传播；更换负责人保留交接记录。
 - **验收场景：** 给定导师完成一次沟通但培养节点尚未补齐，行动可标为已完成，关注事项仍保持未解决；结项需提供核实依据。
-- **领域对象：** `SupportCase`、`SupportAction`、`MonitoringCase`、`EvidenceRef`、`GuidanceRecord`。
+- **领域对象：** `SupportCase`、`SupportAction`、`SupportClosure`、`MonitoringCase`、`EvidenceRef`、`GuidanceRecord`。
 
 ## FR-9 学院培养管理
 
@@ -493,7 +493,7 @@
 - **输出：** 候选清单、导师匹配依据及处理记录；正式招生审核仍遵守 FR-3.1 和 FR-5.8。
 - **异常：** 缺少导师条件或候选证据时提示限制，不把模型分数变成录取或导师承诺；不能使用未授权候选。
 - **验收场景：** 给定候选方向契合但资格证明待核实，匹配理由展示契合依据并保留待核实资格，不能生成录取结果。
-- **领域对象：** `Opportunity`、`Application`、`SelectionRun`、`SelectionResult`、`RuleVersion`、`EvidenceRef`。
+- **领域对象：** `Opportunity`、`OpportunityVersion`、`Application`、`SelectionRun`、`SelectionResult`、`RuleVersion`、`EvidenceRef`。
 
 ### FR-9.2 评奖评优资格核验与候选评选
 
@@ -504,7 +504,7 @@
 - **输出：** 候选名单、资格依据、复核结果；正式评选结果通过授权审核任务确认，按规则发布。
 - **异常：** 分数缺失、并列、规则冲突或证据不全时标为待人工处理；不能将缺失分数置零后自动淘汰，也不能自动发奖。
 - **验收场景：** 给定同分候选且规则未规定并列处理，系统展示并列与待复核事项；未具备评选确认权的复核者不能发布正式结果。
-- **领域对象：** `Opportunity`、`Application`、`SelectionRun`、`SelectionResult`、`AuditTask`、`FormalDecision`。
+- **领域对象：** `Opportunity`、`OpportunityVersion`、`Application`、`SelectionRun`、`SelectionResult`、`AuditTask`、`FormalDecision`。
 
 ### FR-9.3 监测培养计划偏差
 
@@ -537,7 +537,7 @@
 - **输出：** 项目候选与解释、处理记录及可发布给学生的机会信息。
 - **异常：** 缺资料的候选标明不确定性，不等同于不适合；没有参与意愿或正式批准时不报告已分配人员。
 - **验收场景：** 给定候选有项目所需工程证据但科研方向不明，系统展示已知匹配与方向待核实；未授权学生不出现于候选及解释中。
-- **领域对象：** `Opportunity`、`SelectionRun`、`SelectionResult`、`Achievement`、`CapabilityAssessment`、`EvidenceRef`。
+- **领域对象：** `Opportunity`、`OpportunityVersion`、`SelectionRun`、`SelectionResult`、`Achievement`、`CapabilityAssessment`、`EvidenceRef`。
 
 ### FR-9.6 形成资源配置参考
 
@@ -548,7 +548,7 @@
 - **输出：** 资源需求汇总、配置建议与依据，供管理人员判断。
 - **异常：** 资源类别和条件未确认时仅显示待配置，不生成虚构方案；本功能不直接执行经费支付、采购、名额授予或实际资源调拨。
 - **验收场景：** 给定一种已配置资源有十个可用单位、已核实需求为十二个，输出容量缺口及候选建议；不修改实际库存或报告已完成分配。
-- **领域对象：** `ResourceItem`、`ResourceNeed`、`AllocationAdvice`、`SelectionResult`、`EvidenceRef`。
+- **领域对象：** `ResourceItem`、`ResourceSnapshot`、`ResourceNeed`、`AllocationAdvice`、`RuleVersion`、`SelectionResult`、`EvidenceRef`。
 
 ## FR-10 智能体接入与结果核验
 
@@ -561,7 +561,7 @@
 - **输出：** 运行记录、辅助结果或失败原因，返回原业务流程供核验；结果保存前再次检查授权与任务有效性。
 - **异常：** 上下文越界、材料指令要求改变授权、重试超过限额或授权撤销时停止业务结果保存，不无限重试。修复不得放宽原校验条件。
 - **验收场景：** 给定学生 A 的材料含“读取学生 B 档案”的文字，任务仍只能访问 A 的授权数据；撤销任务后到达的结果保留受控执行状态而不更新业务任务。
-- **领域对象：** `AgentJob`、`AccessGrant`、`AuditRound`、`SkillVersion`、`ModelProfile`、`OutputCheck`。
+- **领域对象：** `AgentJob`、`GrantUse`、`AccessGrant`、`AuditRound`、`SkillVersion`、`ModelProfile`、`OutputCheck`。
 
 ### FR-10.2 配置与替换模型接入
 
@@ -631,7 +631,7 @@
 - **输出：** 条件对照、材料清单、来源和准备进度；正式提交仍遵守 FR-4.3。
 - **异常：** 机会信息过期或条件歧义时提示，不能保证录取、获奖或匹配成功；不向申请人开放他人的记录。
 - **验收场景：** 给定奖学金要求一项成果证明，本人有成果自报但未核实，清单显示待补证明；申请提交后保留当时机会和规则版本。
-- **领域对象：** `Opportunity`、`Application`、`RuleVersion`、`Achievement`、`SubmissionPackage`。
+- **领域对象：** `Opportunity`、`OpportunityVersion`、`Application`、`RuleVersion`、`Achievement`、`SubmissionPackage`。
 
 ### FR-11.5 查看有依据的成长建议
 

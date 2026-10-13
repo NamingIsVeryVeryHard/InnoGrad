@@ -237,6 +237,7 @@ classDiagram
     RuleItem "1" -- "0..*" AIFinding : 对应检查项
     AIFinding "0..*" --> "0..*" EvidenceRef : 引用证据
     AuditRound "1" -- "0..*" HumanReview : 人工复核
+    HumanReview "0..*" --> "1" RuleItem : 所审规则项
     HumanReview "0..*" --> "0..*" AIFinding : 核对或修正
     HumanReview "0..*" --> "0..*" EvidenceRef : 人工依据
     HumanReview "1" -- "0..*" RevisionRequest : 提出整改
@@ -261,11 +262,11 @@ classDiagram
 | `AuditTask` | 某人在某节点或活动中的审核办理单元，记录目的、状态、并发版本及撤销理由；可关联原任务以重新办理 | FR-5.1、FR-5.8、FR-6.4 |
 | `AuditRound` | 一次固定材料包与规则依据的检查和复核过程；提交、补交或更换依据时形成新轮次 | FR-4.3、FR-5.3、FR-5.7 |
 | `AIFinding` | 一条辅助判断，保留对应规则项、执行来源、覆盖范围、依据和不确定性；缺证据可无引用 | FR-5.3、FR-10.3 |
-| `HumanReview` | 人工复核判断，记录作者、时间、理由、证据与发布状态；可以修正 AI，也可在转人工后独立形成 | FR-5.5、FR-5.7 |
+| `HumanReview` | 人工复核判断，必须关联所审规则项，并记录作者、时间、理由、证据与发布状态；可以修正 AI，也可在没有有效 AI 意见时独立形成 | FR-5.5、FR-5.7 |
 | `RevisionRequest`、`RevisionResponse` | 人工整改项与补交回复；`source` 保留原始反馈人和来源，`respondedBy` 为实际系统记录人。`status` 区分草稿与正式回复，草稿可无材料包，正式回复必须关联一个新材料包，问题关闭须经过复核 | FR-5.6、FR-5.7 |
 | `FormalDecision` | 经授权人员确认的正式结果；记录确认人、理由、轮次及效力与发布状态，更正版本关联前一结果 | FR-5.8、FR-6.3、FR-6.4 |
 
-**多重性说明：** 未提交任务可以没有轮次；每个轮次固定一个材料包。正式提交或补交形成新材料包与轮次，仅更换规则时新轮次可继续使用原材料包。培养节点任务关联一个节点安排，其他活动任务可不关联节点而在第 4 图中关联机会。轮次使用一组固定规则版本，规则项分属于具体版本；规则草稿可尚无检查项，发布前须至少有一项完整、经核对的检查或评价项。预审意见可没有正式轮次，但必须关联预审执行、规则和材料版本；初审执行可有多次重试，只有核验可用结果成为有效意见，执行关系见第 5 图。一个任务可以保留多份历次正式结论，但同一结论序列只允许一份当前有效结果。
+**多重性说明：** 未提交任务可以没有轮次；每个轮次固定一个材料包。正式提交或补交形成新材料包与轮次，仅更换规则时新轮次可继续使用原材料包。培养节点任务关联一个节点安排，其他活动任务可不关联节点而在第 4 图中关联机会。轮次使用一组固定规则版本，规则项分属于具体版本；规则草稿可尚无检查项，发布前须至少有一项完整、经核对的检查或评价项。预审意见可没有正式轮次，但必须关联预审执行、规则和材料版本；初审执行可有多次重试，只有核验可用结果成为有效意见，执行关系见第 5 图。每条人工复核关联恰好一个规则项；没有有效 AI 意见时，这条关联仍然保留。一个任务可以保留多份历次正式结论，但同一结论序列只允许一份当前有效结果。
 
 规则草稿可暂未关联来源原件；由上传制度形成的规则版本，在发布前必须关联实际使用的制度原件版本。一个规则版本可依据多份制度，同一制度原件版本也可供多个规则版本引用。制度原件更新不得替换旧规则版本的来源关联。补交草稿可以没有材料包；正式回复必须关联一个已接受的补交包，保存草稿不创建正式轮次或表示整改完成。
 
@@ -322,7 +323,7 @@ classDiagram
         Text dimension
         Text judgment
         Text uncertainty
-        Text evaluationSource
+        Text sourceNote
     }
     class ProfileFeedback {
         Id feedbackId
@@ -334,13 +335,28 @@ classDiagram
     }
     class GuidanceRecord {
         Id guidanceId
-        Id mentorId
         Text period
+        Status publicationStatus
+    }
+    class GuidanceRevision {
+        Id revisionId
+        Text versionNo
         Text goal
         Text action
-        Text studentFeedback
-        Text feedbackSource
-        Status publicationStatus
+        Text changeReason
+        DateTime recordedAt
+    }
+    class GuidanceFeedback {
+        Id feedbackId
+        Text content
+        Text source
+        DateTime recordedAt
+    }
+    class User {
+        Id userId
+    }
+    class AgentJob {
+        Id jobId
     }
     class Recommendation {
         Id recommendationId
@@ -398,11 +414,18 @@ classDiagram
     ProfileSnapshot "0..*" --> "0..*" CourseRecord : 学业来源
     ProfileSnapshot "0..*" --> "0..*" RuleVersion : 评价口径
     CapabilityAssessment "0..*" --> "0..*" EvidenceRef : 观察证据
+    CapabilityAssessment "0..*" --> "0..1" User : 人工评价者
+    CapabilityAssessment "0..*" --> "0..1" AgentJob : 产生执行
     ProfileSnapshot "1" -- "0..*" ProfileFeedback : 反馈与复核
     ProfileSnapshot "0..*" --> "0..1" ProfileSnapshot : 修正前一版本
     ProfileFeedback "0..*" --> "0..1" ProfileSnapshot : 形成修正版
     StudentRecord "1" -- "0..*" GuidanceRecord : 阶段指导
-    GuidanceRecord "0..*" --> "0..*" EvidenceRef : 指导依据
+    GuidanceRecord "0..*" --> "1" User : 指导导师
+    GuidanceRecord "1" *-- "1..*" GuidanceRevision : 指导版本
+    GuidanceRevision "0..*" --> "0..1" GuidanceRevision : 前一版本
+    GuidanceRevision "0..*" --> "0..*" EvidenceRef : 该版依据
+    GuidanceRevision "1" -- "0..*" GuidanceFeedback : 逐条反馈
+    GuidanceFeedback "0..*" --> "1" User : 实际记录人
     StudentRecord "1" -- "0..*" Recommendation : 成长建议
     Recommendation "0..*" --> "0..*" ProfileSnapshot : 画像依据
     Recommendation "0..*" --> "0..*" TrainingPlan : 目标依据
@@ -418,14 +441,14 @@ classDiagram
 | `CourseRecord` | 课程、学分与成绩及来源；自报和已核实状态分别表达，历史更正有记录 | FR-6.2、FR-7.1 |
 | `Achievement` | 论文、项目、奖励、交流或实践等成果，记录类型、参与贡献、时间、来源与核实状态 | FR-6.2、FR-7.1 |
 | `ProfileSnapshot` | 一段观察期间的画像版本；保存评价口径、成果来源、核实与发布状态，支持历次比较和更正 | FR-7.1 至 FR-7.4 |
-| `CapabilityAssessment` | 单个能力维度的评价，记录依据、判断、不确定性与人工或 AI 来源；无依据时可标未评价 | FR-7.2、FR-7.3 |
+| `CapabilityAssessment` | 单个能力维度的评价，记录依据、判断和不确定性；已形成的判断关联人工评价者或产生它的执行，二者可只具备其一。`sourceNote` 只作说明 | FR-7.2、FR-7.3 |
 | `ProfileFeedback` | 学生本人反馈、管理端复核请求或外部反馈及处理结果；`source` 保留来源，`submittedBy` 为实际记录人，代录时另保留原反馈人，修正关联新的画像版本 | FR-7.4 |
-| `GuidanceRecord` | 导师的阶段目标、行动建议、依据与真实反馈；`feedbackSource` 保留反馈人、来源与记录人，无反馈时保持未反馈，不替代正式计划变更 | FR-8.2 |
+| `GuidanceRecord`、`GuidanceRevision`、`GuidanceFeedback` | 一项阶段指导及其版本和逐条反馈。调整目标或行动形成新版本并指向前一版本；没有反馈时不为该版本建立反馈记录。反馈来源与实际记录人分别保留，指导不替代正式计划变更 | FR-8.2 |
 | `Recommendation` | 学生端的参考成长建议，记录适用条件、来源、用户反馈及是否需更新 | FR-11.5 |
 | `Reminder` | 学生端的截止事项与通知记录，复用节点配置；源对象可以是节点、机会、任务或帮扶事项，已读与业务完成分别记录 | FR-11.3、FR-2.3 |
 | `CorrectionRequest` | 对业务记录的质疑、证明、核实责任与处理结果；代录外部请求保留原提供者与来源，`submittedBy` 为实际记录人；目标可关联课程、材料或正式结论等对象 | FR-4.2、FR-6.4 |
 
-**多重性说明：** 学生可保留多版计划与画像，但同一适用期间的当前版本必须可识别。尚未完成评价的画像可没有能力项；已作能力判断的项需有认可口径与可定位证据，缺证据时只保留待评价状态。成绩或成果没有证明可暂为待核实。一次反馈可以不导致修正；修正后仍保留原画像。更正请求对不同目标类型采用统一关联，正式结论更正另需确认授权。
+**多重性说明：** 学生可保留多版计划与画像，但同一适用期间的当前版本必须可识别。尚未完成评价的画像可没有能力项；已作能力判断的项需有认可口径与可定位证据，缺证据时只保留待评价状态。成绩或成果没有证明可暂为待核实。一次反馈可以不导致修正；修正后仍保留原画像。已形成判断的能力评价必须关联评价者或执行，未评价项可以两者都没有。指导至少有一个版本，后续版本指向被调整的前版；反馈记录可以为空。更正请求对不同目标类型采用统一关联，正式结论更正另需确认授权。
 
 计划条目未完成或待核实时可以没有完成依据。标为已完成时，须按该条目的要求关联同一学生的已核实课程、已核实成果或当前有效正式结论；三类依据不必同时具备。一条要求可由多项记录共同满足，同一记录也可在规则允许时支持多条要求；待核实记录或未满足要求的记录不能据此标记完成。
 
@@ -441,9 +464,14 @@ classDiagram
         Id opportunityId
         Text category
         Text title
-        Text targetRef
-        Text requirements
         Text source
+        Status status
+    }
+    class OpportunityVersion {
+        Id opportunityVersionId
+        Text versionNo
+        Text targetDescription
+        Text requirements
         DateTime deadline
         Status status
     }
@@ -482,17 +510,29 @@ classDiagram
         Id monitoringId
         Text category
         Text observationPeriod
-        Text basisVersionRefs
         Text warningLevel
         Text verificationReason
         Status status
+    }
+    class TrainingPlan {
+        Id planId
+    }
+    class PlanItem {
+        Id planItemId
     }
     class SupportCase {
         Id supportId
         Text objective
         Id responsibleUserId
-        Text closureBasis
         Status status
+    }
+    class SupportClosure {
+        Id closureId
+        Text reason
+        DateTime closedAt
+    }
+    class User {
+        Id userId
     }
     class SupportAction {
         Id actionId
@@ -507,8 +547,14 @@ classDiagram
         Id resourceId
         Text type
         Text unit
-        Number availableAmount
         Text scope
+    }
+    class ResourceSnapshot {
+        Id snapshotId
+        Number availableAmount
+        Text unit
+        Text scope
+        DateTime capturedAt
     }
     class ResourceNeed {
         Id needId
@@ -533,12 +579,13 @@ classDiagram
         Id recommendationId
     }
 
-    Opportunity "0..*" --> "1..*" RuleVersion : 条件与评价规则
+    Opportunity "1" *-- "1..*" OpportunityVersion : 机会版本
+    OpportunityVersion "0..*" --> "1..*" RuleVersion : 该版本条件与规则
     StudentRecord "1" -- "0..*" Application : 本人申请
-    Opportunity "1" -- "0..*" Application : 面向机会
+    Application "0..*" --> "1" OpportunityVersion : 准备或提交时的版本
     Application "0..1" -- "0..*" AuditTask : 申请审核及重审
-    Opportunity "0..1" -- "0..*" AuditTask : 活动审核
-    Opportunity "1" -- "0..*" SelectionRun : 评选或匹配轮次
+    OpportunityVersion "0..1" -- "0..*" AuditTask : 活动审核
+    OpportunityVersion "1" -- "0..*" SelectionRun : 评选或匹配所用版本
     SelectionRun "0..*" --> "1..*" RuleVersion : 固定依据
     SelectionRun "1" *-- "0..*" SelectionResult : 候选参考
     StudentRecord "1" -- "0..*" SelectionResult : 候选对象
@@ -547,13 +594,21 @@ classDiagram
     StudentRecord "1" -- "0..*" MonitoringCase : 待关注情况
     MonitoringCase "0..*" --> "0..*" RuleVersion : 监测或预警口径
     MonitoringCase "0..*" --> "0..*" EvidenceRef : 观察依据
+    MonitoringCase "0..*" --> "0..1" TrainingPlan : 所评估计划
+    MonitoringCase "0..*" --> "0..*" PlanItem : 所评估计划项
+    MonitoringCase "0..*" --> "0..*" AuditTask : 所评估任务
     StudentRecord "1" -- "0..*" SupportCase : 帮扶事项
     MonitoringCase "0..1" -- "0..*" SupportCase : 经核实后组织帮扶
     SupportCase "1" *-- "0..*" SupportAction : 行动与反馈
+    SupportCase "1" -- "0..1" SupportClosure : 结项决定
+    SupportClosure "0..*" --> "1" User : 核实人
+    SupportClosure "0..*" --> "1..*" EvidenceRef : 结项依据
     SupportAction "0..*" --> "0..*" EvidenceRef : 后续变化依据
     StudentRecord "0..1" -- "0..*" ResourceNeed : 个人或群体需求
     ResourceItem "1" -- "0..*" ResourceNeed : 对应资源
-    ResourceItem "1" -- "0..*" AllocationAdvice : 配置参考
+    ResourceItem "1" -- "0..*" ResourceSnapshot : 当时可用量
+    AllocationAdvice "0..*" --> "1..*" ResourceSnapshot : 固定资源输入
+    AllocationAdvice "0..*" --> "1..*" RuleVersion : 固定配置规则
     AllocationAdvice "0..*" --> "1..*" ResourceNeed : 参考需求
     AllocationAdvice "0..*" --> "0..*" SelectionResult : 匹配参考
     AllocationAdvice "0..*" --> "0..*" EvidenceRef : 配置依据
@@ -562,16 +617,16 @@ classDiagram
 
 | 对象 | 含义与属性说明 | 关联需求 |
 | --- | --- | --- |
-| `Opportunity` | 招生、奖学金、项目或其他申请机会；目标引用可指向导师或项目，条件、来源与截止时间须明确 | FR-11.4、FR-9.1、FR-9.2、FR-9.5 |
-| `Application` | 某人针对某机会的申请；学生准备与提交，管理人员接收或按授权代办，来源与实际操作者通过材料包和操作记录保留 | FR-3.1、FR-11.4、FR-9.2 |
+| `Opportunity`、`OpportunityVersion` | 招生、奖学金、项目或其他申请机会及其版本。条件、截止时间和目标说明保存在版本上；新版本不改写已使用的旧版本。`targetDescription` 只说明尚未建模的导师或项目目标，不是已核实关系 | FR-11.4、FR-9.1、FR-9.2、FR-9.5 |
+| `Application` | 某人针对某一机会版本的申请；准备和提交都固定该版本，后续机会变更不改写它。来源与实际操作者通过材料包和操作记录保留 | FR-3.1、FR-11.4、FR-9.2 |
 | `SelectionRun` | 一次资格排序或匹配计算，固定候选范围、输入版本和规则；候选活动的变化生成新运行 | FR-9.1、FR-9.2、FR-9.5 |
 | `SelectionResult` | 某候选的资格、排序或匹配参考，记录理由、不确定性和人工调整；需要正式确认时关联审核任务 | FR-9.1、FR-9.2、FR-9.5 |
-| `MonitoringCase` | 已观察的节点延误、材料缺失或计划变化，记录期间、依据、核实原因和状态；等级需要确认规则 | FR-9.3、FR-9.4 |
-| `SupportCase`、`SupportAction` | 帮扶事项及具体行动，记录负责人、时间、真实反馈与来源、实际记录人和结项依据；单项行动完成不等于问题解决 | FR-8.3、FR-9.4 |
-| `ResourceItem`、`ResourceNeed` | 已确认类型与范围的资源及需求；群体需求通过来源和范围说明，不强制关联单个学生 | FR-9.6 |
-| `AllocationAdvice` | 资源配置参考，保存依据、数据覆盖、不确定性与人工调整；不构成实际调拨记录 | FR-9.6 |
+| `MonitoringCase` | 已观察的节点延误、材料缺失或计划变化，记录期间、核实原因和状态。事项关联所评估的计划、计划项或审核任务，等级需要确认规则 | FR-9.3、FR-9.4 |
+| `SupportCase`、`SupportAction`、`SupportClosure` | 帮扶事项、具体行动和结项决定。行动记录负责人、时间、真实反馈与来源；结项另由核实人关联证据作出。单项行动完成不等于问题解决，未结项时没有结项决定 | FR-8.3、FR-9.4 |
+| `ResourceItem`、`ResourceSnapshot`、`ResourceNeed` | 已确认类型与范围的资源、某一时点的可用量，以及资源需求。当前资源数量变化不改写已捕获的快照；群体需求不强制关联单个学生 | FR-9.6 |
+| `AllocationAdvice` | 资源配置参考，固定当时的规则版本和资源快照，并保存数据覆盖、不确定性与人工调整；不构成实际调拨记录 | FR-9.6 |
 
-**多重性说明：** 未提交申请可以没有审核任务；重审创建关联新任务。同一机会可以有多次选取运行，每次固定依据及候选范围。评选或匹配结果可以是参考而没有正式确认任务；需要正式资格或获奖结论时必须关联授权确认流程。监测事项尚未核实时可以没有证据引用或等级，但不能标为已确认预警。帮扶可由经核实监测触发，也可根据授权人工反馈建立。
+**多重性说明：** 未提交申请可以没有审核任务；重审创建关联新任务。同一机会可以有多次选取运行，每次固定依据及候选范围。评选或匹配结果可以是参考而没有正式确认任务；需要正式资格或获奖结论时必须关联授权确认流程。监测事项尚未核实时可以没有证据引用或等级，但不能标为已确认预警；已经记录的事项至少关联一个计划、计划项或审核任务。帮扶可由经核实监测触发，也可根据授权人工反馈建立。未解决事项没有结项决定；标为解决时必须有核实人和至少一条结项证据。资源建议不直接引用会变化的当前可用量，而引用捕获时的快照和规则版本。
 
 ## 5. 智能体执行与结果核验
 
@@ -607,6 +662,18 @@ classDiagram
         Text validationRecord
         Status status
     }
+    class GrantUse {
+        Id grantUseId
+        Text capability
+        Text scopeType
+        Id scopeId
+        DateTime validFrom
+        DateTime validUntil
+        DateTime capturedAt
+    }
+    class AccessGrant {
+        Id grantId
+    }
     class OutputCheck {
         Id checkId
         Text requiredSchema
@@ -632,6 +699,8 @@ classDiagram
     }
 
     AuditRound "0..1" -- "0..*" AgentJob : 初审及重试
+    AgentJob "1" *-- "1..*" GrantUse : 启动时授权决定
+    GrantUse "0..*" --> "1" AccessGrant : 来源授权
     AgentJob "0..*" --> "0..1" AgentJob : 前次执行
     AgentJob "0..*" --> "0..*" MaterialVersion : 授权材料输入
     AgentJob "0..*" --> "0..*" RuleVersion : 固定规则输入
@@ -645,18 +714,18 @@ classDiagram
 
 | 对象 | 含义与属性说明 | 关联需求 |
 | --- | --- | --- |
-| `AgentJob` | 一次解析、预审、初审或其他辅助执行；记录发起者、业务目的、限定数据、输入版本、尝试次数、状态及失败原因 | FR-4.2、FR-11.1、FR-5.3、FR-10.1 |
+| `AgentJob`、`GrantUse` | 一次解析、预审、初审或其他辅助执行，以及启动时捕获的授权决定。`authorizedScope` 只作说明。后来收窄或撤销授权不改写 `GrantUse`，也不删除它与原 `AccessGrant` 的关联 | FR-4.2、FR-11.1、FR-5.3、FR-10.1 |
 | `SkillVersion` | 业务 Skill 的版本、适用规则和验证记录；未经核验配置不可自动视为可用 | FR-2.4、FR-10.1 |
 | `ModelProfile` | 已选择的模型配置及能力和验证记录；凭据只保存受控引用，密钥不进入文档、任务正文或普通日志 | FR-10.2 |
 | `OutputCheck` | 结构、引用和覆盖范围的核验结果；通过只证明这些校验成立，不证明专业判断正确 | FR-10.3 |
 
-**多重性说明：** 预审或单独解析可以没有正式审核轮次；同一轮次可保留多次失败与重试执行。尚未开始或不需模型的任务可以没有模型配置，实际模型调用须固定配置版本。结构、引用、权限与覆盖核验均完成后结果才成为可用辅助意见；实际业务结果仍引用其对应证据、输入版本与执行标识。
+**多重性说明：** 预审或单独解析可以没有正式审核轮次；同一轮次可保留多次失败与重试执行。每次执行至少捕获一条启动时有效的授权决定。尚未开始或不需模型的任务可以没有模型配置，实际模型调用须固定配置版本。结构、引用、权限与覆盖核验均完成后结果才成为可用辅助意见；实际业务结果仍引用其对应证据、输入版本与执行标识。
 
 ## 跨领域约束
 
 1. **身份与档案：** 用户身份、业务档案、指导关系和任务责任分别管理。访问同时满足有效能力与对象范围，不能仅凭类之间存在关系授予权限。
 2. **材料与规则：** 正式提交后材料包中的版本固定。补交生成新材料包与轮次；规则更新不改变旧轮次；原件与已使用的规则不能被覆盖。
-3. **复核与结论：** 人工意见可在无有效 AI 结果时独立形成。正式确认必须引用当前轮次所需复核，确认人具备有效权限；执行成功或意见提交不等于正式结论。
+3. **复核与结论：** 人工意见可在无有效 AI 结果时独立形成，但必须指向所审规则项。正式确认必须引用当前轮次所需复核，确认人具备有效权限；执行成功或意见提交不等于正式结论。
 4. **整改关系：** 每项正式补交回复关联当前材料包及原整改项；关闭问题保留核实者与依据。失败重试不能制造新的正式提交或重复归档。
 5. **历史与更正：** 已归档结论的更正保留前一版本及核实请求。同一结果序列只有一份当前有效结论；重新审核创建新任务，并保留与原任务的关系和理由。
 6. **画像与下游引用：** 画像、成长建议、监测和候选参考记录来源版本及观察期间。来源更正时标记需更新；不可比口径不直接计算成长增减。
@@ -675,12 +744,18 @@ classDiagram
 | 规则发布后继续旧任务 | 新旧 `RuleVersion` 同时保留，旧轮次仍引用原版；改用新版须形成新轮次并记录原因 |
 | 制度原件更新后查看旧规则来源 | 旧 `RuleVersion` 仍关联原制度的 `MaterialVersion`；新原件不替换旧关联，来源不可访问时明确提示原因 |
 | 用课程或成果满足培养计划 | `PlanItem` 关联符合要求的已核实 `CourseRecord` 或 `Achievement`，可继续定位证明；没有节点结论也能记录课程或成果完成，未核实或不满足要求时保持待核实或待完成 |
-| AI 失败转人工 | 失败 `AgentJob` 和核验结果可保留；轮次可以没有有效 `AIFinding`，但仍可保存真实人工依据和授权结论 |
+| AI 失败转人工 | 失败 `AgentJob` 和核验结果可保留；轮次可以没有有效 `AIFinding`。人工复核仍关联所审 `RuleItem`、证据和授权结论 |
 | 更正原结论与画像 | `CorrectionRequest` 记录原因及核实，`FormalDecision` 与 `ProfileSnapshot` 保留更正链，来源版本明确，下游显示待更新 |
 | 材料跨节点使用与版本更新 | 同一 `MaterialVersion` 可被多个材料包引用，新版不改变旧包；各证据始终定位原版 |
 | 申请人录取与档案连续关联 | 已核实的 `StudentRecord` 保留申请历史并建立在读计划，不把其他人的账号或材料合并进来 |
+| 调整指导意见 | 新的 `GuidanceRevision` 指向前一版本；已有 `GuidanceFeedback` 仍留在原版本，没有反馈时不补造反馈记录 |
+| 机会条件变更后查看已提交申请 | `Application` 仍关联提交时的 `OpportunityVersion` 和该版本的规则；新版本不改写旧申请 |
+| 计划修订后的监测 | `MonitoringCase` 仍指向产生偏差时的 `TrainingPlan`、`PlanItem` 或 `AuditTask`，不因后来的计划版本丢失评估对象 |
+| 能力评价的来源 | 已形成的 `CapabilityAssessment` 关联评价者 `User` 或产生它的 `AgentJob`；未评价项可以没有这两项关联 |
+| 授权撤销后查看旧的智能体任务 | `GrantUse` 保留启动时的能力、范围和有效期，并仍指向原 `AccessGrant`；撤销不改写该决定 |
+| 资源数量变化后查看旧建议 | `AllocationAdvice` 仍关联生成时的 `ResourceSnapshot` 和 `RuleVersion`；资源当前可用量的变化不改写快照 |
 | 评奖同分或匹配缺证据 | `SelectionResult` 保存并列、待核实及人工调整；需要正式结果时通过关联任务确认 |
-| 预警误报与帮扶结项 | `MonitoringCase` 保留核实和撤销原因；`SupportAction` 完成与 `SupportCase` 结项分开，结项有依据 |
+| 预警误报与帮扶结项 | `MonitoringCase` 保留核实和撤销原因，并指向所评估的计划项或任务；`SupportAction` 完成与 `SupportCase` 结项分开，结项决定关联核实人和证据 |
 
 ## 待确认事项
 
@@ -688,6 +763,6 @@ classDiagram
 - 节点安排与机会活动的实际数据来源、规则适用方式及正式结论类型。
 - 画像维度、量表版本和可比较范围；哪些评价信息可对学生发布。
 - 更正、重新审核、资料保留与删除的批准流程，以及历史证据不可用时的呈现方式。
-- 具体资源类型、需求单位、匹配目标及外部系统接口。
+- 具体资源类型、需求单位、匹配目标及外部系统接口。导师或项目目标尚未建模，机会版本中的目标说明不是已核实关系。
 
 上述信息影响最终对象属性与约束。当前模型保持业务范围，不将这些未确认内容转化为已批准实现方案。

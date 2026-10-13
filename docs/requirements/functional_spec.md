@@ -277,6 +277,7 @@ classDiagram
     RuleItem "1" -- "0..*" AIFinding : 对应检查项
     AIFinding "0..*" --> "0..*" EvidenceRef : 引用证据
     AuditRound "1" -- "0..*" HumanReview : 人工复核
+    HumanReview "0..*" --> "1" RuleItem : 所审规则项
     HumanReview "0..*" --> "0..*" AIFinding : 核对或修正
     HumanReview "0..*" --> "0..*" EvidenceRef : 人工依据
     HumanReview "1" -- "0..*" RevisionRequest : 提出整改
@@ -289,7 +290,7 @@ classDiagram
     FormalDecision "0..*" --> "0..1" FormalDecision : 更正前一结论
 ```
 
-审核任务固定所使用的材料版本和规则版本。补交形成新的材料版本和审核轮次，正式结论保留确认人、理由和更正关系。类图描述业务概念，不决定数据库表、接口或部署方式。
+审核任务固定所使用的材料版本和规则版本。人工复核指向所审规则项，没有有效 AI 意见时也保留该关系。补交形成新的材料版本和审核轮次，正式结论保留确认人、理由和更正关系。类图描述业务概念，不决定数据库表、接口或部署方式。
 
 ## 5. 验收摘要
 
