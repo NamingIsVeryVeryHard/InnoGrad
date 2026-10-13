@@ -1,0 +1,59 @@
+{
+  "version": "implicit-2026-10-13-draft.1",
+  "status": "draft_uncalibrated",
+  "interpretation": "等级表示材料支持程度，不代表经验证的稳定能力；所有评价需教师复核。",
+  "dimensions": [
+    {
+      "id": "problem-analysis", "label": "问题分析",
+      "criteria": [
+        { "id": "problem-context", "description": "明确对象、使用情境及具体待解决问题；仅有研究方向名称不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
+        { "id": "problem-gap", "description": "说明现有方法或实践的具体不足，并给出文献、比较或观察依据；仅说创新性强不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
+        { "id": "problem-question", "description": "将不足转换为有明确对象、条件及可检验目标的研究问题。", "allowed_work_statuses": ["planned", "in_progress", "completed"] }
+      ],
+      "levels": [
+        { "value": 1, "label": "描述了具体问题", "requires": ["problem-context"] },
+        { "value": 2, "label": "说明了问题依据", "requires": ["problem-context", "problem-gap"] },
+        { "value": 3, "label": "形成可检验问题", "requires": ["problem-context", "problem-gap", "problem-question"] }
+      ]
+    },
+    {
+      "id": "research-design", "label": "研究设计",
+      "criteria": [
+        { "id": "design-method", "description": "将具体研究问题与方法、数据或研究对象相联系，说明关键步骤和选择理由。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
+        { "id": "design-evaluation", "description": "列出可执行的验证设计，包含比较对象或基线，以及数据来源和评价指标；泛称做实验不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
+        { "id": "design-feasibility", "description": "说明资源、时间或数据约束，以及针对具体风险的应对方案。", "allowed_work_statuses": ["planned", "in_progress", "completed"] }
+      ],
+      "levels": [
+        { "value": 1, "label": "形成方法方案", "requires": ["design-method"] },
+        { "value": 2, "label": "形成验证方案", "requires": ["design-method", "design-evaluation"] },
+        { "value": 3, "label": "说明执行条件", "requires": ["design-method", "design-evaluation", "design-feasibility"] }
+      ]
+    },
+    {
+      "id": "evidence-reasoning", "label": "证据推理",
+      "criteria": [
+        { "id": "evidence-result", "description": "给出已完成研究的具体观测、数据或可定位结果；仅说取得领先结果或论文录用不够。", "allowed_work_statuses": ["completed"] },
+        { "id": "evidence-comparison", "description": "用实际结果与基线、对照或其他解释作比较，说明结果如何支持具体结论。", "allowed_work_statuses": ["completed"] },
+        { "id": "evidence-limits", "description": "结合已获结果讨论适用范围、不确定性、失败案例或替代解释。", "allowed_work_statuses": ["completed"] }
+      ],
+      "levels": [
+        { "value": 1, "label": "提供具体结果", "requires": ["evidence-result"] },
+        { "value": 2, "label": "连接证据与结论", "requires": ["evidence-result", "evidence-comparison"] },
+        { "value": 3, "label": "审视结论边界", "requires": ["evidence-result", "evidence-comparison", "evidence-limits"] }
+      ]
+    },
+    {
+      "id": "reflection-improvement", "label": "反思改进",
+      "criteria": [
+        { "id": "reflection-issue", "description": "指出本人研究中的具体不足、失败或外部反馈，不能仅列泛化的下一年计划。", "allowed_work_statuses": ["in_progress", "completed"] },
+        { "id": "reflection-action", "description": "给出针对上述不足或反馈的具体调整及其理由，明确是计划还是已执行。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
+        { "id": "reflection-check", "description": "提供调整后的实际检查结果，并与调整前或预期目标比较；只有修改计划不够。", "allowed_work_statuses": ["completed"] }
+      ],
+      "levels": [
+        { "value": 1, "label": "识别具体不足", "requires": ["reflection-issue"] },
+        { "value": 2, "label": "提出对应调整", "requires": ["reflection-issue", "reflection-action"] },
+        { "value": 3, "label": "检查改进结果", "requires": ["reflection-issue", "reflection-action", "reflection-check"] }
+      ]
+    }
+  ]
+}

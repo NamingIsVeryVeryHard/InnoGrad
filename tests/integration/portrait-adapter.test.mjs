@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { adapterConfig,requestStructured } from '../../.agents/skills/graduate-portrait/scripts/adapter.mjs';
+import { prepareTask } from '../../.agents/skills/graduate-portrait/scripts/prompts.mjs';
+import { validateExtraction } from '../../.agents/skills/graduate-portrait/scripts/validation.mjs';
+import { fixture } from '../fixtures/portrait.mjs';
+const config={url:'https://school.invalid/chat/completions',model:'explicit-test-model',key:'synthetic-test-key'};
+const reply=content=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content}}]})});
+test('配置缺失拒绝请求，不推测模型或密钥',()=>{assert.throws(()=>adapterConfig({}));assert.throws(()=>adapterConfig({PORTRAIT_API_URL:'http://localhost',PORTRAIT_API_MODEL:'test',PORTRAIT_API_KEY:'test'}));});
+test('坏JSON最多修复一次，没有假结果回退',async()=>{const f=fixture();let calls=0;await assert.rejects(requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async()=>{calls++;return reply('bad JSON');}}),/failed validation/);assert.equal(calls,2);});
+test('一次修复可生成合法结果，拒绝额外score',async()=>{const f=fixture();let calls=0;const result=await requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async(_url,init)=>{const body=JSON.parse(init.body);assert.equal(body.model,config.model);assert.equal(init.redirect,'error');calls++;return reply(JSON.stringify(calls===1?{...f.extraction,score:100}:f.extraction));}});assert.equal(result.attempts,2);assert.deepEqual(result.data,f.extraction);});
+test('伪造证据及截断、拒绝、HTTP错误均关闭流程',async()=>{const f=fixture();const bad=structuredClone(f.extraction);bad.facts[0].evidence[0].quote='伪造';for(const response of [reply(JSON.stringify(bad)),{ok:false,status:403},{ok:true,json:async()=>({choices:[{finish_reason:'length',message:{content:'{}'}}]})},{ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'{}',refusal:'拒绝'}}]})}])await assert.rejects(requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async()=>response}));});

@@ -1,6 +1,6 @@
 # 团队 Skills 与 GitHub Projects
 
-本目录保存团队共用的现成 skills。它们帮助 Codex 按既定流程编写需求、拆分任务、管理 GitHub 内容和提交评审。Skills 的指令与引用文件随仓库同步，GitHub 登录凭证由每位成员自行管理。
+本目录保存团队共用的流程 skills 和本项目的画像 Skill。它们帮助 Codex 按既定流程编写需求、拆分任务、管理 GitHub 内容、提交评审和执行画像原型。Skills 的指令与引用文件随仓库同步，GitHub 登录凭证由每位成员自行管理。
 
 首次参与请先阅读[贡献指南](../CONTRIBUTING.md)，再按本文配置 Codex 与 GitHub CLI。
 
@@ -43,6 +43,7 @@
 | 编写文档与记录设计决定 | [documentation-and-adrs](skills/documentation-and-adrs/SKILL.md) | Addy Osmani |
 | 分支、提交与 PR | [git-workflow-and-versioning](skills/git-workflow-and-versioning/SKILL.md) | Addy Osmani |
 | 检查差异与质量 | [code-review-and-quality](skills/code-review-and-quality/SKILL.md) | Addy Osmani |
+| 从解析材料生成画像草稿 | [graduate-portrait](skills/graduate-portrait/SKILL.md) | 本项目；方法原型 |
 
 需求 skill 的后续实现流程还引用了以下 3 个 skills，一并保留：
 
@@ -70,6 +71,8 @@ Skills 提供操作指引；执行 GitHub 操作仍需要可用的 `gh`、账号
 - Labels、Assignees 和 Milestone 更新对应 Issue 或 PR；Project 的自定义字段使用 `gh project`，需要时通过 `gh api graphql` 调用官方 API。
 - 关闭 Issue、将任务标为完成之前，核对交付与验收结果。读取现有 Workflows，检查字段更新是否会触发关联 Issue 的状态变化。
 - Skills 不会新增 API 能力。内置 Workflows 的配置和 Insights 图表设置等操作，仍可能需要 GitHub 网页。
+
+graduate-portrait 是本项目维护的业务 Skill，不属于下方第三方来源清单。输入约定、运行方式和未验证边界见[画像方法说明](../docs/algorithm/graduate_portrait.md)。
 
 ## 来源与更新
 

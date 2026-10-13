@@ -15,3 +15,7 @@ Thumbs.db
 *~
 *.log
 *.tmp
+
+# Local portrait runs can contain student materials
+node_modules/
+/local-runs/

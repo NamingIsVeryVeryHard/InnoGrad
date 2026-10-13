@@ -1,0 +1,41 @@
+{
+  "version": "0.1.0",
+  "data_mode": "synthetic",
+  "command": "node scripts/cli.mjs demo --out <local-directory>",
+  "cases": [
+    {
+      "id": "conflicting-paper-count",
+      "input": "scripts/synthetic.mjs",
+      "expect": [
+        "papers_reported.value=3",
+        "ledger.paper.published=2",
+        "papers-consistency.status=needs_review"
+      ]
+    },
+    {
+      "id": "missing-evidence",
+      "input": "scripts/synthetic.mjs",
+      "expect": [
+        "credits_earned.value=null",
+        "evidence-reasoning.level=null",
+        "review_status=draft"
+      ]
+    },
+    {
+      "id": "planned-vs-completed",
+      "replay": "unit test: 计划不能支持已完成的检验；无证据不评为低能力",
+      "expect": [
+        "planned result rejected for completion-only criterion",
+        "not_observed does not produce zero level"
+      ]
+    },
+    {
+      "id": "missing-proposal-period",
+      "replay": "unit test: 开题期次未知时允许null且禁止本期计数，年报不允许未知期次",
+      "expect": [
+        "period_unconfirmed",
+        "in_scope forbidden when period=null"
+      ]
+    }
+  ]
+}

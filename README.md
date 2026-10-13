@@ -6,7 +6,7 @@ InnoGrad 面向研究生培养全过程，计划依托 [Inno-Agent](https://hhyq
 
 让学生知道“该做什么”，让教师知道“怎么审”，让学院知道“哪里需要管”。
 
-**项目状态：需求分析阶段。** 当前仓库提供需求文档、目录结构和协作模板，尚无可运行版本。下文介绍的是规划中的功能。
+**项目状态：需求设计与方法原型验证。** 当前仓库提供需求文档、协作模板及可本地运行的[研究生画像方法原型](docs/algorithm/graduate_portrait.md)。完整业务应用尚未实现，下文核心功能为规划内容。
 
 ## 项目背景
 
@@ -67,7 +67,7 @@ flowchart LR
 
 ## 使用说明
 
-当前可阅读下方文档了解需求与功能规划。安装、运行和部署说明将随首个可运行版本提供。
+画像方法原型可使用合成材料运行，安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)。完整业务应用的安装和部署说明将在实现后补充。
 
 ## 项目文档
 
@@ -75,6 +75,7 @@ flowchart LR
 | --- | --- |
 | [问题定义与产品描述](docs/requirements/problem_definition.md) | 项目要解决的问题、目标用户、业务流程和衡量方式 |
 | [产品范围](docs/requirements/product_scope.md) | 各业务领域的功能、边界及验证要求 |
+| [研究生画像方法原型](docs/algorithm/graduate_portrait.md) | 显性规则、隐性评价、输入约定与本地运行 |
 | [平台基础与建设边界](docs/software/platform_reuse.md) | Inno-Agent 的可复用能力与需要建设的业务能力 |
 | [协作流程](docs/mgmt/project_workflow.md) | 任务管理、需求反馈、缺陷记录和评审约定 |
 | [团队 Skills 与 GitHub Projects](.agents/README.md) | 共享 skills、成员授权与项目操作约定 |
@@ -107,7 +108,7 @@ InnoGrad/
     └── plan.md           # 阶段交付与验收
 ```
 
-应用、算法、复盘、测试和持续集成目录目前为预留结构。审核、档案、画像和规则等业务按模块组织，具体实现随需求设计补充。
+画像原型的配置和脚本位于 .agents/skills/graduate-portrait/，方法说明位于 docs/algorithm/，相关测试位于 tests/。应用、复盘和持续集成目录仍为预留结构；业务实现随需求设计补充。
 
 ## 参与贡献
 
