@@ -45,15 +45,15 @@ build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：ski
 
 - 所有观察都有 document_id、segment_id、quote。引用原句，允许忽略排版空白和全半角。结构合法及引用存在不证明语义判断正确。
 - 缺失事实不填；程序输出 null。多个冲突值保留 observations 与 conflict，不选最高值。没有列出的成果不等于实际零；coverage.complete 只用于明确完整清单。
-- 数字保留 numeric_token 与 exact、lower_bound 或 approximate。年级只从明确“博一”“博士二年级”“年级”记载提取；“博士研究生”不是年级，也不能根据入学年份计算。
+- 数字保留 numeric_token 与 exact、lower_bound 或 approximate。numeric_token 按原文字形保留：原文“两篇”对应 value 2、token“两”，不能写 token“2”。年级只从明确“博一”“博士二年级”“年级”记载提取；“博士研究生”不是年级，也不能根据入学年份计算。
 - “120余篇”“超过3000人”不能当精确值，也不能从100提取10。当前不支持上界、否定数量或区间，如“不超过20”“不足20”“至多20”，不得截成精确或下界事实。“累计服务超过3000人”不属于本期人数，保留在实践项目原句中，不能填本期统计。
-- 投稿、录用、发表分别记录。计划保持 planned；期间不明写 uncertain，跨期写 out_of_scope。按成果 kind、identifier、标题及事件日期核对重复。不同标识或不同日期活动分别记录；模糊重复待复核，状态冲突不挑最好状态。
+- 投稿、录用、发表分别记录。papers_reported 仅用于明确本期已发表自报数；“两篇论文录用”或仅“两篇论文”不能填入该字段。计划保持 planned；期间不明写 uncertain，跨期写 out_of_scope。按成果 kind、identifier、标题及事件日期核对重复。不同标识或不同日期活动分别记录；模糊重复待复核，状态冲突不挑最好状态。
 - 自报发表3篇但仅列2篇时分别保留 self_report 与 listed 并待复核，不补出第三篇。完整列表内未知状态或不明期间也不能推出精确零。部分解析来源的完整清单声明会降级为部分覆盖，保留列明项及 partial_source 提示。
 - 空白签字或审核表不表示审核通过；材料自述不等于独立验证，不外查语言或发表状态来补造结果。
 
 ## 隐性评价约束
 
-按 references/implicit-rubric.json 的每个 criterion 输出 judgment、work_status、rationale、evidence、missing_evidence。只支持符合 description 的原文，不能用论文数、关键词数、领先自评或服务人数替代具体证据。开题计划可支持问题分析和方案设计，不能支持完成实验、验证结果或改进成效。
+按 references/implicit-rubric.json 的每个 criterion 输出 judgment、work_status、rationale、evidence、missing_evidence。只支持符合 description 的原文，不能用论文数、关键词数、领先自评或服务人数替代具体证据。开题计划可支持问题分析和方案设计，不能支持完成实验、验证结果或改进成效。description 中的所有必需并列条件都须有直接引文，rationale 逐条件对应；缺一用 not_observed 并说明缺项。资源可用、GPU 或拟用工具不能替代具体约束及风险应对；文献的一般困难不能当作本人不足或已执行改进。引文应表达完整命题，孤立半句不足以支持条件。
 
 缺证据用 not_observed 并说明缺什么。evidence 为空时 work_status 必须为 unknown；任何非 unknown 工作状态都须有直接引文。allowed_work_statuses 是标准允许的状态，不能直接抄成实际状态。not_observed 不表示矛盾、不合格、低能力或零分；contradicted 必须有直接反证。等级由配置的累计 requires 确定性导出，模型不得输出等级、score、人格或正式审核决定。等级只表示本次材料的支持程度；配置为 draft_uncalibrated，需要教师核对及校准，隐性等级不纳入显性总分。
 

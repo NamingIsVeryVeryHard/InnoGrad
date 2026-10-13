@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "data_mode": "synthetic",
   "command": "node scripts/cli.mjs demo --out <local-directory>",
   "cases": [
@@ -62,6 +62,33 @@
     {
       "request": "博士研究生填为年级",
       "expected": "do_not_extract_grade_label"
+    }
+  ],
+  "semantic_cases": [
+    {
+      "id": "available-resources-without-risk-response",
+      "execution": "人工或已授权模型使用prepareTask的assessment任务包评估；未自动运行模型",
+      "criterion_id": "design-feasibility",
+      "synthetic_text": "计划使用现有GPU服务器，并采用公开数据集完成实验。",
+      "expect": {
+        "judgment": "not_observed",
+        "missing_evidence": "缺少资源、时间或数据约束，以及具体执行风险和对应方案；现有设备与数据不满足这些条件。"
+      },
+      "boundary": "严格结构与quote校验不能证明所有语义条件得到支持，仍需逐条件复核。"
+    },
+    {
+      "id": "literature-difficulty-is-not-personal-revision",
+      "execution": "人工或已授权模型使用prepareTask的assessment任务包评估；未自动运行模型",
+      "criterion_ids": [
+        "reflection-issue",
+        "reflection-action",
+        "reflection-check"
+      ],
+      "synthetic_text": "已有方法常受长尾数据不足影响。拟采用数据增强方法开展后续研究。",
+      "expect": {
+        "judgment": "not_observed",
+        "missing_evidence": "缺少本人研究中实际不足或反馈、针对它的调整及调整后的实际检查。"
+      }
     }
   ]
 }
