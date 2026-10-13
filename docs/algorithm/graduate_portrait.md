@@ -28,7 +28,7 @@
 | 证据推理 | 实际结果 → 比较及结论 → 适用范围与不确定性 | 论文录用、计划做实验或没有结果的领先声明 |
 | 反思改进 | 本人研究的具体不足 → 对应调整 → 调整后的检查 | 没有具体问题的下一年计划 |
 
-等级表示本次材料的支持程度，不是经验证的稳定能力。开题计划可以支持问题和方案设计，不能替代已经完成的验证或改进结果。缺证据输出 null 和待补材料，不补零分。学生自报的效果数字可以作为“材料提供了具体结果”的证据，不能直接证实效果真实或因果关系。
+等级表示本次材料的支持程度，不是经验证的稳定能力。开题计划可以支持问题和方案设计，不能替代已经完成的验证或改进结果。缺证据输出 null 和待补材料，不补零分；没有引用时，工作状态只能标为 unknown，不能声称已完成。学生自报的效果数字可以作为“材料提供了具体结果”的证据，不能直接证实效果真实或因果关系。
 
 ## 设计依据与取舍
 
@@ -40,7 +40,7 @@
 | [Google LangExtract：结构化输出与原文定位](https://developers.googleblog.com/introducing-langextract-a-gemini-powered-information-extraction-library/) | 每项记录绑定文件、分段和原句；本地核验引用 | 借鉴溯源方法，未引入该库，也未实现其字符偏移定位 |
 | [Agent Skills 规范](https://agentskills.io/specification)及[评价指南](https://agentskills.io/skill-creation/evaluating-skills) | 拆分指令、配置、脚本和回放样例，变更后复查同一组案例 | 格式检查和程序测试不能替代真实模型评价 |
 
-Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时显式选择 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出，教师一致性仍需另行评估。
+Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时显式选择 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。真实样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；因此隐性结果仅作为可修改的演示草稿，须由教师逐项核对，尚未通过语义准确性或教师一致性验证。
 
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
 
@@ -65,11 +65,15 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synt
 
 合成示例生成 portrait.json 和 portrait.md，来源标为 synthetic/offline_replay。它验证流程与数据约定，不代表真实模型抽取效果。
 
-主流程由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../.agents/skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。平台入口、隔离工作区和 Skill 安装步骤见 Skill 说明。
+主流程由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../.agents/skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
 
 API 提供异步生成、结果查询、只读规则配置，以及可调试的 Swagger UI 和 OpenAPI JSON。模型配置由服务端读取本项目的 .env，默认使用 ECNU Plus；明确额度耗尽时才切换配置好的 CLIProxy Grok 或 Gemini。普通限速、超时、无效 JSON 或缺失证据不触发换模型。备用推理档位为 low，响应来源记录区分请求别名与服务实际模型。密钥、真实材料和中间输出均不进入版本库。
 
-底层 ECNU Plus 抽取与逐项评价已用真实年度报告验证；两个备用模型已用无学生数据的最小请求验证连接。这不等于完整备用切换或所有模型质量均已验证。完整 InnoAgent 业务链路仍需独立样例验收。
+ECNU Plus 已通过 InnoAgent 完成年度报告抽取、逐项评价和画像生成；两个备用模型已用无学生数据的最小请求验证连接。这不等于完整备用切换或所有模型质量均已验证。完整 InnoAgent 业务链路的验收需同时核对画像结果、实际 Skill 加载记录及模型调用来源，不能仅根据接口返回成功判断。
+
+本地验收已通过三个授权真实材料样例的完整 HTTP API 流程：两个年度报告和一个日期缺失的开题报告。最终结果保留实际 Skill 版本与模型完成记录，显性结果经过独立复核。联调期间曾因工具审批等待、无效 JSON、数字原字及引用错误失败；最终完成不表示一次成功率或抽取准确率，失败结果未当作成功画像。核心回归测试 48 项、API 测试 10 项通过，类型检查和构建通过。
+
+隐性演示仍有待教师处理的语义问题：年度报告中的问题不足、验证设计，以及开题报告中的约束与可行性，有些引用不足以支持模型给出的完整判断。原型保留 draft、review_required 和无总分边界；这些结果不应直接用于排序或正式考核。自动 Skill 路由、Claude/Codex 的完整运行，以及真实额度耗尽后的全流程切换尚未验证。
 
 真实材料及输出放在被 Git 忽略的 local-runs/，仓库测试只使用合成材料。未配置服务时，可由当前 Agent 按 Skill 完成语义工作并离线校验；执行来源必须如实记录，不冒充线上模型结果。
 
