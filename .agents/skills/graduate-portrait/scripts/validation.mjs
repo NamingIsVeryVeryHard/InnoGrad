@@ -8,7 +8,7 @@ const fail = message => { throw new Error(message); };
 function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
 export function repairFeedback(error){
   const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE'}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
-  return '本地校验错误（仅路径与类别）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
+  return '本地校验错误（仅路径与类别）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
 }
 
 export function validateShape(schema, data, label) {
@@ -134,13 +134,15 @@ export function validateAssessment(bundle, assessment, rubric) {
   sameScope(bundle, assessment);
   unique(assessment.dimensions.map(d => d.dimension_id), 'dimension_id');
   if (assessment.dimensions.length !== rubric.dimensions.length) fail('missing rubric dimension');
-  for (const dimension of assessment.dimensions) {
+  for (const [dimensionIndex,dimension] of assessment.dimensions.entries()) {
     const definition = rubric.dimensions.find(d => d.id === dimension.dimension_id);
     unique(dimension.criteria.map(c => c.criterion_id), 'criterion_id');
     if (dimension.criteria.length !== definition.criteria.length) fail('missing rubric criterion');
-    for (const c of dimension.criteria) {
+    for (const [criterionIndex,c] of dimension.criteria.entries()) {
+      atPath('/dimensions/'+dimensionIndex+'/criteria/'+criterionIndex,()=>{
       const criterion = definition.criteria.find(x => x.id === c.criterion_id);
       if (!criterion) fail('unknown criterion');
+      if(c.work_status!=='unknown'&&!c.evidence.length){const error=new Error('work status requires direct evidence');error.validation_issues=[{path:'/dimensions/'+dimensionIndex+'/criteria/'+criterionIndex+'/work_status',category:'WORK_STATUS_WITHOUT_EVIDENCE'}];throw error;}
       validateEvidence(bundle, c.evidence, c.judgment !== 'not_observed');
       if (c.judgment === 'not_observed' && !c.missing_evidence?.trim()) fail('missing explanation of evidence gap');
       if (c.judgment === 'supported' && !criterion.allowed_work_statuses.includes(c.work_status)) fail('work status cannot support this criterion');
@@ -149,6 +151,7 @@ export function validateAssessment(bundle, assessment, rubric) {
           c.evidence.every(e => bundle.documents.find(d => d.document_id === e.document_id).kind === 'proposal')) {
         fail('completed result requires annual or supporting evidence');
       }
+      });
     }
   }
   return assessment;

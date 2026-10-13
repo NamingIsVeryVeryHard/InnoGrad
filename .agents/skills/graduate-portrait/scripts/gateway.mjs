@@ -28,16 +28,19 @@ export function createModelGateway({config,fetchImpl=fetch,onAttempt=()=>{}}) {
         if(payload.stream) {
           if(!response.headers.get('content-type')?.includes('text/event-stream'))throw failure('INNOAGENT_PROTOCOL','provider did not return SSE');
           res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache'});
-          const decoder=new TextDecoder();let pending='';let done=false;metadata.status='in_progress';
-          const parseLine=line=>{if(line==='data: [DONE]')done=true;else if(line.startsWith('data: ')){try{const event=JSON.parse(line.slice(6));if(typeof event.model==='string')metadata.actual_model=event.model;if(event.error)throw failure('INNOAGENT_PROTOCOL','provider SSE error');}catch(e){if(e.code)throw e;}}};
+          const decoder=new TextDecoder();let pending='';let done=false;let recorded=false;metadata.status='in_progress';
+          const parseLine=line=>{if(line==='data: [DONE]')done=true;else if(line.startsWith('data: ')){try{const event=JSON.parse(line.slice(6));if(typeof event.model==='string')metadata.actual_model=event.model;for(const choice of event.choices??[]){if(choice.index===0||choice.index===undefined){if(typeof choice.finish_reason==='string')metadata.finish_reason=choice.finish_reason;}}if(event.error)throw failure('INNOAGENT_PROTOCOL','provider SSE error');}catch(e){if(e.code)throw e;}}};
+          const complete=()=>{metadata.status='completed';metadata.stream_termination='done_marker';record(metadata);recorded=true;res.end();};
           try {
           for await(const chunk of response.body) {
             pending+=decoder.decode(chunk,{stream:true});const lines=pending.split('\n');pending=lines.pop();
             for(const line of lines)parseLine(line.replace(/\r$/,''));
             res.write(chunk);
+            // [DONE] terminates the SSE protocol; waiting for TCP EOF races client cleanup.
+            if(done){complete();break;}
           }
-          pending+=decoder.decode();if(pending)parseLine(pending.replace(/\r$/,''));if(!done)throw failure('INNOAGENT_PROTOCOL','incomplete provider SSE');metadata.status='completed';record(metadata);res.end();
-          }catch(e){metadata.status=aborter.signal.aborted?'aborted':'stream_failed';record(metadata);throw e;}
+          if(!recorded){pending+=decoder.decode();if(pending)parseLine(pending.replace(/\r$/,''));if(!done)throw failure('INNOAGENT_PROTOCOL','incomplete provider SSE');complete();}
+          }catch(e){if(!recorded){metadata.status=aborter.signal.aborted?'aborted':'stream_failed';metadata.stream_termination=aborter.signal.aborted?'client_closed_before_done':'incomplete';record(metadata);}throw e;}
         } else {const envelope=await response.json();metadata.actual_model=typeof envelope.model==='string'?envelope.model:null;record(metadata);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(envelope));}
         return;
       }

@@ -55,7 +55,7 @@ build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：ski
 
 按 references/implicit-rubric.json 的每个 criterion 输出 judgment、work_status、rationale、evidence、missing_evidence。只支持符合 description 的原文，不能用论文数、关键词数、领先自评或服务人数替代具体证据。开题计划可支持问题分析和方案设计，不能支持完成实验、验证结果或改进成效。
 
-缺证据用 not_observed 并说明缺什么。not_observed 不表示矛盾、不合格、低能力或零分；contradicted 必须有直接反证。等级由配置的累计 requires 确定性导出，模型不得输出等级、score、人格或正式审核决定。等级只表示本次材料的支持程度；配置为 draft_uncalibrated，需要教师核对及校准，隐性等级不纳入显性总分。
+缺证据用 not_observed 并说明缺什么。evidence 为空时 work_status 必须为 unknown；任何非 unknown 工作状态都须有直接引文。allowed_work_statuses 是标准允许的状态，不能直接抄成实际状态。not_observed 不表示矛盾、不合格、低能力或零分；contradicted 必须有直接反证。等级由配置的累计 requires 确定性导出，模型不得输出等级、score、人格或正式审核决定。等级只表示本次材料的支持程度；配置为 draft_uncalibrated，需要教师核对及校准，隐性等级不纳入显性总分。
 
 ## 修改与评价
 
