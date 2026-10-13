@@ -5,6 +5,7 @@ export function prepareTask({bundle,rules,rubric}, phase='extraction') {
   if (!['extraction','assessment'].includes(phase)) throw new Error('unknown task phase');
   const instructions = phase==='extraction' ? [
     '从材料逐项抽取事实，不计算分数或正式结论。只输出一个符合schema的JSON对象。',
+    'grade_label只填写原文明示年级，例如博一、博士二年级、年级；博士研究生是培养层次，不能当年级，也不从入学年份推算。',
     '未观察字段不填；数字只能从所引原句提取，numeric_token写数字本身。120余篇、超过3000标lower_bound，约/近/左右标approximate，不得抹去模糊程度。',
     '本期发表自报数仅指明确本期且明确发表。累计服务不能改写成本期人数。录用、在审、发表分开，计划保留planned。',
     'item按kind与标题/identifier记录，period_status不明写uncertain。period=null时禁止in_scope。只抽取当前学生，不用名字合并身份。',

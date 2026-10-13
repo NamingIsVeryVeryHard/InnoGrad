@@ -1,6 +1,6 @@
 # 研究生画像方法原型
 
-本原型接收已解析的年度报告、开题报告及证明材料，生成显性事实、固定规则检查和隐性评价草稿。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，尚未接入业务服务和正式审核。材料解析由上游负责。
+本原型接收已解析的年度报告、开题报告及证明材料，生成显性事实、固定规则检查和隐性评价草稿。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供本地 API 接入原型，尚未接入正式审核。材料解析由上游负责。
 
 ## 处理方法
 
@@ -65,7 +65,11 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synt
 
 合成示例生成 portrait.json 和 portrait.md，来源标为 synthetic/offline_replay。它验证流程与数据约定，不代表真实模型抽取效果。
 
-[graduate-portrait Skill](../../.agents/skills/graduate-portrait/SKILL.md)包含 prepare、validate、build 和可选远端调用的完整步骤。Inno-Agent 或其他具备文件与脚本能力的 Agent 可读取 Skill，完成抽取和逐项评价，再调用程序校验和生成结果。学校 API 如支持兼容的 Chat Completions 协议，可通过环境变量配置适配器；真实服务尚未完成联调。API 密钥不写入样例或版本库。
+主流程由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../.agents/skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。平台入口、隔离工作区和 Skill 安装步骤见 Skill 说明。
+
+API 提供异步生成、结果查询、只读规则配置，以及可调试的 Swagger UI 和 OpenAPI JSON。模型配置由服务端读取本项目的 .env，默认使用 ECNU Plus；明确额度耗尽时才切换配置好的 CLIProxy Grok 或 Gemini。普通限速、超时、无效 JSON 或缺失证据不触发换模型。备用推理档位为 low，响应来源记录区分请求别名与服务实际模型。密钥、真实材料和中间输出均不进入版本库。
+
+底层 ECNU Plus 抽取与逐项评价已用真实年度报告验证；两个备用模型已用无学生数据的最小请求验证连接。这不等于完整备用切换或所有模型质量均已验证。完整 InnoAgent 业务链路仍需独立样例验收。
 
 真实材料及输出放在被 Git 忽略的 local-runs/，仓库测试只使用合成材料。未配置服务时，可由当前 Agent 按 Skill 完成语义工作并离线校验；执行来源必须如实记录，不冒充线上模型结果。
 

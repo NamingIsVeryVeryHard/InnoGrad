@@ -5,6 +5,8 @@ import { buildPortrait,validateExtraction,validateAssessment } from './engine.mj
 import { prepareTask } from './prompts.mjs';
 import { renderPortrait } from './report.mjs';
 import { adapterConfig,requestStructured } from './adapter.mjs';
+import { runPortraitWorkflow } from './workflow.mjs';
+import { loadProjectEnv } from './env.mjs';
 import { fixture } from './synthetic.mjs';
 const json=async path=>{let contents;try{contents=await readFile(path,'utf8');}catch{throw new Error('input JSON file cannot be read');}try{return JSON.parse(contents);}catch{throw new Error('input JSON file is invalid');}};
 const save=async(path,data)=>writeFile(path,JSON.stringify(data,null,2)+'\n',{mode:0o600});
@@ -16,18 +18,21 @@ async function output(out,input){const result=buildPortrait(input);await mkdir(o
 async function main() {
   const [command,...args]=process.argv.slice(2);const o=options(args);
   if(command==='demo'){const f=fixture();f.provenance={mode:'synthetic',description:'synthetic/offline_replay'};const out=resolve(o.out??'local-runs/synthetic');await mkdir(out,{recursive:true,mode:0o700});for(const k of ['bundle','extraction','assessment'])await save(join(out,k+'.json'),f[k]);await output(out,f);console.log('synthetic/offline_replay completed');return;}
-  if(!['prepare','validate','build','remote'].includes(command))throw new Error('commands: prepare, validate, build, demo, remote');
+  if(!['prepare','validate','build','remote','workflow'].includes(command))throw new Error('commands: prepare, validate, build, demo, remote');
   if(!o.bundle)throw new Error('--bundle required');const bundle=await json(o.bundle);
   const rules=await json(o.rules??new URL('../references/explicit-rules.json',import.meta.url));const rubric=await json(o.rubric??new URL('../references/implicit-rubric.json',import.meta.url));
   const out=o.out&&resolve(o.out);
   if(command==='prepare'){if(!out)throw new Error('--out required');const tasks={extraction:prepareTask({bundle,rules,rubric}),assessment:prepareTask({bundle,rules,rubric},'assessment')};await mkdir(out,{recursive:true,mode:0o700});for(const [phase,task]of Object.entries(tasks)){await save(join(out,phase+'-task.json'),task);await save(join(out,phase+'-schema.json'),task.schema);}console.log('local task packages prepared');return;}
+  if(command==='workflow'){if(!out)throw new Error('--out required');const result=await runPortraitWorkflow({bundle,rules,rubric});await mkdir(out,{recursive:true,mode:0o700});await save(join(out,'portrait.json'),result);await writeFile(join(out,'portrait.md'),renderPortrait(result),{mode:0o600});console.log('InnoAgent Skill workflow completed');return;}
   if(command==='remote'){
-    if(!out)throw new Error('--out required');const config=adapterConfig(process.env);
+    if(!out)throw new Error('--out required');const config=adapterConfig(await loadProjectEnv());
     const extracted=await requestStructured(prepareTask({bundle,rules,rubric}),{config,validate:d=>validateExtraction(bundle,d,rules)});
     const assessed=await requestStructured(prepareTask({bundle,rules,rubric},'assessment'),{config,validate:d=>validateAssessment(bundle,d,rubric)});
     await mkdir(out,{recursive:true,mode:0o700});await save(join(out,'extraction.json'),extracted.data);await save(join(out,'assessment.json'),assessed.data);
-    await output(out,{bundle,rules,rubric,extraction:extracted.data,assessment:assessed.data,provenance:{mode:'remote_model',model:config.model,description:'Chat Completions; extraction attempts '+extracted.attempts+'; assessment attempts '+assessed.attempts}});console.log('remote workflow completed');return;
+    await output(out,{bundle,rules,rubric,extraction:extracted.data,assessment:assessed.data,provenance:{mode:'remote_model',model:assessed.model,description:JSON.stringify({protocol:'Chat Completions',extraction:extracted.records,assessment:assessed.records})}});console.log('remote workflow completed');return;
   }
+  if(o.mode==='remote_model')throw new Error('local build is a replay; remote_model is recorded only by a real request');
+  if(o.model&&['synthetic','assistant_curated'].includes(o.mode))throw new Error('synthetic or curated mode cannot name a model');
   if(!o.extraction||!o.assessment)throw new Error('--extraction and --assessment required');
   const input={bundle,rules,rubric,extraction:await json(o.extraction),assessment:await json(o.assessment),provenance:{mode:o.mode??'offline_replay',model:o.model??null,description:o['producer-note']??null}};
   if(command==='validate'){buildPortrait(input);console.log('validated');return;}if(!out)throw new Error('--out required');await output(out,input);console.log('local portrait built');

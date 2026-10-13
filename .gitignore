@@ -19,3 +19,4 @@ Thumbs.db
 # Local portrait runs can contain student materials
 node_modules/
 /local-runs/
+/apps/server/portrait/dist/

@@ -20,7 +20,7 @@ test('CLI从合成输入准备任务包、严格校验并一致重放',async()=>
  await run(process.execPath,[script,'build',...input,'--out',join(dir,'replay'),'--mode','synthetic','--producer-note','synthetic/offline_replay']);
  assert.deepEqual(JSON.parse(await readFile(join(dir,'replay','portrait.json'),'utf8')),first);
  const md=await readFile(join(dir,'portrait.md'),'utf8');assert.match(md,/待人工复核/);assert.match(md,/自报 3；逐项 2/);
- await assert.rejects(run(process.execPath,[script,'remote','--bundle',join(dir,'bundle.json'),'--out',join(dir,'remote')],{env:{PATH:process.env.PATH}}),/PORTRAIT_API_URL/);
+ await assert.rejects(run(process.execPath,[script,'remote','--bundle',join(dir,'bundle.json'),'--out',join(dir,'remote')],{env:{PATH:process.env.PATH,PORTRAIT_API_URL:'',PORTRAIT_API_MODEL:'',PORTRAIT_API_KEY:''}}),/PORTRAIT_API_URL/);
  } finally {await rm(dir,{recursive:true,force:true});}
 });
 

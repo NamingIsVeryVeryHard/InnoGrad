@@ -47,7 +47,7 @@ function metricsFor(extraction,rules) {
 function ledgerFor(extraction,rules,bundle) {
   // Merge exact normalized titles or identifiers within a kind. Never merge students by name.
   const groups=[];
-  const potentialDuplicates=[];
+  let potentialDuplicates=[];
   const eventKinds=new Set(['exchange','practice','training']);
   const sameEvidence=(a,b)=>canonical(a.evidence)===canonical(b.evidence);
   function relationship(a,b) {
@@ -71,6 +71,8 @@ function ledgerFor(extraction,rules,bundle) {
     for (const other of matches.slice(1)) {g.items.push(...other.items);groups.splice(groups.indexOf(other),1);}
     g.items.push(item);
   }
+  // A later identifier can confirm a merge. Keep only unresolved links across final groups.
+  potentialDuplicates=potentialDuplicates.filter(p=>new Set(p.item_ids.map(id=>groups.findIndex(g=>g.items.some(i=>i.item_id===id)))).size>1);
   const itemConflicts=groups.filter(g=>new Set(g.items.map(i=>i.status)).size>1 || new Set(g.items.map(i=>i.period_status)).size>1).map(g=>({kind:g.kind,item_ids:g.items.map(i=>i.item_id),statuses:[...new Set(g.items.map(i=>i.status))],period_statuses:[...new Set(g.items.map(i=>i.period_status))]}));
   const ledger={}, details={};
   for (const kind of rules.item_kinds) {
@@ -127,6 +129,7 @@ export function buildPortrait({bundle,extraction,assessment,rules,rubric,provena
   validateConfig(rules,rubric);validateExtraction(bundle,extraction,rules);validateAssessment(bundle,assessment,rubric);
   const mode=provenance.mode??'offline_replay';
   if(!['offline_replay','synthetic','assistant_curated','skill_execution','remote_model'].includes(mode))throw new Error('unknown producer mode');
+  if(['synthetic','assistant_curated','offline_replay'].includes(mode)&&provenance.model)throw new Error('replay or curated provenance cannot name a model');
   const producer={mode,model:provenance.model??null,description:provenance.description??null};
   if(mode==='remote_model'&&!producer.model)throw new Error('remote model provenance required');
   const hashes={input:hash(bundle),extraction:hash(extraction),assessment:hash(assessment),rules:hash(rules),rubric:hash(rubric),skill:implementationHash()};

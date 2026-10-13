@@ -37,5 +37,31 @@
         "in_scope forbidden when period=null"
       ]
     }
+  ],
+  "scope_cases": [
+    {
+      "request": "年度报告证据画像",
+      "expected": "invoke"
+    },
+    {
+      "request": "已解析文本论文数及学分核对",
+      "expected": "invoke"
+    },
+    {
+      "request": "原始扫描件OCR",
+      "expected": "out_of_scope"
+    },
+    {
+      "request": "判定正式考核通过或随意能力总分",
+      "expected": "refuse_official_decision_and_score"
+    },
+    {
+      "request": "混合两个student_id材料",
+      "expected": "reject_input"
+    },
+    {
+      "request": "博士研究生填为年级",
+      "expected": "do_not_extract_grade_label"
+    }
   ]
 }

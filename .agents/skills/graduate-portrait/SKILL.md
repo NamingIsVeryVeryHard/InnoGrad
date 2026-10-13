@@ -5,6 +5,10 @@ description: 从已解析的研究生年度报告、开题报告和证明材料�
 
 # 研究生画像
 
+将本目录复制到明确的 INNO_SKILLS_DIR/graduate-portrait 或指定工作区 .skills/graduate-portrait（不复制 node_modules 与 .env），然后在该目录 scripts 内 npm ci；仓库 .agents/skills 不会由 InnoAgent 自动发现。
+
+InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills` 中该 Skill 的 enabled 与 loaded 均为 true；平台负责加载 Skill，随后按本文件准备任务包、抽取和评价，服务端脚本核验并生成草稿。自动选择 Skill 及 Claude/Codex 完整运行尚未实测。
+
 使用已有解析文本执行固定流程：准备任务包 → 提取事实 → 核验出处 → 逐项评价 → 生成画像。脚本、规则和合成样例均在本 Skill 内，安装到其他位置后仍可运行。依赖 Node.js 22 以上，首次在 scripts 内执行 npm ci。
 
 ## 范围与输入
@@ -17,27 +21,30 @@ description: 从已解析的研究生年度报告、开题报告和证明材料�
 
 ## 执行
 
-以下命令从仓库根运行；独立安装时将脚本路径替换为该 Skill 的 scripts/cli.mjs。
+以下命令从本 Skill 目录运行。输入与输出路径由调用者明确指定；references 与脚本路径均相对本 Skill。安装依赖后才执行脚本。
 
 ~~~sh
-node .agents/skills/graduate-portrait/scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
+node scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
 ~~~
 
 prepare 生成 extraction-task.json、assessment-task.json 及各自 JSON Schema。读取任务包，按 instructions 和 configuration 完成两份 JSON；当前 Agent 可离线执行，不要求 API。事实抽取与逐项评价是语义工作，脚本不以关键词或随机值代替。
 
 ~~~sh
-node .agents/skills/graduate-portrait/scripts/cli.mjs validate --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json
-node .agents/skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json --out local-runs/result --mode skill_execution --producer-note '当前Agent依据Skill执行，待教师复核'
-node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synthetic
+node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json
+node scripts/cli.mjs build --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json --out local-runs/result --mode skill_execution --producer-note '当前Agent依据Skill执行，待教师复核'
+node scripts/cli.mjs demo --out local-runs/synthetic
 ~~~
 
-build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 只用于真实模型调用并记录模型名，不能给离线示例伪造模型或人工审核来源。合成 demo 明确标为 synthetic/offline_replay。
+装载后的 Agent 不应调用 workflow 再递归调用平台；它直接执行抽取与评价。业务服务通过 scripts/workflow.mjs 的 runPortraitWorkflow 调用 InnoAgent，每个学生使用新建的独立工作区和 session，并强制 /skill:graduate-portrait。外部服务也可执行 `node scripts/cli.mjs workflow --bundle <明确路径> --out <明确路径>`。
+
+build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 仅由 remote 真实请求记录；本地 build 不接受该模式。重放只表示本次离线运行，不能伪称新模型调用；合成、整理及重放模式的 model 必须为空。合成 demo 明确标为 synthetic/offline_replay。
 
 ## 事实抽取约束
 
 - 所有观察都有 document_id、segment_id、quote。引用原句，允许忽略排版空白和全半角。结构合法及引用存在不证明语义判断正确。
 - 缺失事实不填；程序输出 null。多个冲突值保留 observations 与 conflict，不选最高值。没有列出的成果不等于实际零；coverage.complete 只用于明确完整清单。
-- 数字保留 numeric_token 与 exact、lower_bound 或 approximate。“120余篇”“超过3000人”不能当精确值，也不能从100提取10。“累计服务超过3000人”不属于本期人数，保留在实践项目原句中，不能填本期统计。
+- 数字保留 numeric_token 与 exact、lower_bound 或 approximate。年级只从明确“博一”“博士二年级”“年级”记载提取；“博士研究生”不是年级，也不能根据入学年份计算。
+- “120余篇”“超过3000人”不能当精确值，也不能从100提取10。当前不支持上界、否定数量或区间，如“不超过20”“不足20”“至多20”，不得截成精确或下界事实。“累计服务超过3000人”不属于本期人数，保留在实践项目原句中，不能填本期统计。
 - 投稿、录用、发表分别记录。计划保持 planned；期间不明写 uncertain，跨期写 out_of_scope。按成果 kind、identifier、标题及事件日期核对重复。不同标识或不同日期活动分别记录；模糊重复待复核，状态冲突不挑最好状态。
 - 自报发表3篇但仅列2篇时分别保留 self_report 与 listed 并待复核，不补出第三篇。完整列表内未知状态或不明期间也不能推出精确零。部分解析来源的完整清单声明会降级为部分覆盖，保留列明项及 partial_source 提示。
 - 空白签字或审核表不表示审核通过；材料自述不等于独立验证，不外查语言或发表状态来补造结果。
@@ -58,10 +65,12 @@ minimum 只有明确阈值、适用 stage 和非空制度来源时启用，缺�
 
 ## 可选远端调用
 
-remote 命令才会发送材料。事先确认数据和服务授权；设置 PORTRAIT_API_URL 为完整 HTTPS Chat Completions 地址、PORTRAIT_API_MODEL 为服务实际模型名、PORTRAIT_API_KEY 为已授权密钥。不提供默认模型、地址或密钥，不读取其他应用私密配置。
+workflow 与 remote 均会把材料发送到指定平台和模型服务。事先确认数据和服务授权；本项目根 .env 只由服务端读取，已有进程变量优先，不搜索其他应用配置。设置 PORTRAIT_API_URL 为完整 HTTPS Chat Completions 地址（本地 CLIProxy 允许 loopback HTTP）、PORTRAIT_API_MODEL 为服务实际模型名、PORTRAIT_API_KEY 为已授权密钥。不提供默认模型、地址或密钥，不读取其他应用私密配置。
 
 ~~~sh
-node .agents/skills/graduate-portrait/scripts/cli.mjs remote --bundle local-runs/input/bundle.json --out local-runs/remote
+node scripts/cli.mjs remote --bundle local-runs/input/bundle.json --out local-runs/remote
 ~~~
 
-请求使用原生 fetch，要求完整 JSON，并在本地执行严格 schema、身份、期间、数字和原句校验。无效输出最多重新生成一次；HTTP失败、拒绝或截断立即失败，禁止回退合成结果。仅已验证 mock，真实服务和模型输出质量尚未验证。
+请求使用原生 fetch，要求完整 JSON，并在本地执行严格 schema、身份、期间、数字和原句校验。无效输出最多重新生成一次；普通 HTTP 失败、拒绝或截断立即失败，禁止回退合成结果。已完成 ECNU Plus 首个真实材料的底层抽取、评价与严格校验；服务返回实际模型 qwen3.8-flash。InnoAgent 隔离实例已验证 Skill 发现与原生 /skill 展开；完整画像联调结果按具体运行记录确认，不把这些检查当作模型准确率证明。
+
+超时默认 240000 ms，可用 PORTRAIT_API_TIMEOUT_MS 调整。可选 PORTRAIT_FALLBACK_GROK_*、PORTRAIT_FALLBACK_GEMINI_* 仅在明确额度耗尽代码时启用；普通 429、结构或证据校验失败不换模型。支持的备用模型发送 low effort。InnoAgent 通过 loopback 模型网关保留原生流与工具，并记录 requested_model、actual_model、provider 和 attempts；密钥不进入画像、日志或浏览器。

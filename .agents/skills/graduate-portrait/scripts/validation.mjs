@@ -93,6 +93,7 @@ export function validateExtraction(bundle, extraction, rules) {
       if (!occurrences.length) fail('numeric token not found at number boundary');
       for (const {q,index} of occurrences) {
         const before=q.slice(0,index),after=q.slice(index+token.length);
+        if (/(?:不超过|未超过|不多于|不高于|至多|最多|不足|少于|小于|低于|不到|不满|上限(?:为)?|不(?:大于|足))$/.test(before)||/^(?:[^0-9零〇一二两三四五六七八九十百千万，。；：、]{0,3})(?:以下|以内)/u.test(after)) fail('upper bound or negated quantity unsupported');
         if (/[-−]$/.test(before)||/[0-9零〇一二两三四五六七八九十百千万][~～至到]$/u.test(before)||/^[-−~～至到][0-9零〇一二两三四五六七八九十百千万]/u.test(after)) fail('negative number or range unsupported');
         const approximate=/(?:大约|约|近)$/.test(before)||/^(?:[^0-9零〇一二两三四五六七八九十百千万，。；：、]{0,3})左右/u.test(after);
         const lower=/(?:超过|超|多于|至少|不少于)$/.test(before)||/^(?:余|多|[^0-9零〇一二两三四五六七八九十百千万，。；：、]{0,3}以上)/u.test(after);
