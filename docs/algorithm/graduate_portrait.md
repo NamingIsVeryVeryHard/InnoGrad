@@ -40,6 +40,8 @@
 | [Google LangExtract：结构化输出与原文定位](https://developers.googleblog.com/introducing-langextract-a-gemini-powered-information-extraction-library/) | 每项记录绑定文件、分段和原句；本地核验引用 | 借鉴溯源方法，未引入该库，也未实现其字符偏移定位 |
 | [Agent Skills 规范](https://agentskills.io/specification)及[评价指南](https://agentskills.io/skill-creation/evaluating-skills) | 拆分指令、配置、脚本和回放样例，变更后复查同一组案例 | 格式检查和程序测试不能替代真实模型评价 |
 
+Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时显式选择 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出，教师一致性仍需另行评估。
+
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
 
 ## 接口约定
@@ -70,6 +72,8 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synt
 ## 学校规则与配置变更
 
 优先取得对应学院、专业、培养类别及入学年级的培养方案，以及年度考核或中期考核细则和评分表。随后补充开题、科研成果认定、学术交流与实践的制度。每条规则都需明确适用对象、阶段、统计期间、阈值、材料要求、制度版本及条款来源。
+
+已核对的公开文件说明了适用范围的重要性：[2021—2022 学年博士年度报告通知](https://yjsy.ecnu.edu.cn/73/cb/c3610a422859/page.htm)要求当年 9 月 30 日前完成，并将具体考核内容交由学科培养方案确定；[2024 年发布的软件工程博士培养方案](https://sei.ecnu.edu.cn/fd/f2/c33209a654834/page.htm)规定学年末年度报告、在学期间的学术活动要求，以及开题至申请预答辩的间隔。这些规定不能直接当作所有学院、年级和年度报告的统一阈值。研究院当届培养方案与考核细则未确认前，公开线索只用于核对，不启用达标判定。
 
 当前 minimum 检查只在有阈值、适用阶段和制度来源时启用。适用学院、培养类别、年级及有效期由规则配置者核对，原型尚未自动匹配完整制度。缺少规则时输出 pending_rule；仅核对材料记载的已修与要求学分时，会明确标为材料比较，不作制度达标结论。正式权重和总分暂不生成。
 
