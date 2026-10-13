@@ -67,7 +67,7 @@ flowchart LR
 
 ## 使用说明
 
-画像方法原型可使用合成材料运行，安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)。完整业务应用的安装和部署说明将在实现后补充。
+画像方法原型可使用合成材料运行，也可通过 InnoAgent 执行真实 Skill。安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)，本地服务和 Swagger 调试见[画像 API](apps/server/portrait/README.md)。完整业务应用的安装和部署说明将在实现后补充。
 
 ## 项目文档
 
@@ -108,7 +108,7 @@ InnoGrad/
     └── plan.md           # 阶段交付与验收
 ```
 
-画像原型的配置和脚本位于 .agents/skills/graduate-portrait/，方法说明位于 docs/algorithm/，相关测试位于 tests/。应用、复盘和持续集成目录仍为预留结构；业务实现随需求设计补充。
+画像原型的配置和脚本位于 .agents/skills/graduate-portrait/，方法说明位于 docs/algorithm/，相关测试位于 tests/。apps/server/portrait/ 提供本地画像 API；完整业务应用、复盘和持续集成仍待实现。
 
 ## 参与贡献
 
