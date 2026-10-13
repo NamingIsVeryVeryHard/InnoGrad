@@ -79,6 +79,8 @@ flowchart LR
 | [功能树与范围映射](docs/requirements/feature_tree.md) | 管理端重点与学生端简洁入口、51 项 FR 功能及范围映射 |
 | [功能需求](docs/requirements/functional_requirements.md) | 输入、处理、输出、异常、审核状态和验收场景 |
 | [非功能需求](docs/requirements/nonfunctional_requirements.md) | 性能、安全、可靠性等基本质量要求与待确认内容 |
+| [功能规格说明书](docs/requirements/functional_spec.md) | 按课程模板汇总角色、功能树、审核闭环和核心领域类图 |
+| [非功能需求规范](docs/requirements/nonfunctional_spec.md) | 课程要求提交的基本质量要求；具体指标仍待确认 |
 | [UML 领域模型](docs/software/domain_model.md) | 核心业务对象、属性、关系与多重性 |
 | [平台基础与建设边界](docs/software/platform_reuse.md) | Inno-Agent 的可复用能力与需要建设的业务能力 |
 | [协作流程](docs/mgmt/project_workflow.md) | 任务管理、需求反馈、缺陷记录和评审约定 |
