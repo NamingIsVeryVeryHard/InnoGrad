@@ -2,16 +2,133 @@
 
 本地服务把已解析材料交给 InnoAgent 的 `graduate-portrait` Skill，返回待人工复核的画像草稿。显性部分按材料记录统计和核对，隐性部分按配置的评价标准判断材料支持程度。没有制度原文的阈值保持待配置，不得据此认定学生达标。
 
-## 启动与调试
+## 准备本地运行环境
 
-需要 Node.js 22 或更新版本。先按[画像 Skill](../../../.agents/skills/graduate-portrait/SKILL.md)配置服务端 InnoAgent 入口与工作区。模型密钥留在服务端配置中，接口不接受客户端密钥。
+需要 Node.js 22 或更新版本、Git 和已登录的 GitHub CLI。下面的命令从仓库根目录执行。模型密钥只填入本地 `.env`；接口和浏览器不接受密钥。已有 `.env` 时补齐缺少的变量，不覆盖现有配置。
 
-在本目录运行：
+首次创建配置：
 
 ```sh
-npm ci
-npm start
+cp .env.example .env
+npm --prefix .agents/skills/graduate-portrait/scripts ci
+npm --prefix apps/server/portrait ci
 ```
+
+按 `.env.example`填写 ECNU Plus 的 `PORTRAIT_API_KEY`，保留或按实际服务调整 `PORTRAIT_API_URL`、`PORTRAIT_API_MODEL`与超时值。备用服务使用模板中的 `PORTRAIT_FALLBACK_GROK_*`、`PORTRAIT_FALLBACK_GEMINI_*`；只有明确额度耗尽时才切换，普通429、结构或证据错误不换模型。以下本机端口须与后续命令一致：
+
+```dotenv
+INNOAGENT_URL=http://127.0.0.1:3147
+INNOAGENT_MODEL_AUDIT_URL=http://127.0.0.1:3148
+INNOAGENT_TIMEOUT_MS=240000
+```
+
+连接顺序为画像 API（3001）→ InnoAgent（3147）→ 模型网关（3148）→ `.env`指定的模型服务。`local-runs/`已被 Git 忽略，用于隔离实例和本地结果；其中的会话和工作区可能包含材料，不要提交。
+
+### 构建固定版本的官方 InnoAgent
+
+首次在新的目录检出[官方仓库](https://github.com/hhyqhh/inno-agent)，固定到已核对接口的提交。已有同名源码目录时先确认其版本，不覆盖本地修改。
+
+```sh
+mkdir -p local-runs
+gh repo clone hhyqhh/inno-agent local-runs/innoagent-source
+git -C local-runs/innoagent-source checkout --detach 5be785f8cc0a89394b858c123d60738078a597cb
+(cd local-runs/innoagent-source && npm ci --ignore-scripts --no-audit --no-fund)
+(cd local-runs/innoagent-source && npm --workspace inno-agent run build)
+```
+
+### 安装 Skill 与隔离配置
+
+InnoAgent 不会自动发现仓库的 `.agents/skills/`。首次在新的运行目录安装[画像 Skill](../../../.agents/skills/graduate-portrait/SKILL.md)，排除依赖和环境文件；以后修改 Skill 时同步这些文件，再重启 InnoAgent。工作流会检查平台加载的 `SKILL.md`与仓库文件完全一致。
+
+```sh
+mkdir -p local-runs/innoagent/skills/graduate-portrait
+mkdir -p local-runs/innoagent/home local-runs/innoagent/data local-runs/innoagent/workspace
+rsync -a --exclude=node_modules --exclude='.env' --exclude='.env.*' \
+  .agents/skills/graduate-portrait/ local-runs/innoagent/skills/graduate-portrait/
+npm --prefix local-runs/innoagent/skills/graduate-portrait/scripts ci
+```
+
+新建 `local-runs/innoagent/config.json`：
+
+```json
+{
+  "defaultProvider": "ecnu",
+  "defaultModel": "ecnu-plus",
+  "providers": {
+    "ecnu": {
+      "baseUrl": "http://127.0.0.1:3148/v1",
+      "apiKey": "local-gateway",
+      "api": "openai-completions",
+      "bypassProxy": true,
+      "models": [{
+        "id": "ecnu-plus",
+        "name": "ECNU Plus",
+        "reasoning": false,
+        "input": ["text"],
+        "contextWindow": 128000,
+        "maxTokens": 16000
+      }]
+    }
+  },
+  "memory": { "l1Enabled": false, "l2Enabled": false, "l3Enabled": false },
+  "subagents": { "enabled": false },
+  "mcp": { "enabled": false },
+  "plugins": {
+    "todo": { "enabled": false },
+    "webAccess": { "enabled": false },
+    "computerUse": { "enabled": false },
+    "codemode": { "enabled": false },
+    "permissionSystem": { "enabled": true, "mode": "default" }
+  }
+}
+```
+
+`local-gateway`是本机连接的占位字符串，真正的模型密钥由网关读取 `.env`。画像流程不需要持久记忆、子智能体或外部工具；保留默认权限审批。阶段任务若请求工具审批或用户交互，本地结束等待并返回 `TOOL_APPROVAL_REQUIRED`，同时尝试取消对应的 InnoAgent 执行；上游取消结果需确认，重试前请检查 InnoAgent。
+
+该固定版本的官方服务按数字端口调用 `listen`，没有主机参数。创建以下启动适配文件，将监听限制在本机；它不修改官方源码，也不是隔离沙箱：
+
+```sh
+cat > local-runs/innoagent/loopback.mjs <<'JS'
+import net from 'node:net';
+const original = net.Server.prototype.listen;
+net.Server.prototype.listen = function (...args) {
+  if (typeof args[0] === 'number') args.splice(1, 0, '127.0.0.1');
+  return original.apply(this, args);
+};
+JS
+```
+
+## 启动与调试
+
+按以下顺序在三个终端启动。每个终端均从仓库根目录运行，并保持进程运行。
+
+终端一启动模型网关，读取明确指定的环境文件，监听 `127.0.0.1:3148`：
+
+```sh
+PORTRAIT_ENV_FILE="$(pwd)/.env" node --input-type=module -e \
+  "import { startModelGateway } from './.agents/skills/graduate-portrait/scripts/gateway.mjs'; await startModelGateway();"
+```
+
+终端二启动官方 InnoAgent，所有运行目录均明确指定，监听 `127.0.0.1:3147`：
+
+```sh
+node --import "$(pwd)/local-runs/innoagent/loopback.mjs" \
+  "$(pwd)/local-runs/innoagent-source/apps/inno-agent/dist/server.js" \
+  --home "$(pwd)/local-runs/innoagent/home" \
+  --config "$(pwd)/local-runs/innoagent/config.json" \
+  --data "$(pwd)/local-runs/innoagent/data" \
+  --skills-dir "$(pwd)/local-runs/innoagent/skills" \
+  --workspace-dir "$(pwd)/local-runs/innoagent/workspace" \
+  --port 3147
+```
+
+先确认 [InnoAgent Skills](http://127.0.0.1:3147/api/skills)中的 `graduate-portrait`同时满足 `loaded: true`与 `enabled: true`。终端三启动画像 API：
+
+```sh
+PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
+```
+
+`PORTRAIT_ENV_FILE`明确指定仓库根目录的环境文件，不搜索父目录。在 API 子目录启动时，也须把它设置为该文件的绝对路径。停止服务时在对应终端按 Ctrl+C；重启顺序同上。模型网关的调用记录仅存于进程内，重启后清空。
 
 默认只监听 `127.0.0.1:3001`。用 `PORTRAIT_PORT` 指定其他端口。浏览器打开 [Swagger UI](http://127.0.0.1:3001/docs/)可查看结构、展开接口并使用 **Try it out** 调试；[OpenAPI JSON](http://127.0.0.1:3001/openapi.json)供其他客户端读取。
 
@@ -37,10 +154,12 @@ npm start
 
 ## 验证
 
+在仓库根目录运行：
+
 ```sh
-npm test
-npm run typecheck
-npm run build
+npm --prefix apps/server/portrait test
+npm --prefix apps/server/portrait run typecheck
+npm --prefix apps/server/portrait run build
 ```
 
 接口测试覆盖输入一致性、异步任务、草稿结果、错误脱敏、超时取消、容量限制、过期、关闭取消、OpenAPI 和 Swagger 页面。真实 InnoAgent 与真实模型调用需要单独验证，测试中的合成执行函数不能证明在线效果。

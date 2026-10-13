@@ -150,3 +150,40 @@ test('default runner fails closed when the real InnoAgent entry is missing', asy
   assert.equal(fetched.json().error.code, 'CONFIGURATION');
   assert.equal(fetched.json().portrait, undefined);
 });
+
+
+test('interactive approval requirements become an explicit safe task failure', async t => {
+  const fixture = await syntheticFixture();
+  const app = await createPortraitServer({ workflow: async () => {
+    throw Object.assign(new Error('private tool arguments'), { code: 'TOOL_APPROVAL_REQUIRED' });
+  } });
+  t.after(() => app.close());
+  const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  await delay(0);
+  const job = await app.inject(`/api/portraits/${response.json().id}`);
+  assert.equal(job.json().status, 'failed');
+  assert.equal(job.json().error.code, 'TOOL_APPROVAL_REQUIRED');
+  assert.match(job.json().error.message, /本地已停止等待/);
+  assert.match(job.json().error.message, /上游取消结果需确认/);
+  assert.match(job.json().error.message, /重试前请检查 InnoAgent/);
+  assert.doesNotMatch(job.json().error.message, /生成已停止/);
+  assert.doesNotMatch(job.body, /private tool arguments/);
+});
+
+
+test('unconfirmed upstream cancellation never claims the generation was cancelled', async t => {
+  const fixture = await syntheticFixture();
+  const app = await createPortraitServer({ workflow: async () => {
+    throw Object.assign(new Error('backend cancellation unconfirmed'), { code: 'ABORTED' });
+  } });
+  t.after(() => app.close());
+  const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  await delay(0);
+  const job = await app.inject(`/api/portraits/${response.json().id}`);
+  assert.equal(job.json().status, 'failed');
+  assert.equal(job.json().error.code, 'ABORTED');
+  assert.match(job.json().error.message, /本地已停止等待/);
+  assert.match(job.json().error.message, /上游取消结果需确认/);
+  assert.match(job.json().error.message, /重试前请检查 InnoAgent/);
+  assert.doesNotMatch(job.json().error.message, /画像任务已取消|生成已停止/);
+});

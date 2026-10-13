@@ -38,7 +38,8 @@ const messages: Record<string, string> = {
   QUOTA_EXHAUSTED: '模型服务配额已用尽。',
   STRUCTURED_OUTPUT: '画像输出未通过结构或证据校验。',
   INNOAGENT_PROTOCOL: 'InnoAgent 响应不符合约定。',
-  ABORTED: '画像任务已取消。',
+  TOOL_APPROVAL_REQUIRED: '阶段任务需要额外交互审批，本地已停止等待；上游取消结果需确认，重试前请检查 InnoAgent。',
+  ABORTED: '本地已停止等待；上游取消结果需确认，重试前请检查 InnoAgent。',
   JOB_TIMEOUT: '画像任务超过等待时间限制，上游可能仍在执行，确认结束前请勿重试。',
   GENERATION_FAILED: '画像生成失败，请检查本地服务配置。',
 };
