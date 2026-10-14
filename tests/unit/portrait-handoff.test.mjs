@@ -26,3 +26,7 @@ test('A同版本规则的阈值、适用阶段和指标集合必须一致',()=>{
 test('材料指纹不依赖对象字段顺序，文本与页段改变仍会变化',()=>{
  const f=fixture();const before=handoff.materialFingerprints(f.bundle);f.bundle.documents[0].segments[0]={text:f.bundle.documents[0].segments[0].text,page:null,segment_id:'body'};assert.deepEqual(handoff.materialFingerprints(f.bundle),before);f.bundle.documents[0].segments[0].page=2;assert.notDeepEqual(handoff.materialFingerprints(f.bundle),before);
 });
+test('A规则输入引用须来自实际交接抽取且计算字段不能缺少',()=>{
+ const f=fixture();const a=handoff.buildAResult({...f,metadata});a.explicit.checks[0].input_evidence[0]={document_id:'annual-1',segment_id:'body',quote:'研究问题是在小样本课堂数据中提高反馈准确性。'};assert.throws(()=>handoff.validateAResult(f.bundle,a,f.rules));
+ const b=handoff.buildAResult({...f,metadata});b.explicit.checks[0].status='consistent';delete b.explicit.checks[0].self_report;assert.throws(()=>handoff.validateAResult(f.bundle,b,f.rules));
+});

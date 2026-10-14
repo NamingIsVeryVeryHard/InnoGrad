@@ -34,8 +34,8 @@ const check = object({
   threshold: nullableNumber, observed: nullableNumber, qualifier,
   reference: nullableNumber, interpretation: text, self_report: number, listed: number,
   listing_coverage: choice(['complete', 'partial', 'not_reported']),
-}, ['id', 'label', 'kind', 'source', 'metric', 'status']);
-export const hashesSchema = object(Object.fromEntries(['input', 'extraction', 'assessment', 'rules', 'rubric', 'skill', 'a_result'].map(key => [key, { type: 'string', pattern: '^[a-f0-9]{64}$', nullable: true }])));
+}, ['id', 'label', 'kind', 'source', 'metric', 'status', 'rule_version', 'applicable_scope', 'input_evidence']);
+export const hashesSchema = object(Object.fromEntries(['input', 'extraction', 'assessment', 'rules', 'rubric', 'skill', 'a_result'].map(key => [key, { type: ['extraction','a_result'].includes(key)?['string','null']:'string', pattern: '^[a-f0-9]{64}$' }])));
 
 export const explicitSchema = object({
     overall_score: { type: 'null' },

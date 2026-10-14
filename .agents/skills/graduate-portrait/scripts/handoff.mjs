@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {scope,extractionSchema,evidenceSchema} from './schema.mjs';
 import {explicitSchema} from './portrait-schema.mjs';
-import {validateBundle,validateExtraction,validateEvidence,validateShape,unique} from './validation.mjs';
+import {validateBundle,validateExtraction,validateEvidence,validateShape,unique,compact} from './validation.mjs';
 import {buildExplicit} from './engine.mjs';
 const text={type:'string',minLength:1};
 const nullableText={type:['string','null'],minLength:1};
@@ -41,6 +41,11 @@ export function validateAResult(bundle,aResult,rules){
   if(!statuses[check.kind]?.includes(check.status))throw Error('A invalid status for rule kind');
   if(!definition||check.rule_version!==rules.version)throw Error('A rule version mismatch');
   if(!check.applicable_scope||['student_id','period','stage'].some(key=>check.applicable_scope[key]!==bundle[key]))throw Error('A rule scope mismatch');
+  if(!Array.isArray(check.input_evidence))throw Error('A rule input evidence required');
+  const allowedRefs=aResult.extraction.facts.filter(f=>[definition.metric,definition.reported_field,definition.required_field].includes(f.field)).flatMap(f=>f.evidence).concat(aResult.extraction.items.filter(i=>i.kind===definition.metric.split('.')[0]).flatMap(i=>i.evidence));
+  const refKey=e=>canonical([e.document_id,e.segment_id,compact(e.quote)]);const extractedRefs=new Set(allowedRefs.map(refKey));
+  if(check.input_evidence.some(e=>!extractedRefs.has(refKey(e))))throw Error('A rule input reference not in extraction');
+  if(['met','not_met','consistent'].includes(check.status)){const required=check.kind==='consistency'?['self_report','listed','listing_coverage']:check.kind==='minimum'?['threshold','observed']:['observed','reference'];if(required.some(key=>!Object.hasOwn(check,key)||check[key]===null))throw Error('A evaluated rule missing inputs');}
   validateEvidence(bundle,check.input_evidence,['met','not_met','consistent'].includes(check.status));
   if(!definition.applicable_stages.includes(bundle.stage)&&check.status!=='not_applicable')throw Error('A stage requires not applicable');
   if(definition.applicable_stages.includes(bundle.stage)&&check.status==='not_applicable')throw Error('A rule stage mismatch');
