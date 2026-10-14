@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runPortraitWorkflow,createInnoAgentRunner} from '../../.agents/skills/graduate-portrait/scripts/workflow.mjs';
+import {runPortraitWorkflow,createInnoAgentRunner} from '../../skills/graduate-portrait/scripts/workflow.mjs';
 import {fixture} from '../fixtures/portrait.mjs';
-import {createModelGateway} from '../../.agents/skills/graduate-portrait/scripts/gateway.mjs';
-import {loadProjectEnv} from '../../.agents/skills/graduate-portrait/scripts/env.mjs';
+import {createModelGateway} from '../../skills/graduate-portrait/scripts/gateway.mjs';
+import {loadProjectEnv} from '../../skills/graduate-portrait/scripts/env.mjs';
 import {mkdtemp,writeFile,rm,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const skillBody=await readFile(new URL('../../.agents/skills/graduate-portrait/SKILL.md',import.meta.url),'utf8');
+const skillBody=await readFile(new URL('../../skills/graduate-portrait/SKILL.md',import.meta.url),'utf8');
 const reply=data=>({ok:true,json:async()=>data});
 test('InnoAgent必须实际加载Skill、新建独立工作区并验证session',async()=>{let paths=[];const f=fixture();let phase=0;const runner=await createInnoAgentRunner({url:'http://localhost:3147',timeoutMs:1000},{fetchImpl:async(url,init)=>{paths.push(new URL(url).pathname);if(url.endsWith('/api/skills'))return reply([{name:'graduate-portrait',loaded:true,enabled:true}]);if(url.endsWith('/api/skills/graduate-portrait/content'))return reply({content:skillBody});if(url.endsWith('/api/sessions')){assert.equal(JSON.parse(init.body).newWorkspace.isTemp,false);return reply({id:'s',workspaceId:'portrait-123'});}if(url.endsWith('/api/sessions/s'))return reply({id:'s'});assert.match(JSON.parse(init.body).prompt,/^\/skill:graduate-portrait/);const task=JSON.parse(JSON.parse(init.body).prompt.split('\n').at(-1));const result=JSON.stringify(phase++===0?f.extraction:{...f.assessment,dimensions:f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id)});return new Response('data: '+JSON.stringify({sessionId:'s',turnId:'t',event:{type:'text_delta',delta:result}})+'\n\ndata: '+JSON.stringify({sessionId:'s',turnId:'t',event:{type:'done'}})+'\n\n');}});const p=await runPortraitWorkflow({...f,mode:'bundle_pipeline',runner});assert.equal(p.explicit.checks[0].status,'needs_review');assert.equal(p.provenance.producer.mode,'skill_execution');assert.equal(paths.filter(x=>x==='/api/chat/stream').length,1+f.rubric.dimensions.length);assert.deepEqual(runner.records,[{phase:'extraction',attempts:1},...f.rubric.dimensions.map(d=>({phase:'assessment',dimension_id:d.id,attempts:1}))]);await assert.rejects(createInnoAgentRunner({url:'http://localhost',timeoutMs:1000},{fetchImpl:async()=>reply([])}),e=>e.code==='CONFIGURATION');});
 test('环境加载只读显式文件且进程环境优先',async()=>{const dir=await mkdtemp(join(tmpdir(),'portrait-env-'));try{const path=join(dir,'.env');await writeFile(path,'PORTRAIT_API_MODEL=file-model\nPORTRAIT_API_KEY=synthetic\n');const env=await loadProjectEnv({env:{PORTRAIT_ENV_FILE:path,PORTRAIT_API_MODEL:'process-model'}});assert.equal(env.PORTRAIT_API_MODEL,'process-model');assert.equal(env.PORTRAIT_API_KEY,'synthetic');}finally{await rm(dir,{recursive:true,force:true});}});
@@ -29,8 +29,17 @@ test('默认B只评价；显式联调才抽取，已有A结果绝不重算',asyn
  const f=fixture();const phases=[];const runner={async execute(task,validate){phases.push(task.phase);const data=task.phase==='extraction'?f.extraction:{...f.assessment,dimensions:f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id)};validate(data);return data;}};
  let p=await runPortraitWorkflow({...f,runner});assert.deepEqual(phases,f.rubric.dimensions.map(()=> 'assessment'));assert.equal(p.explicit_status,'pending');
  phases.length=0;p=await runPortraitWorkflow({...f,mode:'bundle_pipeline',runner});assert.deepEqual(phases,['extraction',...f.rubric.dimensions.map(()=> 'assessment')]);assert.equal(p.explicit_status,'local_pipeline');
- const {buildAResult}=await import('../../.agents/skills/graduate-portrait/scripts/handoff.mjs');const aResult=buildAResult({...f,metadata:{output_version:'A-synthetic.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:null,model:null}}});
+ const {buildAResult}=await import('../../skills/graduate-portrait/scripts/handoff.mjs');const aResult=buildAResult({...f,metadata:{output_version:'A-synthetic.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:null,model:null}}});
  phases.length=0;p=await runPortraitWorkflow({...f,aResult,mode:'bundle_pipeline',runner});assert.deepEqual(phases,f.rubric.dimensions.map(()=> 'assessment'));assert.deepEqual(p.explicit,aResult.explicit);
+});
+
+test('逐域workflow传入同一A事实快照且不传显性计算结果',async()=>{
+ const f=fixture();const {buildAResult}=await import('../../skills/graduate-portrait/scripts/handoff.mjs');
+ const aResult=buildAResult({...f,metadata:{output_version:'A-synthetic-context.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:null,model:null}}});
+ const before=structuredClone(aResult);const tasks=[];
+ const runner={async execute(task,validate){tasks.push(task);assert.deepEqual(task.a_context.extraction,aResult.extraction);assert.equal(Object.hasOwn(task.a_context,'explicit'),false);const result={...f.assessment,dimensions:f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id)};validate(result);return result;}};
+ const p=await runPortraitWorkflow({...f,aResult,runner});
+ assert.equal(tasks.length,f.rubric.dimensions.length);assert.deepEqual(p.explicit,before.explicit);assert.deepEqual(p.explicit_extraction,before.extraction);assert.deepEqual(aResult,before);
 });
 
 test('平台创建会话409 session_busy明确报告忙且不重试',async()=>{
@@ -111,7 +120,7 @@ test('分域之间或末域收到取消立即终止，不创建部分画像或�
 
 
 test("原生runner接受纯json代码块包装，拒绝前后文字与数组且不改写非法状态",async()=>{
- const f=fixture();const {prepareDimensionTask}=await import("../../.agents/skills/graduate-portrait/scripts/prompts.mjs");const {validateAssessment}=await import("../../.agents/skills/graduate-portrait/scripts/validation.mjs");const d=f.rubric.dimensions[0];const task=prepareDimensionTask(f,d.id);const local={...f.assessment,dimensions:[f.assessment.dimensions[0]]};const fence=String.fromCharCode(96).repeat(3);const fenced=fence+"json\n"+JSON.stringify(local)+"\n"+fence;
+ const f=fixture();const {prepareDimensionTask}=await import("../../skills/graduate-portrait/scripts/prompts.mjs");const {validateAssessment}=await import("../../skills/graduate-portrait/scripts/validation.mjs");const d=f.rubric.dimensions[0];const task=prepareDimensionTask(f,d.id);const local={...f.assessment,dimensions:[f.assessment.dimensions[0]]};const fence=String.fromCharCode(96).repeat(3);const fenced=fence+"json\n"+JSON.stringify(local)+"\n"+fence;
  const bad=structuredClone(local);bad.dimensions[0].criteria[0].work_status="not_applicable";
  for(const [content,valid] of [[fenced,true],["解释\n"+fenced,false],[fenced+"\n解释",false],[fence+"json\n[]\n"+fence,false],[fence+"json\n"+JSON.stringify(bad)+"\n"+fence,false]]){
   let calls=0;const runner=await createInnoAgentRunner({url:"http://localhost",timeoutMs:1000},{fetchImpl:async url=>{

@@ -97,6 +97,9 @@ InnoGrad/
 │   ├── software/         # 平台说明与工程设计
 │   ├── mgmt/             # 协作流程与项目管理
 │   └── retrospection/    # 反馈与复盘
+├── skills/               # 显式安装到 InnoAgent 的业务 Skills
+│   └── graduate-portrait/ # 研究生画像 Skill
+├── .agents/              # 团队开发流程 Skills
 ├── tests/
 │   ├── unit/             # 单元测试
 │   └── integration/      # 集成测试
@@ -108,7 +111,7 @@ InnoGrad/
     └── plan.md           # 阶段交付与验收
 ```
 
-画像原型的配置和脚本位于 .agents/skills/graduate-portrait/，方法说明位于 docs/algorithm/，相关测试位于 tests/。apps/server/portrait/ 提供本地画像 API；完整业务应用、复盘和持续集成仍待实现。
+画像业务 Skill、配置和脚本位于 [skills/graduate-portrait/](skills/graduate-portrait/SKILL.md)，须显式安装到 InnoAgent；团队开发流程 Skills 留在 .agents/skills/，方法说明位于 docs/algorithm/，相关测试位于 tests/。apps/server/portrait/ 提供本地画像 API；完整业务应用、复盘和持续集成仍待实现。
 
 ## 参与贡献
 

@@ -2,13 +2,13 @@
 
 本原型接收已解析的年度报告、开题报告及证明材料，默认生成隐性评价草稿，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供本地 API 接入原型，尚未接入正式审核。材料解析由上游负责。
 
-当前采用七领域、23个观察项的项目试用量规。完整评价设计、A/B 交接协议及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
+本轮主交付是 `skills/graduate-portrait/` 中的业务 Skill，与 `.agents/skills/` 中的开发协作 Skill 分开维护：A、B 读取共享学生材料，B 的隐性判断引用原文，画像直接参考 A 的结果，不复查 A 的整理。A 可提供 JSON、Markdown、表格或其他可读内容，无需符合固定交接 Schema。当前采用七领域、23个观察项的项目试用量规。完整评价设计、共享内容约定及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
 
 ## 处理方法
 
-一次任务只处理一名学生、一个报告期间和一个培养阶段。默认流程为：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样合并可选 A 结果 → 生成画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
+一次任务只处理一名学生、一个报告期间和一个培养阶段。直接调用 Skill 时，Agent 阅读共享原文与 A 内容，生成带来源的 Markdown 草稿。以下为已有 API/CLI 结构化模式的实现：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样合并可选 A 结果 → 生成画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
 
-显性部分按六组组织，但不直接生成分数：
+下面六组是本地联调原型的展示方式，不替代 A 的实际年度规则或语雀修订方案；画像保留 A 输入的名称、版本及结果。该本地原型不直接生成分数：
 
 | 分组 | 当前记录 | 需要正式规则才能判断的内容 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 
 学分、课程状态和文献数量另保留在基础记录中。自报数量与逐项成果分别统计，投稿、录用、发表分别记录。材料没有列出成果不表示实际成果为零；累计人数不改写成本期人数；下一年度计划不计入已完成成果。同一成果的状态冲突交给人工复核。
 
-隐性部分按学科知识与文献、方案设计、实施与推理、表达与论证、反馈改进、规范与追溯、科研协作七领域组织。每个观察项分开输出证据状态、表现等级、理由、引用、限制和建议。领域只归纳已校验观察项，不平均、不评级，也不生成隐性总分。每次在线调用只评价一个领域，同时保留完整材料；各领域通过校验后再检查整体结果。任一领域修正后仍不合规，整项任务失败，不发布部分画像。
+隐性部分按学科知识与文献、方案设计、实施与推理、表达与论证、反馈改进、规范与追溯、科研协作七领域组织。每个观察项分开输出证据状态、表现等级、理由、引用、限制和建议。领域只归纳已校验观察项，不平均、不评级，也不生成隐性总分。结构化工作流每次在线调用只评价一个领域，同时保留完整材料；各领域通过校验后再检查整体结果。任一领域修正后仍不合规，整项任务失败，不发布部分画像。
 
 证据可评价且标准适用时，使用“待改进、达到要求、表现充分”；证据不足、冲突或不适用时等级为 null。标准待确认也暂缓等级。缺材料不等于能力差，负实验结果不自动降级，开题方案不能替代已完成研究。材料直接展示和行动、效果自述分别标记，教师确认保持待复核。
 
@@ -39,9 +39,11 @@ Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/pac
 
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
 
-## 接口约定
+## 可选的结构化接口约定
 
-材料输入包含 student_id、period、stage，以及文件标识、SHA-256、材料类型、解析状态和文本分段。字段及可执行格式见 [schema.mjs](../../.agents/skills/graduate-portrait/scripts/schema.mjs)。同一输入不能混入其他学生或其他期间的材料。
+以下格式约束现有 API/CLI，不要求 A 为直接调用 Skill 改写输出。
+
+材料输入包含 student_id、period、stage，以及文件标识、SHA-256、材料类型、解析状态和文本分段。字段及可执行格式见 [schema.mjs](../../skills/graduate-portrait/scripts/schema.mjs)。同一输入不能混入其他学生或其他期间的材料。
 
 年度报告必须明确年份或连续学年。当前可用材料文本未提供可确认的开题日期时，period 允许为 null，并提示 period_unconfirmed；成果期间不得标为 in_scope。不得用上传日期或参考文献年份补开题日期。学年的月日起止范围需由适用制度确认；仅有日期而无法判断统计范围的条目保留 uncertain。
 
@@ -56,13 +58,13 @@ HTTP 可选 aResult 使用 a-handoff-1.0，校验任务、材料指纹、规则�
 依赖 Node.js 22 及以上。从仓库根目录运行：
 
 ~~~sh
-npm ci --prefix .agents/skills/graduate-portrait/scripts
-node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synthetic
+npm ci --prefix skills/graduate-portrait/scripts
+node skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synthetic
 ~~~
 
 合成示例生成 portrait.json 和 portrait.md，来源标为 synthetic/offline_replay。它验证流程与数据约定，不代表真实模型抽取效果。
 
-主流程由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../.agents/skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
+结构化调用由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
 
 API 提供异步生成、结果查询、只读规则配置，以及可调试的 Swagger UI 和 OpenAPI JSON。模型配置由服务端读取本项目的 .env，默认使用 ECNU Plus；明确额度耗尽时才切换配置好的 CLIProxy Grok 或 Gemini。普通限速、超时、无效 JSON 或缺失证据不触发换模型。备用推理档位为 low，响应来源记录区分请求别名与服务实际模型。密钥、真实材料和中间输出均不进入版本库。
 
@@ -80,8 +82,8 @@ PDF 可能同时包含文字页和扫描页。整份文件能提取文字，不�
 
 当前 minimum 检查只在有阈值、适用阶段和制度来源时启用。适用学院、培养类别、年级及有效期由规则配置者核对，原型尚未自动匹配完整制度。缺少规则时输出 pending_rule；仅核对材料记载的已修与要求学分时，会明确标为材料比较，不作制度达标结论。正式权重和总分暂不生成。
 
-- 维度名称、观察条件、等级锚点：修改 [implicit-rubric.json](../../.agents/skills/graduate-portrait/references/implicit-rubric.json)，增加版本号后重放样例。
-- 显性字段、分组、固定阈值：修改 [explicit-rules.json](../../.agents/skills/graduate-portrait/references/explicit-rules.json)，确认制度适用性与证据要求。
+- 维度名称、观察条件、等级锚点：修改 [implicit-rubric.json](../../skills/graduate-portrait/references/implicit-rubric.json)，增加版本号后重放样例。
+- 显性字段、分组、固定阈值：修改 [explicit-rules.json](../../skills/graduate-portrait/references/explicit-rules.json)，确认制度适用性与证据要求。
 - 输出字段、计数语义、证据校验或接口版本：同步修改代码和测试。
 
 不同规则版本或材料覆盖范围的结果不直接相减为成长分数。后续需由教师核对同一批材料的事实提取、引用和逐项判断；有争议的条件先修订，再评估一致性。程序测试、合成回放与教师评价分别记录。

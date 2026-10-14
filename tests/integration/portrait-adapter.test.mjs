@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adapterConfig,requestStructured } from '../../.agents/skills/graduate-portrait/scripts/adapter.mjs';
-import { prepareTask } from '../../.agents/skills/graduate-portrait/scripts/prompts.mjs';
-import { validateExtraction } from '../../.agents/skills/graduate-portrait/scripts/validation.mjs';
+import { adapterConfig,requestStructured } from '../../skills/graduate-portrait/scripts/adapter.mjs';
+import { prepareTask } from '../../skills/graduate-portrait/scripts/prompts.mjs';
+import { validateExtraction } from '../../skills/graduate-portrait/scripts/validation.mjs';
 import { fixture } from '../fixtures/portrait.mjs';
 const config={url:'https://school.invalid/chat/completions',model:'explicit-test-model',key:'synthetic-test-key'};
 const reply=content=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content}}]})});

@@ -10,7 +10,7 @@
 
 ```sh
 cp .env.example .env
-npm --prefix .agents/skills/graduate-portrait/scripts ci
+npm --prefix skills/graduate-portrait/scripts ci
 npm --prefix apps/server/portrait ci
 ```
 
@@ -38,13 +38,13 @@ git -C local-runs/innoagent-source checkout --detach 5be785f8cc0a89394b858c123d6
 
 ### 安装 Skill 与隔离配置
 
-InnoAgent 不会自动发现仓库的 `.agents/skills/`。首次在新的运行目录安装[画像 Skill](../../../.agents/skills/graduate-portrait/SKILL.md)，排除依赖和环境文件；以后修改 Skill 时同步这些文件，再重启 InnoAgent。工作流会检查平台加载的 `SKILL.md`与仓库文件完全一致。
+画像业务 Skill 位于仓库根 `skills/graduate-portrait/`，与 `.agents/skills/` 中的团队开发流程分开。InnoAgent 不会自动发现仓库业务 Skill，须显式安装。首次在新的运行目录安装[画像 Skill](../../../skills/graduate-portrait/SKILL.md)，排除依赖和环境文件；以后修改 Skill 时同步这些文件，再重启 InnoAgent。工作流会检查平台加载的 `SKILL.md`与仓库文件完全一致。
 
 ```sh
 mkdir -p local-runs/innoagent/skills/graduate-portrait
 mkdir -p local-runs/innoagent/home local-runs/innoagent/data local-runs/innoagent/workspace
 rsync -a --exclude=node_modules --exclude='.env' --exclude='.env.*' \
-  .agents/skills/graduate-portrait/ local-runs/innoagent/skills/graduate-portrait/
+  skills/graduate-portrait/ local-runs/innoagent/skills/graduate-portrait/
 npm --prefix local-runs/innoagent/skills/graduate-portrait/scripts ci
 ```
 
@@ -106,7 +106,7 @@ JS
 
 ```sh
 PORTRAIT_ENV_FILE="$(pwd)/.env" node --input-type=module -e \
-  "import { startModelGateway } from './.agents/skills/graduate-portrait/scripts/gateway.mjs'; await startModelGateway();"
+  "import { startModelGateway } from './skills/graduate-portrait/scripts/gateway.mjs'; await startModelGateway();"
 ```
 
 终端二启动官方 InnoAgent，所有运行目录均明确指定，监听 `127.0.0.1:3147`：
@@ -155,7 +155,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 示例中的姓名、学校、题目和数字均为虚构，没有复制真实材料正文。两份文本分别按4页和6页模拟分页；`page`只用于定位合成文本，不对应真实PDF。`sha256`是按 `segments`顺序将各段 `text`以换页符 `\f`连接后，计算 UTF-8 字节所得的哈希，不是PDF文件哈希。示例没有原始PDF，来源名称和各页均作了标注。`parse_status: complete`只说明这些合成文本完整提供，不证明真实材料完成解析。
 
-旧[合成材料构造器](../../../.agents/skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
+旧[合成材料构造器](../../../skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
 
 第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果，并通过`explicit_extraction`原样返回 A 的事实、成果条目及覆盖记录；没有 A 或本地抽取结果时该字段为`null`。
 

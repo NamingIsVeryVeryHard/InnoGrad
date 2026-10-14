@@ -1,9 +1,31 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {fixture} from '../fixtures/portrait.mjs';
-import {buildPortrait,validateAssessment} from '../../.agents/skills/graduate-portrait/scripts/engine.mjs';
-import {assessmentSchema} from '../../.agents/skills/graduate-portrait/scripts/schema.mjs';
+import {buildPortrait,validateAssessment} from '../../skills/graduate-portrait/scripts/engine.mjs';
+import {assessmentSchema} from '../../skills/graduate-portrait/scripts/schema.mjs';
 const criterion=f=>f.assessment.dimensions[1].criteria[0];
+test('评价任务保留已校验A事实和出处，但不向模型提供显性规则结果',async()=>{
+ const {prepareTask,prepareDimensionTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');
+ const {buildAResult}=await import('../../skills/graduate-portrait/scripts/handoff.mjs');
+ const f=fixture();f.bundle.task_context={task_id:'synthetic-task',observation_period:f.bundle.period,training_category:null,training_year:null,support_conditions:null};
+ const aResult=buildAResult({...f,metadata:{output_version:'synthetic-a-context.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:'synthetic A context',model:null}}});
+ const before=structuredClone(aResult);
+ for(const task of [prepareTask({...f,aResult},'assessment'),prepareDimensionTask({...f,aResult},f.rubric.dimensions[0].id)]){
+  assert.deepEqual(task.a_context.extraction,aResult.extraction);
+  assert.equal(task.a_context.task_id,f.bundle.task_context.task_id);
+  assert.equal(task.a_context.rules_version,aResult.rules_version);
+  assert.deepEqual(task.a_context.material_fingerprints,aResult.material_fingerprints);
+  assert.equal(Object.hasOwn(task.a_context,'explicit'),false);
+  assert.equal(Object.hasOwn(task,'aResult'),false);
+  assert.deepEqual(task.bundle,f.bundle);
+  task.a_context.extraction.facts.length=0;
+ }
+ assert.deepEqual(aResult,before);
+ assert.equal(Object.hasOwn(prepareTask(f,'assessment'),'a_context'),false);
+ assert.equal(Object.hasOwn(prepareTask({...f,aResult},'extraction'),'a_context'),false);
+ const invalid=structuredClone(aResult);invalid.student_id='other';
+ assert.throws(()=>prepareTask({...f,aResult:invalid},'assessment'));
+});
 test('默认七领域按观察项评级且不输出领域等级或隐性总分',()=>{
  const f=fixture();assert.equal(f.rubric.schema_version,'2.0');assert.equal(f.rubric.dimensions.length,7);
  const p=buildPortrait(f);assert.equal(p.schema_version,'2.0');assert.equal(p.implicit.dimensions.length,7);
@@ -43,22 +65,22 @@ test('年级专属标准只在明确上下文下适用，通用开题标准可�
  f.bundle.task_context={task_id:'T1',observation_period:null,training_category:null,training_year:2,support_conditions:null};c.standard_status='applicable';c.performance_grade='meets_requirements';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
 });
 test('评价提示要求精炼全部观察项而保留必要条件引用和反证',async()=>{
- const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();const task=prepareTask(f,'assessment');const instructions=task.instructions.join('\n');
+ const {prepareTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();const task=prepareTask(f,'assessment');const instructions=task.instructions.join('\n');
  assert.match(instructions,/observed.*rationale.*各.*1.?2.*短句/);assert.match(instructions,/limitations.*missing_evidence.*suggestions.*1.?2/);assert.match(instructions,/最少.*完整.*引文/);assert.match(instructions,/缺证据.*长成果清单/);assert.match(instructions,/保留全部.*观察项/);assert.match(instructions,/必要反证.*多条引用/);
  assert.equal(task.configuration.dimensions.flatMap(d=>d.criteria).length,23);assert.deepEqual(task.schema,assessmentSchema(f.rubric));assert.ok(!JSON.stringify(task.schema).includes('maxLength'));
 });
 test('评价schema直接限定领域与各自观察项清单，漏域漏项及跨域项在结构层拒绝',async()=>{
- const {validateShape}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const f=fixture();const schema=assessmentSchema(f.rubric);assert.equal(schema.properties.dimensions.minItems,f.rubric.dimensions.length);assert.equal(schema.properties.dimensions.maxItems,f.rubric.dimensions.length);
+ const {validateShape}=await import('../../skills/graduate-portrait/scripts/validation.mjs');const f=fixture();const schema=assessmentSchema(f.rubric);assert.equal(schema.properties.dimensions.minItems,f.rubric.dimensions.length);assert.equal(schema.properties.dimensions.maxItems,f.rubric.dimensions.length);
  for(const mutate of [a=>{a.dimensions.pop();},a=>{a.dimensions[0].criteria.pop();},a=>{a.dimensions[0].criteria[0].criterion_id=a.dimensions[1].criteria[0].criterion_id;},a=>{a.dimensions[0]=structuredClone(a.dimensions[1]);}]){const a=structuredClone(f.assessment);mutate(a);assert.throws(()=>validateShape(schema,a,'assessment'));}
  assert.doesNotThrow(()=>validateShape(schema,f.assessment,'assessment'));
 });
 test('任务输出动态完整清单，改量规后的数量与ID同步并要求结束前自查',async()=>{
- const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();f.rubric.dimensions=f.rubric.dimensions.slice(0,2);f.rubric.dimensions[0].criteria=f.rubric.dimensions[0].criteria.slice(0,1);const task=prepareTask(f,'assessment');
+ const {prepareTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();f.rubric.dimensions=f.rubric.dimensions.slice(0,2);f.rubric.dimensions[0].criteria=f.rubric.dimensions[0].criteria.slice(0,1);const task=prepareTask(f,'assessment');
  assert.deepEqual(task.expected_dimension_ids,f.rubric.dimensions.map(d=>d.id));assert.deepEqual(task.expected_criterion_ids,Object.fromEntries(f.rubric.dimensions.map(d=>[d.id,d.criteria.map(c=>c.id)])));assert.match(task.instructions.join('\n'),/结束前.*expected_dimension_ids.*expected_criterion_ids.*自查/);assert.equal(task.schema.properties.dimensions.minItems,2);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.criteria.minItems,1);
 });
 
 test('分域任务仅含当前动态领域配置与schema，但保留完整原文和身份范围',async()=>{
- const {prepareDimensionTask,prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const {validateShape}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const f=fixture();
+ const {prepareDimensionTask,prepareTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const {validateShape}=await import('../../skills/graduate-portrait/scripts/validation.mjs');const f=fixture();
  for(const d of f.rubric.dimensions){
   const task=prepareDimensionTask(f,d.id);assert.equal(task.phase,'assessment');assert.equal(task.dimension_id,d.id);assert.deepEqual(task.bundle,f.bundle);assert.deepEqual(task.configuration,{...f.rubric,dimensions:[d]});
   assert.deepEqual(task.expected_dimension_ids,[d.id]);assert.deepEqual(task.expected_criterion_ids,{[d.id]:d.criteria.map(c=>c.id)});assert.deepEqual(Object.keys(task.criterion_standard_status),d.criteria.map(c=>c.id));
@@ -70,7 +92,7 @@ test('分域任务仅含当前动态领域配置与schema，但保留完整原�
 });
 
 test('评价提示逐条核对所有必需条件，缺信息暂缓而直接反例才待改进',async()=>{
- const {prepareTask,prepareDimensionTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();
+ const {prepareTask,prepareDimensionTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();
  for(const task of [prepareTask(f,'assessment'),prepareDimensionTask(f,f.rubric.dimensions[0].id)]){
   const instructions=task.instructions.join('\n');assert.match(instructions,/每个必需条件.*逐条/);assert.match(instructions,/任何必需条件.*未有证据.*insufficient.*null/);assert.match(instructions,/meets_requirements.*所有必需条件/);assert.match(instructions,/直接反例.*needs_improvement/);assert.match(instructions,/多行.*缩进.*非minified/);
  }
@@ -78,7 +100,7 @@ test('评价提示逐条核对所有必需条件，缺信息暂缓而直接反�
 
 
 test('可评价工作状态不符合当前观察项时给精确类别，计划可保留为证据不足',async()=>{
- const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');
+ const {repairFeedback}=await import('../../skills/graduate-portrait/scripts/validation.mjs');
  for(const status of ['planned','in_progress','unknown']){
   const f=fixture();f.bundle.documents[0].segments[0].text+=' 计划与同伴共同处理样本不平衡问题，尚未执行。';const c=f.assessment.dimensions.at(-1).criteria.at(-1);
   Object.assign(c,{evidence_state:'evaluable',performance_grade:'meets_requirements',work_status:status,evidence_nature:'self_report',evidence:[{document_id:'annual-1',segment_id:'body',quote:'计划与同伴共同处理样本不平衡问题，尚未执行。',supports:'仅支持计划记录。'}]});

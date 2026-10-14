@@ -1,1 +1,1 @@
-export { fixture } from '../../.agents/skills/graduate-portrait/scripts/synthetic.mjs';
+export { fixture } from '../../skills/graduate-portrait/scripts/synthetic.mjs';

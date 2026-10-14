@@ -71,7 +71,7 @@ export async function runPortraitWorkflow({bundle,rules,rubric,aResult,mode='imp
   for(const dimension of rubric.dimensions) {
     if(signal?.aborted)throw failure('ABORTED','request cancelled');
     const localRubric={...rubric,dimensions:[dimension]};
-    const local=await active.execute(prepareDimensionTask({bundle,rules,rubric},dimension.id),d=>validateAssessment(bundle,d,localRubric));
+    const local=await active.execute(prepareDimensionTask({bundle,rules,rubric,aResult},dimension.id),d=>validateAssessment(bundle,d,localRubric));
     // Validate returned values too: injected runners must not bypass the core boundary.
     validateAssessment(bundle,local,localRubric);
     if(signal?.aborted)throw failure('ABORTED','request cancelled');

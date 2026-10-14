@@ -1,6 +1,6 @@
 # 团队 Skills 与 GitHub Projects
 
-本目录保存团队共用的流程 skills 和本项目的画像 Skill。它们帮助 Codex 按既定流程编写需求、拆分任务、管理 GitHub 内容、提交评审和执行画像原型。Skills 的指令与引用文件随仓库同步，GitHub 登录凭证由每位成员自行管理。
+本目录保存团队共用的开发流程 skills，帮助 Codex 编写需求、拆分任务、管理 GitHub 内容和提交评审。业务 Skills 位于仓库根 skills/，由业务运行平台显式安装。Skills 的指令与引用文件随仓库同步，GitHub 登录凭证由每位成员自行管理。
 
 首次参与请先阅读[贡献指南](../CONTRIBUTING.md)，再按本文配置 Codex 与 GitHub CLI。
 
@@ -43,7 +43,6 @@
 | 编写文档与记录设计决定 | [documentation-and-adrs](skills/documentation-and-adrs/SKILL.md) | Addy Osmani |
 | 分支、提交与 PR | [git-workflow-and-versioning](skills/git-workflow-and-versioning/SKILL.md) | Addy Osmani |
 | 检查差异与质量 | [code-review-and-quality](skills/code-review-and-quality/SKILL.md) | Addy Osmani |
-| 从解析材料生成画像草稿 | [graduate-portrait](skills/graduate-portrait/SKILL.md) | 本项目；方法原型 |
 
 需求 skill 的后续实现流程还引用了以下 3 个 skills，一并保留：
 
@@ -72,7 +71,7 @@ Skills 提供操作指引；执行 GitHub 操作仍需要可用的 `gh`、账号
 - 关闭 Issue、将任务标为完成之前，核对交付与验收结果。读取现有 Workflows，检查字段更新是否会触发关联 Issue 的状态变化。
 - Skills 不会新增 API 能力。内置 Workflows 的配置和 Insights 图表设置等操作，仍可能需要 GitHub 网页。
 
-graduate-portrait 是本项目维护的业务 Skill，不属于下方第三方来源清单。输入约定、运行方式和未验证边界见[画像方法说明](../docs/algorithm/graduate_portrait.md)。
+[graduate-portrait](../skills/graduate-portrait/SKILL.md) 是本项目维护的业务 Skill，位于仓库根 skills/graduate-portrait/，须显式安装到 InnoAgent，不属于 Codex 团队开发 Skills 或下方第三方来源清单。输入约定、运行方式和未验证边界见[画像方法说明](../docs/algorithm/graduate_portrait.md)。
 
 ## 来源与更新
 
@@ -85,6 +84,6 @@ graduate-portrait 是本项目维护的业务 Skill，不属于下方第三方�
 
 所列上游文件均保留原文，未作修改。许可证分别适用于对应来源的文件；项目自己的文档不因此更改许可证。
 
-本仓库使用 `.agents/skills/` 保存 skills。[仓库约定](../AGENTS.md)说明上游 `skills/` 路径的对应关系，并要求临时改写源文件的验证在独立、干净的工作区进行。
+本仓库使用 `.agents/skills/` 保存团队开发流程 skills，`skills/` 保存业务 Skills。[仓库约定](../AGENTS.md)说明上游 `skills/` 路径的对应关系，并要求临时改写源文件的验证在独立、干净的工作区进行。
 
 升级时在任务分支中查看上游差异，选定新的固定提交，更新 skill、所需引用文件和来源清单，通过 PR 评审后同步给团队。保留各来源的署名与许可证；若修改上游文件，在来源清单中说明修改。`references/` 保持上游相对目录关系，更新时检查 skill 中的文件引用能否解析。

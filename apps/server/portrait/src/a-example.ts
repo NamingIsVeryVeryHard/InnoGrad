@@ -4,7 +4,7 @@ import type { AResult, EvidenceRef, Extraction, ParsedMaterialBundle } from './c
 
 // Use the complete annual report already shown in Swagger; this adds no student text.
 export function buildAnnualAExample(bundle: ParsedMaterialBundle): AResult {
-  const rules = JSON.parse(readFileSync(new URL('../../../../.agents/skills/graduate-portrait/references/explicit-rules.json', import.meta.url), 'utf8'));
+  const rules = JSON.parse(readFileSync(new URL('../../../../skills/graduate-portrait/references/explicit-rules.json', import.meta.url), 'utf8'));
   const cite = (quote: string): EvidenceRef[] => [{ document_id: 'synthetic-annual-report', segment_id: 'annual-page-2', quote }];
   const extraction: Extraction = {
     schema_version: '1.0', student_id: bundle.student_id, period: bundle.period, stage: bundle.stage,

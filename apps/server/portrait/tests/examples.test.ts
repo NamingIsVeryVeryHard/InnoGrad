@@ -6,6 +6,11 @@ import { portraitExamples } from '../src/examples.js';
 import { createPortraitServer } from '../src/server.js';
 import { validateBundle, validateAResult, loadConfiguration } from '../skill-bridge.mjs';
 import type { ParsedMaterialBundle } from '../src/contracts.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 test('synthetic report examples have reproducible text hashes and explicit simulated provenance', () => {
   for (const { value: { bundle } } of Object.values(portraitExamples)) {
@@ -63,4 +68,24 @@ test('A handoff Swagger example reuses full annual material and passes the share
   assert.equal(response.statusCode, 202);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(received, aResult);
+});
+
+test('CLI prepare retains full Swagger annual material and A extraction without explicit results', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'portrait-swagger-context-'));
+  try {
+    const { bundle, aResult } = portraitExamples.annualWithAResult.value;
+    await writeFile(join(directory, 'bundle.json'), JSON.stringify(bundle));
+    await writeFile(join(directory, 'a-result.json'), JSON.stringify(aResult));
+    const cli = fileURLToPath(new URL('../../../../skills/graduate-portrait/scripts/cli.mjs', import.meta.url));
+    execFileSync(process.execPath, [cli, 'prepare', '--bundle', join(directory, 'bundle.json'), '--a-result', join(directory, 'a-result.json'), '--out', join(directory, 'task')]);
+    const task = JSON.parse(await readFile(join(directory, 'task', 'assessment-task.json'), 'utf8'));
+    assert.deepEqual(task.bundle, bundle);
+    assert.deepEqual(task.a_context.extraction, aResult.extraction);
+    assert.equal(task.a_context.producer.mode, 'synthetic');
+    assert.equal(Object.hasOwn(task.a_context, 'explicit'), false);
+    assert.equal(Object.hasOwn(task, 'aResult'), false);
+    assert.equal(task.configuration.dimensions.length, 7);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

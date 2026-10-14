@@ -24,12 +24,12 @@ async function main() {
   const out=o.out&&resolve(o.out);
   const workflowMode=o['workflow-mode']??'implicit_only';if(!['implicit_only','bundle_pipeline'].includes(workflowMode))throw new Error('unknown workflow mode');
   const aResult=o['a-result']?await json(o['a-result']):undefined;if(aResult)validateAResult(bundle,aResult,rules);
-  if(command==='prepare'){if(!out)throw new Error('--out required');const tasks={...(workflowMode==='bundle_pipeline'&&!aResult?{extraction:prepareTask({bundle,rules,rubric})}:{}),assessment:prepareTask({bundle,rules,rubric},'assessment')};await mkdir(out,{recursive:true,mode:0o700});for(const [phase,task]of Object.entries(tasks)){await save(join(out,phase+'-task.json'),task);await save(join(out,phase+'-schema.json'),task.schema);}console.log('local task packages prepared');return;}
+  if(command==='prepare'){if(!out)throw new Error('--out required');const tasks={...(workflowMode==='bundle_pipeline'&&!aResult?{extraction:prepareTask({bundle,rules,rubric})}:{}),assessment:prepareTask({bundle,rules,rubric,aResult},'assessment')};await mkdir(out,{recursive:true,mode:0o700});for(const [phase,task]of Object.entries(tasks)){await save(join(out,phase+'-task.json'),task);await save(join(out,phase+'-schema.json'),task.schema);}console.log('local task packages prepared');return;}
   if(command==='workflow'){if(!out)throw new Error('--out required');const result=await runPortraitWorkflow({bundle,rules,rubric,aResult,mode:workflowMode});await mkdir(out,{recursive:true,mode:0o700});await save(join(out,'portrait.json'),result);await writeFile(join(out,'portrait.md'),renderPortrait(result),{mode:0o600});console.log('InnoAgent Skill workflow completed');return;}
   if(command==='remote'){
     if(!out)throw new Error('--out required');const config=adapterConfig(await loadProjectEnv());
     const extracted=!aResult&&workflowMode==='bundle_pipeline'?await requestStructured(prepareTask({bundle,rules,rubric}),{config,validate:d=>validateExtraction(bundle,d,rules)}):null;
-    const assessed=await requestStructured(prepareTask({bundle,rules,rubric},'assessment'),{config,validate:d=>validateAssessment(bundle,d,rubric)});
+    const assessed=await requestStructured(prepareTask({bundle,rules,rubric,aResult},'assessment'),{config,validate:d=>validateAssessment(bundle,d,rubric)});
     await mkdir(out,{recursive:true,mode:0o700});if(extracted)await save(join(out,'extraction.json'),extracted.data);await save(join(out,'assessment.json'),assessed.data);
     await output(out,{bundle,rules,rubric,aResult,extraction:extracted?.data,assessment:assessed.data,provenance:{mode:'remote_model',model:assessed.model,description:JSON.stringify({protocol:'Chat Completions',extraction:extracted?.records??[],assessment:assessed.records})}});console.log('remote workflow completed');return;
   }

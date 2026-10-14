@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {fixture} from '../fixtures/portrait.mjs';
-import * as engine from '../../.agents/skills/graduate-portrait/scripts/engine.mjs';
-import * as handoff from '../../.agents/skills/graduate-portrait/scripts/handoff.mjs';
+import * as engine from '../../skills/graduate-portrait/scripts/engine.mjs';
+import * as handoff from '../../skills/graduate-portrait/scripts/handoff.mjs';
 const metadata={output_version:'A-trial.1',generated_at:'2026-10-14T04:00:00.000Z',producer:{mode:'offline_replay',name:'synthetic A fixture',model:null}};
 test('B无A时显性部分待接入，外部A合并不改写抽取和固定结果',()=>{
  const f=fixture();const a=handoff.buildAResult({...f,metadata});const before=structuredClone(a);
