@@ -38,6 +38,7 @@ const messages: Record<string, string> = {
   REMOTE_HTTP: 'InnoAgent 或模型服务返回错误。',
   QUOTA_EXHAUSTED: '模型服务配额已用尽。',
   STRUCTURED_OUTPUT: '画像输出未通过结构或证据校验。',
+  INNOAGENT_BUSY: 'InnoAgent 实例忙碌，本次任务未完成；确认现有执行结束后再手动提交。',
   INNOAGENT_PROTOCOL: 'InnoAgent 响应不符合约定。',
   TOOL_APPROVAL_REQUIRED: '阶段任务需要额外交互审批，本地已停止等待；上游取消结果需确认，重试前请检查 InnoAgent。',
   ABORTED: '本地已停止等待；上游取消结果需确认，重试前请检查 InnoAgent。',
@@ -54,7 +55,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   const configuration = await loadConfiguration();
   const workflow = options.workflow ?? runWorkflow;
   const now = options.now ?? Date.now;
-  const maxConcurrent = options.maxConcurrent ?? 2;
+  const maxConcurrent = options.maxConcurrent ?? 1;
   const maxJobs = options.maxJobs ?? 20;
   const ttlMs = options.ttlMs ?? 30 * 60_000;
   const timeoutMs = options.timeoutMs ?? 5 * 60_000;
@@ -85,7 +86,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
       openapi: '3.0.3',
       info: {
         title: 'InnoGrad 研究生画像原型 API', version: '0.2.0',
-        description: `画像与隐性评价采用 2.0 契约，材料 bundle 与事实抽取保持 1.0。默认 implicit_only 只执行 B 的隐性评价，显性部分为空且待补 A；可传 aResult 合并 A 结果，或选择 bundle_pipeline 在原型内抽取。七领域不定级，每项分开记录证据状态和三档表现。通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、同时2次本地执行，整体等待${timeoutMs / 1000}秒超时（默认300秒，启动配置范围1–900秒）。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。POST每次创建新任务，重复提交会再次生成。`,
+        description: `画像与隐性评价采用 2.0 契约，材料 bundle 与事实抽取保持 1.0。默认 implicit_only 只执行 B 的隐性评价，显性部分为空且待补 A；可传 aResult 合并 A 结果，或选择 bundle_pipeline 在原型内抽取。七领域不定级，每项分开记录证据状态和三档表现。通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、默认同时1次本地执行，整体等待${timeoutMs / 1000}秒超时（默认300秒，启动配置范围1–900秒）。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。本地已有执行时POST返回503，不排队、不自动重试；平台返回已知session_busy时已接收的任务失败，error.code为INNOAGENT_BUSY。POST每次创建新任务，重复提交会再次生成。`,
       },
       tags: [{ name: '画像' }, { name: '规则' }],
     },
@@ -155,7 +156,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   app.get<{ Params: { id: string } }>('/api/portraits/:id', {
     schema: {
       tags: ['画像'], operationId: 'getPortrait', summary: '查询任务状态与画像草稿',
-      description: '运行中返回running；完成后返回completed与portrait；失败返回failed与error。不存在、已过期或服务重启后的任务返回404。画像字段review_status始终为draft。',
+      description: '运行中返回running；完成后返回completed与portrait；失败返回failed与error。不存在、已过期或服务重启后的任务返回404。画像字段review_status始终为draft。平台忙碌的已接收任务仍以200查询失败状态及INNOAGENT_BUSY；确认现有执行结束后再手动提交。',
       params: object({ id: { type: 'string', minLength: 1, maxLength: 100 } }),
       response: { 200: { $ref: 'PortraitJob#' }, 400: errorSchema, 404: errorSchema },
     },

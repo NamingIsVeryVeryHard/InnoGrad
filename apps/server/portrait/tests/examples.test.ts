@@ -32,6 +32,7 @@ test('all Swagger examples pass HTTP validation unchanged without a model call',
   for (const example of Object.values(portraitExamples)) {
     const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: example.value });
     assert.equal(response.statusCode, 202);
+    await new Promise(resolve => setImmediate(resolve));
   }
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(received, Object.values(portraitExamples).map(example => example.value.bundle));

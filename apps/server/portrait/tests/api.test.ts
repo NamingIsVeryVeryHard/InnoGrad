@@ -388,3 +388,41 @@ test('OpenAPI describes the configured overall job timeout', async t => {
   const document = (await app.inject('/openapi.json')).json();
   assert.match(document.info.description, /整体等待900秒超时/);
 });
+
+test('default concurrency allows one workflow and rejects another without queueing', async t => {
+  const fixture = await syntheticFixture();
+  let calls = 0;
+  const app = await createPortraitServer({ workflow: async () => {
+    calls++;
+    return new Promise(() => {});
+  } });
+  t.after(() => app.close());
+  const first = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  assert.equal(first.statusCode, 202);
+  const second = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  assert.equal(second.statusCode, 503);
+  assert.equal(second.headers['retry-after'], '30');
+  assert.equal(second.json().error.code, 'CAPACITY_EXCEEDED');
+  assert.equal(calls, 1);
+});
+
+test('upstream busy becomes a safe failed job without automatic retries', async t => {
+  const fixture = await syntheticFixture();
+  let calls = 0;
+  const app = await createPortraitServer({ workflow: async () => {
+    calls++;
+    throw Object.assign(new Error('private session identifier and student material'), { code: 'INNOAGENT_BUSY', status: 409 });
+  } });
+  t.after(() => app.close());
+  const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  assert.equal(created.statusCode, 202);
+  await delay(0);
+  const response = await app.inject(created.headers.location!);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().status, 'failed');
+  assert.equal(response.json().error.code, 'INNOAGENT_BUSY');
+  assert.match(response.json().error.message, /忙碌/);
+  assert.match(response.json().error.message, /确认.*结束/);
+  assert.doesNotMatch(response.body, /private session|student material/);
+  assert.equal(calls, 1);
+});
