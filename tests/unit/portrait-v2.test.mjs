@@ -68,3 +68,10 @@ test('分域任务仅含当前动态领域配置与schema，但保留完整原�
  }
  assert.throws(()=>prepareDimensionTask(f,'unknown-domain'));assert.equal(prepareTask(f,'assessment').schema.properties.dimensions.minItems,f.rubric.dimensions.length);
 });
+
+test('评价提示逐条核对所有必需条件，缺信息暂缓而直接反例才待改进',async()=>{
+ const {prepareTask,prepareDimensionTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();
+ for(const task of [prepareTask(f,'assessment'),prepareDimensionTask(f,f.rubric.dimensions[0].id)]){
+  const instructions=task.instructions.join('\n');assert.match(instructions,/每个必需条件.*逐条/);assert.match(instructions,/任何必需条件.*未有证据.*insufficient.*null/);assert.match(instructions,/meets_requirements.*所有必需条件/);assert.match(instructions,/直接反例.*needs_improvement/);assert.match(instructions,/多行.*缩进.*非minified/);
+ }
+});

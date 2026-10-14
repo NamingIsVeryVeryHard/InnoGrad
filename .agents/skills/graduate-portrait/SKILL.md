@@ -57,7 +57,11 @@ bundle、extraction 保留 1.0，assessment、portrait 使用 2.0，旧四维支
 
 每项保持精炼：observed与rationale各用1–2个短句，准确覆盖事实与必需条件；limitations、missing_evidence、suggestions各优先1–2条具体内容，不重复通用提醒。保留全部配置观察项；默认量规23项逐项输出，不能省略未评价项。引用选择足够证明条件的最少完整必要引文，保留限定条件，不截断原句或删字；必要反证和多条引用必须保留。缺证据时直接说明具体缺口，勿重复无关的长成果清单；evidence可为空，贡献未知保留null。精炼不得省略判断条件、降低证据要求或改变状态标准。
 
+JSON输出使用多行缩进，按schema检查数组[]与对象{}的配对及闭合，不输出minified JSON或Markdown代码块。语法修正反馈只保留可提取的数字offset、line、column，位置对应待解析的JSON内层文本；程序不自动修补JSON，最多一次重新生成。
+
 每项分开写 observed（可观察事实）、rationale（按标准的判断）、limitations（范围和未排除解释）、missing_evidence（具体缺口）、suggestions（对应下一步）。先判 evidence_state：evaluable、insufficient、conflicting、not_applicable。证据不足与未解释冲突的 performance_grade 必须 null；不提协作不等于不适用。不适用须有任务条件或原文说明没有展示机会。不同时间或版本的变化先核对，不随意当冲突；冲突只暂缓相关项。
+
+对每个必需条件逐条核对直接证据，并在rationale精炼说明满足、直接反例或未观察。任何必需条件未有证据且没有直接反例时，用insufficient与null，不能将缺信息判为needs_improvement。只有直接反例证明关键要求未满足才考虑needs_improvement；meets_requirements须所有必需条件均有证据满足。反例与缺口并存时分别说明，不把缺口作为低档依据；证据冲突仍优先conflicting并暂缓等级。
 
 可评价且标准适用时，按观察项预先写明的标准选择 needs_improvement、meets_requirements、well_demonstrated。待改进须有直接证据表明关键要求未满足；材料缺失、实验失败、负结果、目标未达不自动降级。表现充分须先满足达到要求，再满足附加条件，证据多或文件齐全不等于高档。criterion_standard_status 由程序检查阶段和 required_context，标准待确认时保留事实并暂缓定级。培养类别、年级未知时不套用专属门槛，通用任务标准可用。
 

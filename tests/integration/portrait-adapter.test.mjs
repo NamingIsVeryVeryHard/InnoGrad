@@ -24,3 +24,14 @@ test("remote接受单个json代码块包装且仍严格校验内容",async()=>{
  const bad=structuredClone(f.extraction);bad.facts[0].evidence[0].quote="伪造";
  await assert.rejects(requestStructured(prepareTask(f),{config,repairLimit:0,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async()=>reply(fence+"json\n"+JSON.stringify(bad)+"\n"+fence)}),e=>e.code==="STRUCTURED_OUTPUT");
 });
+
+
+test('JSON语法修正传递数字位置与闭合要求，不回显原文且只重新生成一次',async()=>{
+ const f=fixture();let calls=0;
+ const result=await requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async(_u,init)=>{
+  const body=JSON.parse(init.body);
+  if(calls++){const feedback=body.messages.at(-1).content;assert.match(feedback,/JSON_PARSE/);assert.match(feedback,/"offset":\d+/);assert.match(feedback,/数组.*对象.*闭合/);assert.match(feedback,/多行.*缩进/);assert.ok(!feedback.includes('PRIVATE_INVALID_OUTPUT'));return reply(JSON.stringify(f.extraction,null,2));}
+  return reply('{\n "PRIVATE_INVALID_OUTPUT": [1}\n}');
+ }});
+ assert.deepEqual(result.data,f.extraction);assert.equal(calls,2);assert.equal(result.attempts,2);
+});

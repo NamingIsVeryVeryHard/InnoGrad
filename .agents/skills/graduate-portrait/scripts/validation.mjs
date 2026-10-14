@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import {jsonParseLocation} from './response.mjs';
 import { bundleSchema, extractionSchema, assessmentSchema } from './schema.mjs';
 
 const ajv = new Ajv({ strict: true, allErrors: true });
@@ -7,8 +8,8 @@ export const compact = value => value.normalize('NFKC').replace(/\s+/gu, '');
 const fail = message => { throw new Error(message); };
 function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
 export function repairFeedback(error){
-  const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE'}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
-  return '本地校验错误（仅路径与类别）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
+  const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE',...jsonParseLocation(error)}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
+  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
 }
 
 export function validateShape(schema, data, label) {
