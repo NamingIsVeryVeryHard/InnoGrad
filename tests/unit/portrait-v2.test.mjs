@@ -102,3 +102,11 @@ test('可评价证据性质unknown给明确类别而不伪造观察性质',async
  const f=fixture();const c=criterion(f);c.evidence_nature='unknown';let error;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(e){error=e;}
  assert.deepEqual(error?.validation_issues,[{path:'/dimensions/1/criteria/0/evidence_nature',category:'EVIDENCE_NATURE_REQUIRED'}]);
 });
+
+test('一次报告多个错误引文及状态问题，反馈精确到证据下标且不包含材料',async()=>{
+ const f=fixture();const c=criterion(f);c.evidence=[{document_id:'annual-1',segment_id:'body',quote:'PRIVATE_FAKE_ONE',supports:'待校验。'},{document_id:'annual-1',segment_id:'absent',quote:'PRIVATE_FAKE_TWO',supports:'待校验。'}];c.evidence_nature='unknown';
+ let error;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(e){error=e;}
+ assert.deepEqual(error.validation_issues,[{path:'/dimensions/1/criteria/0/evidence/0/quote',category:'QUOTE_NOT_IN_SEGMENT'},{path:'/dimensions/1/criteria/0/evidence/1',category:'EVIDENCE_LOCATION'},{path:'/dimensions/1/criteria/0/evidence_nature',category:'EVIDENCE_NATURE_REQUIRED'}]);
+ const {repairFeedback}=await import('../../skills/graduate-portrait/scripts/validation.mjs');assert.ok(!repairFeedback(error).includes('PRIVATE_FAKE'));
+ c.evidence=structuredClone(fixture().assessment.dimensions[1].criteria[0].evidence);c.evidence_nature='self_report';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
+});

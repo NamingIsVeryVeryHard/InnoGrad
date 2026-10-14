@@ -10,7 +10,7 @@ function assessmentFail(message,path,category){const error=new Error(message);er
 function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
 export function repairFeedback(error){
   const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE',...jsonParseLocation(error)}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
-  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。可评价状态须属于当前criterion.allowed_work_statuses；不能为了合规把planned捏造为completed，也不能把unknown捏造为已执行。只有原文依据确足才认定真实状态；只有计划且该项要求已执行时用insufficient/null，状态未知而无法证明允许状态时也用insufficient/null，保留真实work_status并写具体缺口。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
+  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。可评价状态须属于当前criterion.allowed_work_statuses；不能为了合规把planned捏造为completed，也不能把unknown捏造为已执行。只有原文依据确足才认定真实状态；只有计划且该项要求已执行时用insufficient/null，状态未知而无法证明允许状态时也用insufficient/null，保留真实work_status并写具体缺口。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子；QUOTE_NOT_IN_SEGMENT要同时核对原句与document_id、segment_id，不能把其他页的原句挂在当前页。SCHEMA_TYPE按expected_type修正字段类型，array即数组，即使只有一条也用数组，无内容用空数组。只输出JSON，不加Markdown代码块。';
 }
 
 export function validateShape(schema, data, label) {
@@ -23,7 +23,7 @@ export function validateShape(schema, data, label) {
   if (!validate(data)) {
     // Paths and error categories suffice; source data and provider responses stay out of logs.
     const error=new Error(label + ': ' + validate.errors.map(e => e.instancePath + ' ' + e.keyword).join('; '));
-    error.validation_issues=validate.errors.map(e=>({path:e.instancePath,category:'SCHEMA_'+e.keyword.toUpperCase(),...(e.keyword==='required'?{missing_property:e.params.missingProperty}:{})}));throw error;
+    error.validation_issues=validate.errors.map(e=>({path:e.instancePath,category:'SCHEMA_'+e.keyword.toUpperCase(),...(e.keyword==='required'?{missing_property:e.params.missingProperty}:{}),...(e.keyword==='type'?{expected_type:e.params.type}:{})}));throw error;
   }
 }
 
@@ -52,13 +52,22 @@ export function validateBundle(bundle) {
   return bundle;
 }
 
-export function validateEvidence(bundle, refs, required = true) {
-  if (required && refs.length === 0) fail('missing evidence');
-  for (const ref of refs) {
+export function validateEvidence(bundle, refs, required = true, pointer = '') {
+  const issues = [];
+  if (required && refs.length === 0) issues.push({path:pointer,category:'EVIDENCE_REQUIRED'});
+  for (const [index, ref] of refs.entries()) {
     const doc = bundle.documents.find(d => d.document_id === ref.document_id);
     const segment = doc?.segments.find(s => s.segment_id === ref.segment_id);
-    if (!doc || doc.parse_status === 'failed' || !segment) fail('unknown evidence location');
-    if (!compact(ref.quote) || !compact(segment.text).includes(compact(ref.quote))) fail('quote not found in source segment');
+    if (!doc || doc.parse_status === 'failed' || !segment) {
+      issues.push({path:pointer+'/'+index,category:'EVIDENCE_LOCATION'});
+    } else if (!compact(ref.quote) || !compact(segment.text).includes(compact(ref.quote))) {
+      issues.push({path:pointer+'/'+index+'/quote',category:'QUOTE_NOT_IN_SEGMENT'});
+    }
+  }
+  if (issues.length) {
+    const error = new Error('invalid evidence reference or quote not found in source segment');
+    error.validation_issues = issues;
+    throw error;
   }
 }
 
@@ -91,7 +100,7 @@ export function validateExtraction(bundle, extraction, rules) {
     atPath('/facts/'+factIndex,()=>{
     const field = rules.fields.find(f => f.id === fact.field);
     if (typeof fact.value !== field.type) fail('fact value type mismatch: ' + field.id);
-    validateEvidence(bundle, fact.evidence);
+    validateEvidence(bundle, fact.evidence, true, '/facts/'+factIndex+'/evidence');
     if (field.type === 'number') {
       if (!fact.numeric_token || tokenValue(fact.numeric_token) !== fact.value) fail('numeric value does not match source token');
       const token = compact(fact.numeric_token);
@@ -119,7 +128,7 @@ export function validateExtraction(bundle, extraction, rules) {
   }
   for (const [itemIndex,item] of extraction.items.entries()) {
     atPath('/items/'+itemIndex,()=>{
-    validateEvidence(bundle, item.evidence);
+    validateEvidence(bundle, item.evidence, true, '/items/'+itemIndex+'/evidence');
     if (bundle.period === null && item.period_status === 'in_scope') fail('period unconfirmed: cannot claim in-scope item');
     if (item.kind === 'paper' && !['planned', 'in_progress', 'under_review', 'accepted', 'published', 'unknown'].includes(item.status)) {
       fail('paper requires a publication status');
@@ -127,7 +136,7 @@ export function validateExtraction(bundle, extraction, rules) {
     if (item.kind !== 'paper' && ['under_review', 'accepted', 'published'].includes(item.status)) fail('invalid non-paper status');
     });
   }
-  for (const [coverageIndex,coverage] of extraction.coverage.entries()) atPath('/coverage/'+coverageIndex,()=>validateEvidence(bundle, coverage.evidence, coverage.status === 'complete'));
+  for (const [coverageIndex,coverage] of extraction.coverage.entries()) atPath('/coverage/'+coverageIndex,()=>validateEvidence(bundle, coverage.evidence, coverage.status === 'complete', '/coverage/'+coverageIndex+'/evidence'));
   return extraction;
 }
 
@@ -144,13 +153,18 @@ export function validateAssessment(bundle, assessment, rubric) {
   sameScope(bundle, assessment);
   unique(assessment.dimensions.map(d => d.dimension_id), 'dimension_id');
   if (assessment.dimensions.length !== rubric.dimensions.length) fail('missing rubric dimension');
+  const issues = [];
+  const collect = operation => { try { operation(); } catch (error) { issues.push(...(error.validation_issues ?? [{path:'',category:'VALIDATION'}])); } };
   for (const [dimensionIndex, dimension] of assessment.dimensions.entries()) {
     const definition = rubric.dimensions.find(d => d.id === dimension.dimension_id);
     unique(dimension.criteria.map(c => c.criterion_id), 'criterion_id');
     if (dimension.criteria.length !== definition.criteria.length) fail('missing rubric criterion');
     for (const [criterionIndex, c] of dimension.criteria.entries()) {
       const pointer = '/dimensions/' + dimensionIndex + '/criteria/' + criterionIndex;
-      atPath(pointer, () => {
+      const configured = standardStatus(bundle, definition.criteria.find(x => x.id === c.criterion_id));
+      const requiresEvidence = ['evaluable', 'conflicting'].includes(c.evidence_state) || (c.evidence_state === 'not_applicable' && configured !== 'not_applicable');
+      collect(() => validateEvidence(bundle, c.evidence, requiresEvidence, pointer+'/evidence'));
+      collect(() => atPath(pointer, () => {
         const criterion = definition.criteria.find(x => x.id === c.criterion_id);
         if (!criterion) fail('unknown criterion');
         if (c.work_status !== 'unknown' && !c.evidence.length) {
@@ -178,10 +192,7 @@ export function validateAssessment(bundle, assessment, rubric) {
             assessmentFail('low grade requires a direct counterexample', pointer+'/performance_grade', 'CONDITION_COUNTEREXAMPLE_REQUIRED');
           }
         }
-        const configured = standardStatus(bundle, criterion);
         if (c.standard_status !== configured && !(configured === 'applicable' && c.standard_status === 'not_applicable' && c.evidence_state === 'not_applicable' && c.evidence.length)) fail('standard scope or context mismatch');
-        const requiresEvidence = ['evaluable', 'conflicting'].includes(c.evidence_state) || (c.evidence_state === 'not_applicable' && configured !== 'not_applicable');
-        validateEvidence(bundle, c.evidence, requiresEvidence);
         if (c.evidence_state !== 'evaluable' && c.performance_grade !== null) fail('non-evaluable criterion cannot have performance grade');
         if (c.standard_status !== 'applicable' && c.performance_grade !== null) fail('pending or inapplicable standard cannot have performance grade');
         if (c.evidence_state === 'evaluable' && c.standard_status === 'applicable' && c.performance_grade === null) fail('applicable evaluable criterion requires performance grade');
@@ -193,8 +204,13 @@ export function validateAssessment(bundle, assessment, rubric) {
         if (!c.evidence.length && c.evidence_nature !== 'unknown') assessmentFail('evidence nature without evidence',pointer+'/evidence_nature','EVIDENCE_NATURE_WITHOUT_EVIDENCE');
         if (c.evidence_state === 'evaluable' && !criterion.allowed_work_statuses.includes(c.work_status)) assessmentFail('work status cannot support this criterion',pointer+'/work_status','WORK_STATUS_NOT_ALLOWED');
         if (c.evidence_state === 'evaluable' && criterion.allowed_work_statuses.every(s => s === 'completed') && c.evidence.every(e => bundle.documents.find(d => d.document_id === e.document_id).kind === 'proposal')) fail('completed result requires annual or supporting evidence');
-      });
+      }));
     }
+  }
+  if (issues.length) {
+    const error = new Error('assessment validation failed');
+    error.validation_issues = issues;
+    throw error;
   }
   return assessment;
 }

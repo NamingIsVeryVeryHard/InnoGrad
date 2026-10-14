@@ -24,7 +24,7 @@ export function prepareTask({bundle,rules,rubric,aResult}, phase='extraction') {
     '把报告自述的行动与实际展示的内容分清：只有“已界定、已比较、已补充案例、已调整”时，不能填出原文没有展示的定义、比较结果、案例内容或回应理由；判据要能回答如何区分类别，不能只说类别需要区分。自述仍可支持行动项，但不证明其效果或独立核验。',
     '每条quote必须为所指segment中连续的完整必要分句，保留否定、时间和限定词。PDF换行不是句意终点，必要时跨行；不能截首行后用未引用内容推结论。OCR缺损影响理解时说明限制。无证据项的evidence可为空，work_status和evidence_nature为unknown，贡献未知为null。不要粘贴无关成果清单。',
     '方案类观察项可评价计划本身，不因未执行拒评方案；实施、结果推理、效果检查要有实际过程。未来计划不替代原计划，成果目录不替代主张出处；反馈理解、调整行动、效果检查分别判断。贡献中的指导和工具支持未知时不从团队存在推断支持范围，不生成教师确认。',
-    'observed记录事实，condition_checks说明各必要条件的具体内容或缺口，rationale概括判断和限制，suggestions提出最少的具体补证动作。保持精炼但不删必要引文。完成前逐项反向检查：有等级的项是否仍有未展示的必要内容，理由中的部分支持是否误填supported；有则暂缓，不把必要条件降成最高档的附加条件。',
+    'observed记录事实，condition_checks说明各必要条件的具体内容或缺口，rationale概括判断和限制，suggestions提出最少的具体补证动作。observed与rationale各用1至2句，condition_checks每条reason用一句直接回答该条件，不复述全项经过；missing_evidence、limitations和suggestions始终使用字符串数组，没有内容用[]。保持精炼但不删必要引文。完成前逐项反向检查：有等级的项是否仍有未展示的必要内容，理由中的部分支持是否误填supported；有则暂缓，不把必要条件降成最高档的附加条件。',
     ...(explicitContext?['explicit_context只提供同一任务的上游事实背景，不能替代bundle原文，不复查其整理，不用显性数量或分数判能力。当前能力判断只引用bundle中的学生原句，上游结果在最终画像原样保留。']:[]),
 
   ];

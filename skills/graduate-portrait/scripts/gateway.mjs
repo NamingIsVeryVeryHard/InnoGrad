@@ -16,11 +16,13 @@ export function createModelGateway({config,fetchImpl=fetch,onAttempt=()=>{}}) {
       const userText=typeof user?.content==='string'?user.content:Array.isArray(user?.content)?user.content.filter(c=>c.type==='text').map(c=>c.text).join(''):'';
       const boundary=userText.indexOf('</skill>');const argumentsText=boundary>=0?userText.slice(boundary+'</skill>'.length).trimStart():userText;
       const marker=/^portrait_run_id:([0-9a-f-]{36})(?: |\n)/.exec(argumentsText);const runId=marker?.[1];
+      const jsonOutput=!!marker&&argumentsText.slice(marker[0].length).startsWith('portrait_output:json ');
       // Only the leading caller marker selects the audit run; never scan student materials.
       function record(value){onAttempt(value);if(runId){if(!audit.has(runId)){if(audit.size>=200)audit.delete(audit.keys().next().value);audit.set(runId,[]);}audit.get(runId).push(value);}}
       const providers=[config,...(config.fallbacks??[])];
       for(let i=0;i<providers.length;i++) {
         const p=providers[i],body={...payload,model:p.model};
+        if(jsonOutput)body.response_format={type:'json_object'};
         if(p.effort==='low'&&/^(?:grok-4\.6|gemini-3-flash)$/.test(p.model))body.reasoning_effort='low';
         let response;try{response=await fetchImpl(p.url,{method:'POST',redirect:'error',headers:{'content-type':'application/json',authorization:'Bearer '+p.key},body:JSON.stringify(body),signal:AbortSignal.any([aborter.signal,AbortSignal.timeout(config.timeoutMs??240000)])});}catch(e){throw requestFailure(e,aborter.signal);}
         const metadata={provider:p.provider??'configured',requested_model:p.model,actual_model:null,attempt:i+1,status:'completed'};
