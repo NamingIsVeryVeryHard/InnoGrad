@@ -53,7 +53,7 @@ build 输出 portrait.json 和 portrait.md。不传 --a-result 时显性部分�
 
 ## 隐性评价约束
 
-bundle、extraction 保留 1.0，assessment、portrait 使用 2.0，旧四维支持等级和累计等级量规明确拒绝，不转换为三档表现等级。七领域含26个独立观察项；每项均输出，领域只归纳已校验项，不给领域等级，不生成隐性总分。量规是 draft_uncalibrated，项目试用标准尚需教师校准。
+bundle、extraction 保留 1.0，assessment、portrait 使用 2.0，旧四维支持等级和累计等级量规明确拒绝，不转换为三档表现等级。七领域含23个独立观察项；每项均输出，领域只归纳已校验项，不给领域等级，不生成隐性总分。量规是 draft_uncalibrated，项目试用标准尚需教师校准。
 
 每项分开写 observed（可观察事实）、rationale（按标准的判断）、limitations（范围和未排除解释）、missing_evidence（具体缺口）、suggestions（对应下一步）。先判 evidence_state：evaluable、insufficient、conflicting、not_applicable。证据不足与未解释冲突的 performance_grade 必须 null；不提协作不等于不适用。不适用须有任务条件或原文说明没有展示机会。不同时间或版本的变化先核对，不随意当冲突；冲突只暂缓相关项。
 
