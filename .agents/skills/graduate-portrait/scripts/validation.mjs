@@ -6,10 +6,11 @@ const ajv = new Ajv({ strict: true, allErrors: true });
 const compiled = new Map();
 export const compact = value => value.normalize('NFKC').replace(/\s+/gu, '');
 const fail = message => { throw new Error(message); };
+function assessmentFail(message,path,category){const error=new Error(message);error.validation_issues=[{path,category}];throw error;}
 function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
 export function repairFeedback(error){
   const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE',...jsonParseLocation(error)}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
-  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
+  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。可评价状态须属于当前criterion.allowed_work_statuses；不能为了合规把planned捏造为completed，也不能把unknown捏造为已执行。只有原文依据确足才认定真实状态；只有计划且该项要求已执行时用insufficient/null，状态未知而无法证明允许状态时也用insufficient/null，保留真实work_status并写具体缺口。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子。只输出JSON，不加Markdown代码块。';
 }
 
 export function validateShape(schema, data, label) {
@@ -168,9 +169,9 @@ export function validateAssessment(bundle, assessment, rubric) {
         if (c.evidence_state === 'conflicting' && new Set(c.evidence.map(e=>JSON.stringify([e.document_id,e.segment_id,compact(e.quote)]))).size < 2) fail('conflicting evidence requires opposing references');
         if (c.evidence_state === 'not_applicable' && c.standard_status !== 'not_applicable') fail('not applicable requires task justification');
         if (configured === 'not_applicable' && c.evidence_state !== 'not_applicable') fail('criterion outside report stage');
-        if (c.evidence_state === 'evaluable' && c.evidence_nature === 'unknown') fail('evaluable evidence nature required');
-        if (!c.evidence.length && c.evidence_nature !== 'unknown') fail('evidence nature without evidence');
-        if (c.evidence_state === 'evaluable' && !criterion.allowed_work_statuses.includes(c.work_status)) fail('work status cannot support this criterion');
+        if (c.evidence_state === 'evaluable' && c.evidence_nature === 'unknown') assessmentFail('evaluable evidence nature required',pointer+'/evidence_nature','EVIDENCE_NATURE_REQUIRED');
+        if (!c.evidence.length && c.evidence_nature !== 'unknown') assessmentFail('evidence nature without evidence',pointer+'/evidence_nature','EVIDENCE_NATURE_WITHOUT_EVIDENCE');
+        if (c.evidence_state === 'evaluable' && !criterion.allowed_work_statuses.includes(c.work_status)) assessmentFail('work status cannot support this criterion',pointer+'/work_status','WORK_STATUS_NOT_ALLOWED');
         if (c.evidence_state === 'evaluable' && criterion.allowed_work_statuses.every(s => s === 'completed') && c.evidence.every(e => bundle.documents.find(d => d.document_id === e.document_id).kind === 'proposal')) fail('completed result requires annual or supporting evidence');
       });
     }

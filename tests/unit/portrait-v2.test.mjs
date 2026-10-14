@@ -75,3 +75,20 @@ test('评价提示逐条核对所有必需条件，缺信息暂缓而直接反�
   const instructions=task.instructions.join('\n');assert.match(instructions,/每个必需条件.*逐条/);assert.match(instructions,/任何必需条件.*未有证据.*insufficient.*null/);assert.match(instructions,/meets_requirements.*所有必需条件/);assert.match(instructions,/直接反例.*needs_improvement/);assert.match(instructions,/多行.*缩进.*非minified/);
  }
 });
+
+
+test('可评价工作状态不符合当前观察项时给精确类别，计划可保留为证据不足',async()=>{
+ const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');
+ for(const status of ['planned','in_progress','unknown']){
+  const f=fixture();f.bundle.documents[0].segments[0].text+=' 计划与同伴共同处理样本不平衡问题，尚未执行。';const c=f.assessment.dimensions.at(-1).criteria.at(-1);
+  Object.assign(c,{evidence_state:'evaluable',performance_grade:'meets_requirements',work_status:status,evidence_nature:'self_report',evidence:[{document_id:'annual-1',segment_id:'body',quote:'计划与同伴共同处理样本不平衡问题，尚未执行。',supports:'仅支持计划记录。'}]});
+  assert.deepEqual(f.rubric.dimensions.at(-1).criteria.at(-1).allowed_work_statuses,['completed']);let error;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(e){error=e;}
+  assert.deepEqual(error?.validation_issues,[{path:'/dimensions/6/criteria/2/work_status',category:'WORK_STATUS_NOT_ALLOWED'}]);const feedback=repairFeedback(error);assert.match(feedback,/criterion.allowed_work_statuses/);assert.match(feedback,/不能.*planned.*completed/);assert.match(feedback,/只有计划.*已执行.*insufficient.*null/);assert.match(feedback,/unknown.*捏造.*已执行/);assert.match(feedback,/原文依据确足.*真实状态/);assert.match(feedback,/状态未知.*insufficient.*null/);assert.match(feedback,/保留真实work_status/);assert.ok(!feedback.includes(c.evidence[0].quote));
+  c.evidence_state='insufficient';c.performance_grade=null;c.missing_evidence=['缺少共同处理问题的实际过程。'];assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));assert.equal(c.work_status,status);
+ }
+});
+
+test('可评价证据性质unknown给明确类别而不伪造观察性质',async()=>{
+ const f=fixture();const c=criterion(f);c.evidence_nature='unknown';let error;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(e){error=e;}
+ assert.deepEqual(error?.validation_issues,[{path:'/dimensions/1/criteria/0/evidence_nature',category:'EVIDENCE_NATURE_REQUIRED'}]);
+});
