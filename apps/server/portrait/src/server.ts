@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
-import { bundleSchema, portraitSchema, validateBundle, validatePortrait, loadConfiguration, runWorkflow } from '../skill-bridge.mjs';
-import type { ParsedMaterialBundle, PortraitJob, PublicError, Workflow } from './contracts.js';
+import { bundleSchema, portraitSchema, validateBundle, validatePortrait, loadConfiguration, runWorkflow, aResultSchema, validateAResult } from '../skill-bridge.mjs';
+import type { PortraitRequest, PortraitJob, PublicError, Workflow } from './contracts.js';
 import { portraitExamples } from './examples.js';
 
 interface ServerOptions {
@@ -51,6 +51,7 @@ function publicError(error: unknown): PublicError {
 }
 
 export async function createPortraitServer(options: ServerOptions = {}) {
+  const configuration = await loadConfiguration();
   const workflow = options.workflow ?? runWorkflow;
   const now = options.now ?? Date.now;
   const maxConcurrent = options.maxConcurrent ?? 2;
@@ -91,6 +92,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   });
   await app.register(swaggerUI, { routePrefix: '/docs', staticCSP: true, uiConfig: { docExpansion: 'list' } });
   app.addSchema({ ...bundleSchema, $id: 'ParsedMaterialBundle' });
+  app.addSchema({ ...aResultSchema(configuration.rules), $id: 'AResult' });
   app.addSchema({ ...portraitSchema, $id: 'GraduatePortrait' });
   app.addSchema({ ...jobSchema, $id: 'PortraitJob' });
   app.setErrorHandler((error, _request, reply) => {
@@ -103,16 +105,24 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: '接口或任务不存在。' } }));
 
-  app.post<{ Body: { bundle: ParsedMaterialBundle } }>('/api/portraits', {
+  app.post<{ Body: PortraitRequest }>('/api/portraits', {
     schema: {
       tags: ['画像'], operationId: 'createPortrait', summary: '提交画像生成任务',
       description: '异步调用 InnoAgent。202不表示已生成，使用Location或GET查询任务。相同输入再次POST仍会新建任务。失败任务的error提供固定错误类别，不包含上游原文或密钥。超时停止本地等待，上游执行可能继续，确认其结束前请勿重试。',
-      body: object({ bundle: { $ref: 'ParsedMaterialBundle#' } }),
+      body: object({
+        bundle: { $ref: 'ParsedMaterialBundle#' },
+        aResult: { $ref: 'AResult#', description: 'A 已计算的显性结果；验证通过后只执行隐性评价并原样合并。' },
+        mode: { type: 'string', enum: ['implicit_only', 'bundle_pipeline'], description: '默认 implicit_only：仅评价隐性部分。bundle_pipeline：原型内先抽取并计算显性部分。' },
+      }, ['bundle']),
       response: { 202: { $ref: 'PortraitJob#' }, 400: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema, 503: errorSchema },
     },
   }, async (request, reply) => {
     try { validateBundle(request.body.bundle); }
     catch { return reply.code(422).send({ error: { code: 'INVALID_INPUT', message: '材料的学生、期间、文档或段落信息不一致。' } }); }
+    if (request.body.aResult) {
+      try { validateAResult(request.body.bundle, request.body.aResult, configuration.rules); }
+      catch { return reply.code(422).send({ error: { code: 'INVALID_A_RESULT', message: 'A 交接的学生、任务、期间、材料版本、规则或出处不一致。' } }); }
+    }
     prune();
     if (active.size >= maxConcurrent || jobs.size >= maxJobs) {
       return reply.header('Retry-After', '30').code(503).send({ error: { code: 'CAPACITY_EXCEEDED', message: '画像任务容量已满，请稍后重试。' } });
@@ -130,7 +140,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
     }, timeoutMs);
     timer.unref();
     active.set(id, { controller, timer });
-    void Promise.resolve().then(() => workflow({ bundle: request.body.bundle, signal: controller.signal }))
+    void Promise.resolve().then(() => workflow({ bundle: request.body.bundle, mode: request.body.aResult ? 'implicit_only' : request.body.mode ?? 'implicit_only', ...(request.body.aResult ? { aResult: request.body.aResult } : {}), signal: controller.signal }))
       .then(portrait => {
         if (controller.signal.aborted) return;
         try { validatePortrait(portrait); }

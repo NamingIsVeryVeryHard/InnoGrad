@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { createPortraitServer } from '../src/server.js';
-import { syntheticFixture, syntheticPortrait } from '../skill-bridge.mjs';
+import { syntheticFixture, syntheticPortrait, buildAResult } from '../skill-bridge.mjs';
 
 test('POST creates an asynchronous draft and GET returns the completed result', async t => {
   const fixture = await syntheticFixture();
@@ -192,4 +192,150 @@ test('unconfirmed upstream cancellation never claims the generation was cancelle
   assert.match(job.json().error.message, /上游取消结果需确认/);
   assert.match(job.json().error.message, /重试前请检查 InnoAgent/);
   assert.doesNotMatch(job.json().error.message, /画像任务已取消|生成已停止/);
+});
+
+
+test('default and explicit execution modes reach the workflow without changing the bundle', async t => {
+  const fixture = await syntheticFixture();
+  const received: { mode?: string; bundle: unknown }[] = [];
+  const app = await createPortraitServer({ workflow: async input => {
+    received.push(input);
+    throw Object.assign(new Error('mode validation only'), { code: 'CONFIGURATION' });
+  } });
+  t.after(() => app.close());
+  const defaultRequest = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  assert.equal(defaultRequest.statusCode, 202);
+  await delay(0);
+  assert.equal(received[0]?.mode, 'implicit_only');
+  assert.deepEqual(received[0]?.bundle, fixture.bundle);
+  const pipeline = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, mode: 'bundle_pipeline' } });
+  assert.equal(pipeline.statusCode, 202);
+  await delay(0);
+  assert.equal(received[1]?.mode, 'bundle_pipeline');
+  const invalidMode = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, mode: 'legacy' } });
+  assert.equal(invalidMode.statusCode, 400);
+  assert.equal(received.length, 2);
+});
+
+
+test('v2 criterion grades and complete source references survive Fastify serialization', async t => {
+  const fixture = await syntheticFixture();
+  const result = await syntheticPortrait(fixture);
+  const app = await createPortraitServer({ workflow: async () => result });
+  t.after(() => app.close());
+  const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  await delay(0);
+  const response = await app.inject(created.headers.location!);
+  const job = response.json();
+  assert.equal(job.status, 'completed');
+  assert.equal(job.portrait.schema_version, '2.0');
+  assert.equal(job.portrait.implicit.dimensions.length, 7);
+  const domain = job.portrait.implicit.dimensions.find((item: { id: string }) => item.id === 'research-design');
+  const criterion = domain.criteria.find((item: { criterion_id: string }) => item.criterion_id === 'problem-definition');
+  assert.equal(criterion.evidence_state, 'evaluable');
+  assert.equal(criterion.performance_grade, 'meets_requirements');
+  assert.equal(criterion.review.status, 'pending');
+  assert.deepEqual(criterion.evidence[0], {
+    document_id: 'annual-1', segment_id: 'body', quote: '研究问题是在小样本课堂数据中提高反馈准确性。',
+    supports: '支持研究对象、情境与目标。', source_name: fixture.bundle.documents[0]!.source_name,
+    sha256: fixture.bundle.documents[0]!.sha256, page: null,
+  });
+  for (const item of job.portrait.implicit.dimensions) {
+    assert.equal('level' in item, false);
+    assert.equal('level_label' in item, false);
+    assert.ok(item.summary.every((entry: { criterion_ids: string[] }) => entry.criterion_ids.length > 0));
+  }
+  assert.deepEqual(job.portrait, result);
+});
+
+
+async function aFixture() {
+  const fixture = await syntheticFixture();
+  const aResult = buildAResult({
+    bundle: fixture.bundle, extraction: fixture.extraction, rules: fixture.rules,
+    metadata: { output_version: 'synthetic-a-test-1.0', generated_at: '2026-10-14T00:00:00Z', producer: { mode: 'synthetic', name: 'API test fixture', model: null } },
+  });
+  return { ...fixture, aResult };
+}
+
+test('external A scope, task, material and evidence mismatches fail before workflow execution', async t => {
+  const fixture = await aFixture();
+  let calls = 0;
+  const app = await createPortraitServer({ workflow: async () => { calls++; throw new Error('unreachable'); } });
+  t.after(() => app.close());
+  const invalid: unknown[] = [];
+  const identity = structuredClone(fixture.aResult); identity.student_id = 'another-student'; invalid.push(identity);
+  const fingerprint = structuredClone(fixture.aResult); fingerprint.material_fingerprints[0]!.content_sha256 = 'b'.repeat(64); invalid.push(fingerprint);
+  const task = structuredClone(fixture.aResult); task.task_id = 'another-task'; invalid.push(task);
+  const quote = structuredClone(fixture.aResult); quote.extraction.facts[0]!.evidence[0]!.quote = 'private student text absent from material'; invalid.push(quote);
+  for (const aResult of invalid) {
+    const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, aResult } });
+    assert.equal(response.statusCode, 422);
+    assert.equal(response.json().error.code, 'INVALID_A_RESULT');
+    assert.doesNotMatch(response.body, /another-student|another-task|private student text/);
+  }
+  const legacy = structuredClone(fixture.aResult) as { schema_version: string };
+  legacy.schema_version = '1.0';
+  assert.equal((await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, aResult: legacy } })).statusCode, 400);
+  assert.equal(calls, 0);
+});
+
+test('valid external A is preserved and overrides a requested local bundle pipeline', async t => {
+  const fixture = await aFixture();
+  const original = structuredClone(fixture.aResult);
+  let received: { aResult?: unknown; mode?: string } | undefined;
+  const app = await createPortraitServer({ workflow: async input => {
+    received = input;
+    return syntheticPortrait({ ...fixture, extraction: undefined, aResult: input.aResult });
+  } });
+  t.after(() => app.close());
+  const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, aResult: fixture.aResult, mode: 'bundle_pipeline' } });
+  assert.equal(created.statusCode, 202);
+  await delay(0);
+  assert.equal(received?.mode, 'implicit_only');
+  assert.deepEqual(received?.aResult, original);
+  const job = (await app.inject(created.headers.location!)).json();
+  assert.equal(job.status, 'completed');
+  assert.equal(job.portrait.explicit_status, 'merged');
+  assert.deepEqual(job.portrait.explicit, original.explicit);
+  assert.equal(job.portrait.a_handoff.generated_at, original.generated_at);
+  assert.deepEqual(job.portrait.a_handoff.producer, original.producer);
+  assert.deepEqual(job.portrait.a_handoff.material_fingerprints, original.material_fingerprints);
+  assert.deepEqual(fixture.aResult, original);
+});
+
+test('implicit-only output explicitly reports pending A and never fabricates explicit results', async t => {
+  const fixture = await syntheticFixture();
+  const result = await syntheticPortrait({ ...fixture, extraction: undefined });
+  const app = await createPortraitServer({ workflow: async () => result });
+  t.after(() => app.close());
+  const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+  await delay(0);
+  const job = (await app.inject(created.headers.location!)).json();
+  assert.equal(job.status, 'completed');
+  assert.equal(job.portrait.explicit, null);
+  assert.equal(job.portrait.explicit_status, 'pending');
+  assert.equal(job.portrait.a_handoff, null);
+  assert.ok(job.portrait.warnings.includes('explicit_pending'));
+  assert.equal(job.portrait.provenance.hashes.a_result, null);
+  assert.equal(job.portrait.provenance.hashes.extraction, null);
+});
+
+test('model-generated review confirmations and old cumulative domain levels are rejected', async t => {
+  const fixture = await syntheticFixture();
+  const result = await syntheticPortrait(fixture);
+  for (const malformed of [
+    { ...result, review_status: 'review_confirmed' },
+    (() => { const output = structuredClone(result); Object.assign(output.implicit.dimensions[0]!.criteria[0]!.review, { status: 'review_confirmed' }); return output; })(),
+    (() => { const output = structuredClone(result); Object.assign(output.implicit.dimensions[0]!, { level: 3 }); return output; })(),
+  ]) {
+    const app = await createPortraitServer({ workflow: async () => malformed as never });
+    t.after(() => app.close());
+    const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });
+    await delay(0);
+    const job = (await app.inject(created.headers.location!)).json();
+    assert.equal(job.status, 'failed');
+    assert.equal(job.error.code, 'STRUCTURED_OUTPUT');
+    assert.equal(job.portrait, undefined);
+  }
 });
