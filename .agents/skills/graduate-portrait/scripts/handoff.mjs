@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {scope,extractionSchema,evidenceSchema} from './schema.mjs';
+import {scope,extractionSchema,evidenceSchema,itemStatuses} from './schema.mjs';
 import {explicitSchema} from './portrait-schema.mjs';
 import {validateBundle,validateExtraction,validateEvidence,validateShape,unique,compact} from './validation.mjs';
 import {buildExplicit} from './engine.mjs';
@@ -31,6 +31,10 @@ export function validateAResult(bundle,aResult,rules){
  function sameKeys(actual,expected,label){if(canonical(Object.keys(actual).sort())!==canonical([...expected].sort()))throw Error('A '+label+' mismatch');}
  sameKeys(aResult.explicit.metrics,rules.fields.map(f=>f.id),'metric fields');
  sameKeys(aResult.explicit.ledger,rules.item_kinds,'ledger kinds');sameKeys(aResult.explicit.ledger_details,rules.item_kinds,'ledger detail kinds');
+ for(const kind of rules.item_kinds){
+  sameKeys(aResult.explicit.ledger[kind],itemStatuses,'ledger '+kind+' states');
+  sameKeys(aResult.explicit.ledger_details[kind].counts,itemStatuses,'ledger detail '+kind+' states');
+ }
  if(canonical(aResult.explicit.groups)!==canonical(rules.groups.map(g=>({id:g.id,label:g.label,fields:g.fields,item_kinds:g.item_kinds}))))throw Error('A explicit groups mismatch');
  unique(aResult.explicit.checks.map(c=>c.id),'A rule checks');
  if(aResult.explicit.checks.length!==rules.checks.length)throw Error('A missing rule checks');

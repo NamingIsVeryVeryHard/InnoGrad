@@ -30,3 +30,7 @@ test('A规则输入引用须来自实际交接抽取且计算字段不能缺少'
  const f=fixture();const a=handoff.buildAResult({...f,metadata});a.explicit.checks[0].input_evidence[0]={document_id:'annual-1',segment_id:'body',quote:'研究问题是在小样本课堂数据中提高反馈准确性。'};assert.throws(()=>handoff.validateAResult(f.bundle,a,f.rules));
  const b=handoff.buildAResult({...f,metadata});b.explicit.checks[0].status='consistent';delete b.explicit.checks[0].self_report;assert.throws(()=>handoff.validateAResult(f.bundle,b,f.rules));
 });
+test('A每类成果状态映射必须完整，单状态缺失或空映射不能整合',()=>{
+ const f=fixture();for(const mutate of [a=>{delete a.explicit.ledger.paper.published;},a=>{delete a.explicit.ledger_details.paper.counts.published;},a=>{a.explicit.ledger.paper={};a.explicit.ledger_details.paper.counts={};},a=>{a.explicit.ledger.paper.unrecognized=null;},a=>{a.explicit.ledger_details.paper.counts.unrecognized=structuredClone(a.explicit.ledger_details.paper.counts.unknown);}]){const a=handoff.buildAResult({...f,metadata});mutate(a);assert.throws(()=>handoff.validateAResult(f.bundle,a,f.rules),/states mismatch/);assert.throws(()=>engine.buildPortrait({...f,extraction:undefined,aResult:a}),/states mismatch/);}
+ const a=handoff.buildAResult({...f,metadata});assert.equal(a.explicit.ledger.practice.completed,null);assert.doesNotThrow(()=>handoff.validateAResult(f.bundle,a,f.rules));
+});
