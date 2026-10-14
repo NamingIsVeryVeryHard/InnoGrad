@@ -45,7 +45,7 @@ test('OpenAPI and Swagger UI describe shared input, task states and read-only co
   assert.equal(document.openapi, '3.0.3');
   assert.ok(document.paths['/api/portraits'].post);
   const examples = document.paths['/api/portraits'].post.requestBody.content['application/json'].examples;
-  assert.deepEqual(Object.keys(examples), ['annualReport', 'proposalReport']);
+  assert.deepEqual(Object.keys(examples), ['annualReport', 'proposalReport', 'annualWithAResult']);
   assert.equal(examples.annualReport.value.bundle.stage, 'annual');
   assert.equal(examples.proposalReport.value.bundle.stage, 'proposal');
   for (const example of Object.values(examples) as { description: string; value: { bundle: { student_id: string } } }[]) {
@@ -55,6 +55,23 @@ test('OpenAPI and Swagger UI describe shared input, task states and read-only co
   assert.ok(document.paths['/api/portraits/{id}'].get);
   assert.ok(document.components.schemas.ParsedMaterialBundle);
   assert.ok(document.components.schemas.GraduatePortrait);
+  assert.ok(document.components.schemas.AResult);
+  const requestSchema = document.paths['/api/portraits'].post.requestBody.content['application/json'].schema;
+  assert.deepEqual(requestSchema.required, ['bundle']);
+  assert.deepEqual(requestSchema.properties.mode.enum, ['implicit_only', 'bundle_pipeline']);
+  assert.match(requestSchema.properties.aResult.$ref, /AResult$/);
+  const portrait = document.components.schemas.GraduatePortrait;
+  assert.equal(portrait.properties.schema_version.enum[0], '2.0');
+  const domain = portrait.properties.implicit.properties.dimensions.items.properties;
+  assert.equal(domain.level, undefined);
+  const criterion = domain.criteria.items.properties;
+  assert.deepEqual(criterion.evidence_state.enum, ['evaluable', 'insufficient', 'conflicting', 'not_applicable']);
+  assert.ok(criterion.performance_grade.enum.includes('well_demonstrated'));
+  assert.ok(criterion.evidence.items.properties.supports);
+  assert.ok(criterion.evidence.items.properties.sha256);
+  assert.ok(criterion.evidence.items.properties.page);
+  assert.match(document.paths['/api/portraits'].post.description, /implicit_only/);
+  assert.match(document.info.description, /2\.0/);
   assert.match((await app.inject('/docs/')).body, /swagger-ui/);
   const configuration = await app.inject('/api/portrait-config');
   assert.equal(configuration.statusCode, 200);
@@ -220,6 +237,7 @@ test('default and explicit execution modes reach the workflow without changing t
 
 test('v2 criterion grades and complete source references survive Fastify serialization', async t => {
   const fixture = await syntheticFixture();
+  fixture.bundle.documents[0]!.segments[0]!.page = 7;
   const result = await syntheticPortrait(fixture);
   const app = await createPortraitServer({ workflow: async () => result });
   t.after(() => app.close());
@@ -238,7 +256,7 @@ test('v2 criterion grades and complete source references survive Fastify seriali
   assert.deepEqual(criterion.evidence[0], {
     document_id: 'annual-1', segment_id: 'body', quote: '研究问题是在小样本课堂数据中提高反馈准确性。',
     supports: '支持研究对象、情境与目标。', source_name: fixture.bundle.documents[0]!.source_name,
-    sha256: fixture.bundle.documents[0]!.sha256, page: null,
+    sha256: fixture.bundle.documents[0]!.sha256, page: 7,
   });
   for (const item of job.portrait.implicit.dimensions) {
     assert.equal('level' in item, false);
@@ -283,10 +301,11 @@ test('external A scope, task, material and evidence mismatches fail before workf
 test('valid external A is preserved and overrides a requested local bundle pipeline', async t => {
   const fixture = await aFixture();
   const original = structuredClone(fixture.aResult);
+  const result = await syntheticPortrait({ ...fixture, extraction: undefined });
   let received: { aResult?: unknown; mode?: string } | undefined;
   const app = await createPortraitServer({ workflow: async input => {
     received = input;
-    return syntheticPortrait({ ...fixture, extraction: undefined, aResult: input.aResult });
+    return result;
   } });
   t.after(() => app.close());
   const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle, aResult: fixture.aResult, mode: 'bundle_pipeline' } });
@@ -338,4 +357,23 @@ test('model-generated review confirmations and old cumulative domain levels are 
     assert.equal(job.error.code, 'STRUCTURED_OUTPUT');
     assert.equal(job.portrait, undefined);
   }
+});
+
+
+test('task context preserves explicit unknowns and rejects incomplete context objects', async t => {
+  const fixture = await syntheticFixture();
+  let received: unknown;
+  const app = await createPortraitServer({ workflow: async input => {
+    received = input.bundle.task_context;
+    throw Object.assign(new Error('context validation only'), { code: 'CONFIGURATION' });
+  } });
+  t.after(() => app.close());
+  const task_context = { task_id: 'synthetic-task', observation_period: fixture.bundle.period, training_category: null, training_year: null, support_conditions: null };
+  const bundle = { ...fixture.bundle, task_context };
+  const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle } });
+  assert.equal(response.statusCode, 202);
+  await delay(0);
+  assert.deepEqual(received, task_context);
+  const incomplete = { ...fixture.bundle, task_context: { task_id: 'synthetic-task' } };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: incomplete } })).statusCode, 400);
 });

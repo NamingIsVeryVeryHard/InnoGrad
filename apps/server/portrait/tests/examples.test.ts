@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { portraitExamples } from '../src/examples.js';
 import { createPortraitServer } from '../src/server.js';
-import { validateBundle } from '../skill-bridge.mjs';
+import { validateBundle, validateAResult, loadConfiguration } from '../skill-bridge.mjs';
 import type { ParsedMaterialBundle } from '../src/contracts.js';
 
 test('synthetic report examples have reproducible text hashes and explicit simulated provenance', () => {
@@ -21,7 +22,7 @@ test('synthetic report examples have reproducible text hashes and explicit simul
   assert.equal(portraitExamples.proposalReport.value.bundle.period, null);
 });
 
-test('both Swagger report examples pass HTTP validation unchanged without a model call', async t => {
+test('all Swagger examples pass HTTP validation unchanged without a model call', async t => {
   const received: ParsedMaterialBundle[] = [];
   const app = await createPortraitServer({ workflow: async ({ bundle }) => {
     received.push(bundle);
@@ -34,4 +35,31 @@ test('both Swagger report examples pass HTTP validation unchanged without a mode
   }
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(received, Object.values(portraitExamples).map(example => example.value.bundle));
+});
+
+
+test('A handoff Swagger example reuses full annual material and passes the shared contract', async t => {
+  const annual = JSON.parse(readFileSync(new URL('../examples/annual-report.synthetic.json', import.meta.url), 'utf8'));
+  const proposal = JSON.parse(readFileSync(new URL('../examples/proposal-report.synthetic.json', import.meta.url), 'utf8'));
+  assert.deepEqual(portraitExamples.annualReport.value, annual);
+  assert.deepEqual(portraitExamples.proposalReport.value, proposal);
+  assert.deepEqual(portraitExamples.annualWithAResult.value.bundle, annual.bundle);
+  const { rules } = await loadConfiguration();
+  const { bundle, aResult } = portraitExamples.annualWithAResult.value;
+  validateAResult(bundle, aResult, rules);
+  assert.equal(aResult.producer.mode, 'synthetic');
+  assert.equal(aResult.producer.model, null);
+  assert.equal(aResult.extraction.items.length, 4);
+  assert.deepEqual(aResult.extraction.items.map(item => item.status), ['published', 'under_review', 'accepted', 'in_progress']);
+  assert.equal(aResult.explicit.checks.find(check => check.id === 'credit-requirement')?.status, 'pending_rule');
+  let received: unknown;
+  const app = await createPortraitServer({ workflow: async input => {
+    received = input.aResult;
+    throw Object.assign(new Error('example contract validation only'), { code: 'CONFIGURATION' });
+  } });
+  t.after(() => app.close());
+  const response = await app.inject({ method: 'POST', url: '/api/portraits', payload: portraitExamples.annualWithAResult.value });
+  assert.equal(response.statusCode, 202);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(received, aResult);
 });

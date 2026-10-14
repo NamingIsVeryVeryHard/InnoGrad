@@ -84,8 +84,8 @@ export async function createPortraitServer(options: ServerOptions = {}) {
     openapi: {
       openapi: '3.0.3',
       info: {
-        title: 'InnoGrad 研究生画像原型 API', version: '0.1.0',
-        description: '通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、同时2次本地执行，整体等待5分钟超时。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。POST每次创建新任务，重复提交会再次生成。',
+        title: 'InnoGrad 研究生画像原型 API', version: '0.2.0',
+        description: '画像与隐性评价采用 2.0 契约，材料 bundle 与事实抽取保持 1.0。默认 implicit_only 只执行 B 的隐性评价，显性部分为空且待补 A；可传 aResult 合并 A 结果，或选择 bundle_pipeline 在原型内抽取。七领域不定级，每项分开记录证据状态和三档表现。通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、同时2次本地执行，整体等待5分钟超时。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。POST每次创建新任务，重复提交会再次生成。',
       },
       tags: [{ name: '画像' }, { name: '规则' }],
     },
@@ -108,11 +108,11 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   app.post<{ Body: PortraitRequest }>('/api/portraits', {
     schema: {
       tags: ['画像'], operationId: 'createPortrait', summary: '提交画像生成任务',
-      description: '异步调用 InnoAgent。202不表示已生成，使用Location或GET查询任务。相同输入再次POST仍会新建任务。失败任务的error提供固定错误类别，不包含上游原文或密钥。超时停止本地等待，上游执行可能继续，确认其结束前请勿重试。',
+      description: '默认 implicit_only：仅传 bundle 时只评价隐性部分，explicit 为 null、explicit_status 为 pending。aResult 经身份、任务、材料指纹、版本和出处校验后原样合并；即使 mode 为 bundle_pipeline，有 A 结果时也只执行评价。未传 A 时可选择 bundle_pipeline 先抽取并计算显性部分。异步调用 InnoAgent。202不表示已生成，使用Location或GET查询任务。相同输入再次POST仍会新建任务。失败任务的error提供固定错误类别，不包含上游原文或密钥。超时停止本地等待，上游执行可能继续，确认其结束前请勿重试。',
       body: object({
         bundle: { $ref: 'ParsedMaterialBundle#' },
         aResult: { $ref: 'AResult#', description: 'A 已计算的显性结果；验证通过后只执行隐性评价并原样合并。' },
-        mode: { type: 'string', enum: ['implicit_only', 'bundle_pipeline'], description: '默认 implicit_only：仅评价隐性部分。bundle_pipeline：原型内先抽取并计算显性部分。' },
+        mode: { type: 'string', enum: ['implicit_only', 'bundle_pipeline'], description: '默认 implicit_only：仅评价隐性部分。bundle_pipeline：未传 aResult 时在原型内先抽取并计算显性部分；传 A 时优先合并 A。' },
       }, ['bundle']),
       response: { 202: { $ref: 'PortraitJob#' }, 400: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema, 503: errorSchema },
     },

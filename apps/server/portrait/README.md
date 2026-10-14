@@ -1,6 +1,6 @@
 # 研究生画像原型 API
 
-本地服务把已解析材料交给 InnoAgent 的 `graduate-portrait` Skill，返回待人工复核的画像草稿。显性部分按材料记录统计和核对，隐性部分按配置的评价标准判断材料支持程度。没有制度原文的阈值保持待配置，不得据此认定学生达标。
+本地服务把已解析材料交给 InnoAgent 的 `graduate-portrait` Skill，返回待人工复核的画像草稿。默认只执行 B 的隐性评价，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
 
 ## 准备本地运行环境
 
@@ -134,15 +134,19 @@ PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
 
 | 接口 | 用途 |
 | --- | --- |
-| `POST /api/portraits` | 提交 `{ "bundle": ... }`，返回 `202`、任务标识和 `Location` |
+| `POST /api/portraits` | 提交`{ "bundle": ..., "aResult": ... }`，`aResult`可省略；返回`202`、任务标识和`Location` |
 | `GET /api/portraits/{id}` | 查询 `running`、`completed` 或 `failed`；完成时含 `portrait` |
 | `GET /api/portrait-config` | 读取当前显性规则和隐性评价标准 |
 | `GET /docs/` | 浏览并调试 API |
 | `GET /openapi.json` | 获取 OpenAPI 3 文档 |
 
-`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。
+`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。`bundle`与显性事实抽取仍使用`schema_version: "1.0"`；隐性评价和画像使用`schema_version: "2.0"`，不再接受旧的累计领域等级格式。
 
-Swagger 的请求示例下拉框提供两份独立编写的全虚构报告，也可直接读取 JSON 用于本地调试：
+请求可选字段`mode`取`implicit_only`或`bundle_pipeline`，默认`implicit_only`。仅传`bundle`时只调用 B 的评价阶段，画像中的`explicit`为`null`、`explicit_status`为`pending`，并附`explicit_pending`提示。`bundle_pipeline`会先抽取事实、计算显性结果，再评价隐性部分，适合完整原型演示。传入`aResult`时只执行评价阶段，沿用已校验的 A 结果；即使同时选择`bundle_pipeline`也优先合并 A。
+
+`bundle.task_context`可提供任务标识、观察期间、培养类别、培养年级和支持条件。该对象可省略；提供时五个字段均须填写，缺少的信息保持`null`。接口在分配任务前核对 A 的契约版本、学生、期间、阶段、任务背景、文档及段落指纹、规则来源和输入事实引用。不一致返回`422`，不会调用 InnoAgent；结构不合法返回`400`。错误响应仅返回固定类别，不回传上游材料或错误原文。
+
+Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原有请求体均为`{bundle}`，使用默认隐性评价流程。也可直接读取 JSON 用于本地调试：
 
 - [年度报告示例](examples/annual-report.synthetic.json)：封面、2027—2028学年学习科研总结、下一学年计划和未勾选评定意见。正文区分本期与累计成果、已发表、录用未见刊、审稿及写作状态，并说明作者角色和交流情况。
 - [开题报告示例](examples/proposal-report.synthetic.json)：基本信息、研究意义与现状、问题目标、方法实验计划、可行性风险、进度安排及未填写评审意见。`period: null`表示没有确认统计学年，计划不算已完成成果。
@@ -150,6 +154,10 @@ Swagger 的请求示例下拉框提供两份独立编写的全虚构报告，也
 示例中的姓名、学校、题目和数字均为虚构，没有复制真实材料正文。两份文本分别按4页和6页模拟分页；`page`只用于定位合成文本，不对应真实PDF。`sha256`是按 `segments`顺序将各段 `text`以换页符 `\f`连接后，计算 UTF-8 字节所得的哈希，不是PDF文件哈希。示例没有原始PDF，来源名称和各页均作了标注。`parse_status: complete`只说明这些合成文本完整提供，不证明真实材料完成解析。
 
 旧[合成材料构造器](../../../.agents/skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
+
+第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果。
+
+v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，并附待教师复核状态。
 
 生成过程是异步任务。`202`只表示接受任务，按响应中的 `Location`查询结果。任务失败时，`error.code`说明配置、网络、超时、配额或结构校验问题；响应不包含上游错误原文。超过5分钟会停止本地等待，任务状态为 `failed`、错误代码为 `JOB_TIMEOUT`。InnoAgent 后端可能仍在执行，晚到结果不保存；确认上游执行结束前请勿重试。成功结果的 `review_status`始终为 `draft`。
 
@@ -171,4 +179,4 @@ npm --prefix apps/server/portrait run typecheck
 npm --prefix apps/server/portrait run build
 ```
 
-接口测试覆盖输入一致性、异步任务、草稿结果、错误脱敏、超时取消、容量限制、过期、关闭取消、OpenAPI 和 Swagger 页面。真实 InnoAgent 与真实模型调用需要单独验证，测试中的合成执行函数不能证明在线效果。
+接口测试覆盖执行模式、A 交接一致性与原样保留、v2 结果及出处序列化、异步任务、错误脱敏、超时取消、容量限制、过期、关闭取消、OpenAPI 和 Swagger 页面。真实 InnoAgent 与真实模型调用需要单独验证，测试中的合成执行函数不能证明在线效果。
