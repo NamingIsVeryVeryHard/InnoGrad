@@ -86,6 +86,7 @@ export function assessmentSchema(rubric, {requireConditions = false} = {}) {
       allOf: d.criteria.map(c => containsId('criterion_id', c.id)),
     },
   }));
+  const orderedCriterion = {...criterionSchema, properties: Object.fromEntries(['criterion_id','observed','evidence','condition_checks','contribution','evidence_nature','work_status','missing_evidence','limitations','rationale','evidence_state','standard_status','performance_grade','suggestions'].map(key=>[key,criterionSchema.properties[key]]))};
   return {
     ...object({
       ...scope, schema_version: { const: '2.0' }, rubric_version: { const: rubric.version },
@@ -94,7 +95,7 @@ export function assessmentSchema(rubric, {requireConditions = false} = {}) {
         items: { oneOf: branches }, allOf: rubric.dimensions.map(d => containsId('dimension_id', d.id)),
       },
     }),
-    definitions: { criterion: {...criterionSchema, required: requireConditions ? [...criterionSchema.required, 'condition_checks'] : criterionSchema.required} },
+    definitions: { criterion: {...orderedCriterion, required: requireConditions ? [...criterionSchema.required, 'condition_checks'] : criterionSchema.required} },
   };
 }
 export const schemas = { bundle: bundleSchema, extraction: extractionSchema, assessment: assessmentSchema };

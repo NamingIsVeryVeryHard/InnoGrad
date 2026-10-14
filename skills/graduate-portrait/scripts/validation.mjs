@@ -23,7 +23,7 @@ export function validateShape(schema, data, label) {
   if (!validate(data)) {
     // Paths and error categories suffice; source data and provider responses stay out of logs.
     const error=new Error(label + ': ' + validate.errors.map(e => e.instancePath + ' ' + e.keyword).join('; '));
-    error.validation_issues=validate.errors.map(e=>({path:e.instancePath,category:'SCHEMA_'+e.keyword.toUpperCase()}));throw error;
+    error.validation_issues=validate.errors.map(e=>({path:e.instancePath,category:'SCHEMA_'+e.keyword.toUpperCase(),...(e.keyword==='required'?{missing_property:e.params.missingProperty}:{})}));throw error;
   }
 }
 

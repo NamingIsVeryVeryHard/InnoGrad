@@ -104,20 +104,20 @@ test('分域错误即失败，任何漏项、错误域、非法等级或状态�
  }
 });
 
-test('原生runner同一隔离会话逐域运行，每域最多修正一次且失败后不继续',async()=>{
+test('原生runner按领域隔离会话，同一领域修正一次且失败后不继续',async()=>{
  const f=onlineFixture();const tasks=[];let sessions=0;let audits=0;
  const runner=await createInnoAgentRunner({url:'http://localhost',timeoutMs:1000,auditUrl:'http://audit.local'},{fetchImpl:async(url,init)=>{
   if(url.endsWith('/api/skills'))return reply(skillList);
   if(url.endsWith('/content'))return reply({content:url.includes('graduate-implicit-assessment')?implicitSkillBody:skillBody});
-  if(url.endsWith('/api/sessions')){sessions++;return reply({id:'one-student-session',workspaceId:'unique'});}
-  if(url.endsWith('/api/sessions/one-student-session'))return reply({id:'one-student-session'});
+  if(url.endsWith('/api/sessions')){sessions++;return reply({id:'student-task-'+sessions,workspaceId:'workspace-'+sessions});}
+  if(url.includes('/api/sessions/student-task-'))return reply({id:url.split('/').at(-1)});
   if(url.includes('/runs/')){audits++;return reply({attempts:[]});}
-  assert.equal(new URL(url).pathname,'/api/chat/stream');const body=JSON.parse(init.body);assert.equal(body.sessionId,'one-student-session');const task=JSON.parse(body.prompt.split('\n').at(-1));tasks.push(task);
+  assert.equal(new URL(url).pathname,'/api/chat/stream');const body=JSON.parse(init.body);assert.equal(body.sessionId,'student-task-'+sessions);const task=JSON.parse(body.prompt.split('\n').at(-1));tasks.push(task);
   const data={...f.assessment,dimensions:structuredClone(f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id))};
   if(task.dimension_id===f.rubric.dimensions[1].id)data.dimensions[0].criteria[0].performance_grade='invalid-value';
   return new Response('data: '+JSON.stringify({sessionId:body.sessionId,turnId:'t'+tasks.length,event:{type:'done',fullText:JSON.stringify(data)}})+'\n\n');
  }});
- await assert.rejects(runPortraitWorkflow({...f,runner}),e=>e.code==='STRUCTURED_OUTPUT');assert.equal(sessions,1);assert.equal(audits,0);
+ await assert.rejects(runPortraitWorkflow({...f,runner}),e=>e.code==='STRUCTURED_OUTPUT');assert.equal(sessions,2);assert.equal(audits,0);assert.deepEqual(runner.session_ids,['student-task-1','student-task-2']);
  assert.deepEqual(tasks.map(t=>t.dimension_id),[f.rubric.dimensions[0].id,f.rubric.dimensions[1].id,f.rubric.dimensions[1].id]);assert.deepEqual(tasks[1],tasks[2]);
  assert.deepEqual(runner.records,[{phase:'assessment',dimension_id:f.rubric.dimensions[0].id,attempts:1}]);
 });
