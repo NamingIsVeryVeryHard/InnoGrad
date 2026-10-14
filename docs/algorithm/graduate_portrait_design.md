@@ -6,9 +6,9 @@ A 负责显性事实抽取与固定规则，其他成员负责 OCR 和材料解�
 
 现有原型为了联调，同时包含显性抽取、固定规则、隐性评价和 API。本文保留这些实现说明作为交接背景，不能据此把全部模块都归为 B 的交付。评价方法与适用范围见[画像方法原型](graduate_portrait.md)，启动步骤见[画像 API 说明](../../apps/server/portrait/README.md)。
 
-## 1. B 的目标设计
+## 1. B 的评价设计
 
-B 的交付顺序是：确认可评维度与证据条件 → 编写评价 Skill → 通过 InnoAgent 执行评价 → 校验引用与缺失说明 → 合并显性结果 → 输出画像样例。A、B 的交接要求和当前接口缺口见第5节。
+B 的交付顺序是：确认可评维度与证据条件 → 编写评价 Skill → 通过 InnoAgent 执行评价 → 校验引用与缺失说明 → 合并显性结果 → 输出画像样例。A、B 的版本化交接要求见第5节。
 
 ### 1.1 评价对象与候选领域
 
@@ -99,7 +99,7 @@ InnoAgent 继续作为执行平台，使用原生 graduate-portrait Skill。试�
 
 ### 1.6 当前原型的调用链
 
-第1.1—1.5节是本轮确定的目标设计。以下第2—4节和 Skill 附录说明当前实现；新观察项、证据状态和表现等级仍需同步修改量规、Schema、程序与测试后才能生效。第5节列出交接约定与验收差异。
+第1.1—1.5节已落实为七领域、23个观察项的试用量规、评价 Skill、Schema 和程序校验。以下说明当前实现；教师校准仍待完成。
 
 ```mermaid
 flowchart LR
@@ -108,7 +108,7 @@ flowchart LR
   W --> I[InnoAgent · 原生加载画像 Skill · 3147]
   I --> G[模型网关 · 3148]
   G --> M[ECNU Plus 或配置的备用模型]
-  I -->|结构化抽取与评价| W
+  I -->|分项评价与引用| W
   W -->|画像草稿| A
 ```
 
@@ -117,25 +117,23 @@ flowchart LR
 | 模块 | 职责 | 输出 |
 | --- | --- | --- |
 | 上游材料解析 | 提取文字、OCR、分页和材料身份关联，说明解析覆盖范围 | bundle |
-| InnoAgent + Skill | 提取事实和成果条目，按评价条件判断证据 | extraction、assessment |
-| 本地程序 | 校验结构、身份、期间、引用和数字，核对重复与冲突，执行固定规则 | portrait |
+| InnoAgent + Skill | 默认按分项量规评价；显式联调模式才执行抽取 | assessment；联调模式另含 extraction |
+| 本地程序 | 校验范围、引用、等级条件和交接；原样合并 A，生成草稿 | portrait |
 | 业务服务与教师 | 权限、材料档案、复核及正式审核 | 后续业务流程，本原型未实现 |
 
 OCR 由其他成员负责。本地样例的文字提取与 OCR 试验用于检查输入，不属于画像 API 的正式功能。材料库、登录和正式档案写入暂不开发。
 
-当前工作流为每次画像任务创建独立的 InnoAgent 工作区和会话，抽取与评价在同一任务会话中顺序执行。隔离实例的 L1/L2/L3 持久记忆关闭。后续如需比较成长，应先保留可追溯的历史材料和画像版本，不能用自由生成的记忆替代档案。
+当前工作流为每次画像任务创建独立的 InnoAgent 工作区和会话。默认仅评价；显式 bundle_pipeline 联调模式才在同一会话中先抽取再评价。隔离实例的 L1/L2/L3 持久记忆关闭。后续如需比较成长，应先保留可追溯的历史材料和画像版本，不能用自由生成的记忆替代档案。
 
-## 2. 现有数据流与共享契约
+## 2. 数据流与共享契约
 
-```text
-bundle → 准备抽取任务 → InnoAgent 抽取 → 校验 extraction
-       → 准备评价任务 → InnoAgent 评价 → 校验 assessment
-       → 成果统计、固定规则检查、等级推导 → portrait 草稿
-```
+默认流程：bundle → InnoAgent 原生评价 Skill → 校验 assessment → 领域摘要 → 合并可选 A 结果 → portrait 草稿。
 
-每个任务包包含本阶段的指令、JSON Schema、配置和材料。两个阶段分别返回结构化结果；评价仍以原文及量表为依据。无效结构或证据会触发一次修正尝试，仍不满足要求则失败，不用合成结果替代。
+HTTP 接收 bundle、可选 aResult 和 mode。mode 默认为 implicit_only；明确传 bundle_pipeline 才执行本地抽取与规则联调。提供有效 aResult 时始终只执行评价，保留 A 的结果，不重复计算。没有 A 时 explicit、explicit_extraction 为 null，explicit_status 为 pending；外部 A 合并后为 merged，本地联调结果为 local_pipeline。
 
-CLI 的 `prepare` 同时导出两个任务包，供离线执行；在线 `workflow` 按上述顺序运行。CLI 的 `build/workflow` 保存 `portrait.json` 和 `portrait.md`；HTTP API 返回内存中的任务与 JSON 结果，不自动写入材料数据库。
+bundle、extraction 保留1.0；assessment、portrait 为2.0；A 交接为 a-handoff-1.0。旧四维隐性评价不能直接改名为新表现等级，旧 assessment 明确拒绝。
+
+每个任务包包含阶段指令、Schema、配置、上下文和完整材料。无效结构或证据最多修正一次，仍不满足要求则失败，不用合成结果替代。CLI prepare 默认只导出评价任务包，build/workflow 保存 portrait.json 和 portrait.md；API 的任务和结果保存在内存中。
 
 ### 2.1 输入 bundle
 
@@ -146,14 +144,16 @@ CLI 的 `prepare` 同时导出两个任务包，供离线执行；在线 `workfl
 | Swagger 示例 | 完整 JSON 来源 | 主要内容 |
 | --- | --- | --- |
 | annualReport：博士年报 | [年度报告请求示例](../../apps/server/portrait/examples/annual-report.synthetic.json) | 4 个模拟页，包含本期与累计成果、发表与录用及在审状态、个人角色和下一学年计划 |
+| annualWithAResult：完整年报与 A 交接 | [交接示例生成器](../../apps/server/portrait/src/a-example.ts) | 沿用完整年报，附带版本、指纹、抽取和规则结果；来源明确为 synthetic |
 | proposalReport：开题报告 | [开题报告请求示例](../../apps/server/portrait/examples/proposal-report.synthetic.json) | 6 个模拟页，包含研究问题、方法、风险和进度；period 为 null |
 
-两个文件就是 Swagger 加载的请求体，已包含外层 `{ "bundle": ... }`，复制使用时不要再包一层 bundle。CLI 的 `--bundle` 读取内层 bundle 对象。切换示例只查看内容；点击 Execute 提交 POST 才会启动生成任务。
+年度和开题两个 JSON 文件就是 Swagger 加载的请求体，已包含外层 `{ "bundle": ... }`，复制使用时不要再包一层 bundle。CLI 的 `--bundle` 读取内层 bundle 对象。切换示例只查看内容；点击 Execute 提交 POST 才会启动生成任务。
 
 这些是 API 现有的合成示例，不是真实学生报告。模拟页码和文本哈希的含义沿用 [API 示例说明](../../apps/server/portrait/README.md)，本文不重复维护一份 JSON。
 
 | 字段 | 当前约定 |
 | --- | --- |
+| task_context | 可省略或为 null；提供时须完整包含 task_id、observation_period、training_category、training_year、support_conditions，未知值为 null |
 | stage | `annual/proposal`，表示报告阶段，不是硕士/博士层次 |
 | period | 年份或连续学年，如 `2027-2028`；开题期间无法确认时允许 null，年报不允许为空 |
 | 文档 kind | `annual/proposal/assessment/supporting`，字段名不是 type |
@@ -211,49 +211,37 @@ Swagger 年报原文中的两个数量可用来理解字段区别：
 
 本阶段保留现有字段。若以后要简化，可以让模型只选择原文数字片段及出处，由程序生成 value；这需要同步修改 Schema、提示、校验和测试，目前尚未实现。教师界面只需展示数量、限定词和证据，无需展示 numeric_token。
 
-### 2.4 当前隐性评价 assessment：四维材料支持原型
+### 2.4 隐性评价 assessment：分项表现与证据状态
 
-当前量表采用三级材料支持标准，与第1节的新表现等级不同；以下描述现有行为，不是新方案的定级规则。下表是现有配置的概括，完整条件以[评价配置](../../.agents/skills/graduate-portrait/references/implicit-rubric.json)为准；等级逐级累积，不能跳过前级条件。
+[试用量规](../../.agents/skills/graduate-portrait/references/implicit-rubric.json)含七领域、23个观察项，版本为 implicit-2026-10-14-trial.1，状态为 draft_uncalibrated。每项均输出；证据不足不能靠省略观察项隐藏。各项使用第1节的三档标准，领域不评级、不取平均，也不生成隐性总分。
 
-| 维度 | 1级 | 2级：在前级基础上 | 3级：在前级基础上 |
-| --- | --- | --- | --- |
-| 问题分析 | 明确对象、情境和具体问题 | 用文献、比较或观察说明具体不足 | 形成对象、条件和可检验目标明确的研究问题 |
-| 研究设计 | 说明方法、数据或对象、关键步骤及选择理由 | 有比较对象或基线、数据来源和评价指标 | 说明具体约束及风险应对方案 |
-| 证据推理 | 提供已完成研究的具体观测或结果 | 用实际比较说明结果怎样支持结论 | 结合结果讨论适用范围、不确定性或替代解释 |
-| 反思改进 | 指出本人研究的具体不足或反馈 | 说明对应调整及理由，区分计划与执行 | 提供调整后的实际检查，并与调整前或目标比较 |
-
-示例直接对应第2.1节的 Swagger 完整材料。下表说明如何检查证据，不是模型实测输出，也不预先给整份报告定级。
-
-| Swagger 材料位置 | 要检查的条件 | 评价边界 |
-| --- | --- | --- |
-| proposalReport，proposal-page-3 | problem-question：三个研究问题是否具有明确对象、条件和可检验目标 | 单个问题条件有依据，不代表 problem-gap 已满足；整维度升级仍须核对具体不足的依据 |
-| proposalReport，proposal-page-4 | design-feasibility：授权、伦理和学校安排等约束，是否对应缩小范围、试用或调整时间等措施 | 记录为计划；不把可行性论证当成已经完成实验 |
-| annualReport，annual-page-2 | evidence-result：两轮试标注中的具体观察，是否足以定位研究结果 | 不能用“七十二段”或论文发表替代结果证据；也不能据此认定已完成正式实验或比较验证 |
-| annualReport，annual-page-3 | reflection-issue、reflection-action、reflection-check：反馈、修改与检查结果是否分别存在 | 材料写明修改只经组内讨论、还需独立检验；不能把后续复核计划当成改进已验证 |
-
-每项条件都应回答“依据在哪、支持哪个要求、还缺什么”。只有原文涵盖条件中全部必需内容时才标 supported；不够则用 not_observed 说明缺项。模型对每个 criterion 输出：
-
-| 字段 | 允许值或用途 |
+| 字段 | 约定 |
 | --- | --- |
-| criterion_id | 配置中存在的条件标识 |
-| judgment | supported / contradicted / not_observed，不是 observed |
-| work_status | planned / in_progress / completed / unknown |
-| rationale | 说明引用如何支持或反驳该条件 |
-| evidence | 引用数组；非 unknown 工作状态必须有引用 |
-| missing_evidence | 缺少的证据；not_observed 时必须说明 |
+| criterion_id | 量规中的观察项标识 |
+| evidence_state | evaluable、insufficient、conflicting、not_applicable |
+| performance_grade | needs_improvement、meets_requirements、well_demonstrated 或 null |
+| standard_status | applicable、pending_confirmation、not_applicable；程序核对适用阶段和 required_context |
+| work_status | planned、in_progress、completed、unknown |
+| observed / rationale | 分开记录可观察事实与按标准的判断 |
+| evidence | document_id、segment_id、quote、supports；说明每条引文支持什么 |
+| evidence_nature | observed、self_report、mixed、unknown；自述不是独立核验 |
+| contribution | individual、guidance、tools；未知为 null |
+| limitations / missing_evidence / suggestions | 范围、待补材料及下一步建议 |
 
-完整结果还包含任务范围、rubric_version 和所有配置维度。开题计划可支持问题与方案设计，不能替代完成实验、结果比较或改进后的验证。当前程序对要求完成结果的条件，拒绝仅引用开题材料作为完成证据。
+只有可评价且标准适用时允许等级。缺证据、冲突和不适用均保持 null；冲突须有至少两条不同引用。不提协作只能判证据不足，不自动判不适用。无引用时工作状态只能 unknown。需要完成证据的观察项拒绝仅用开题计划作为完成依据；负结果或目标未达不自动意味着表现差。
 
-程序按各等级 requires 中的条件是否全部 supported 推导等级；缺证据时等级可以为 null，不补零分。等级只描述本批材料的支持程度，量表尚未完成教师一致性验证。模型仍可能选用语义不足的引用，需要教师逐项复核。
+Swagger 的完整 annualReport 可检查反馈理解、调整行动和效果检查是否分开；proposalReport 可检查问题、方法、验证计划和风险应对。具体条件以量规为准，这些阅读说明不预先指定模型等级。
 
 ### 2.5 校验与画像构建
 
-1. 校验 Schema、学生身份、期间、引用位置，以及数字与原句的对应关系。
-2. 分别保留自报字段和逐项成果，结合类别、标识、标题、活动日期及出处核对重复。仅同名但无法确认的记录保留为潜在重复。
-3. 同一成果出现不一致状态或期间时保留原记录，生成 item_conflicts；模型不需输出 status: conflict。当前不自动选择“最新状态”。
-4. 按成果状态和本期范围统计，保留清单完整性。部分清单、未知状态或期间不明时，不能把没有列出的数量推成精确零。
-5. 执行固定规则。自报数与列出数不同标为待复核；最低要求只有阈值、适用阶段和制度来源齐备时才启用，否则为 pending_rule。制度是否有效、适用学院与年级仍由配置者确认。
-6. 推导隐性等级，生成 review_status: draft 的画像并保留执行来源；显性、隐性总分均为 null。
+1. 核对 Schema、学生、期间、阶段和量规版本，要求观察项完整且不重复。
+2. 核对证据是否出现在对应分段，补齐 source_name、sha256 和物理页码。未知页码保持 null；不能由模型补造。
+3. 检查证据状态、工作状态、适用标准和等级的允许组合；缺证据不补低档，标准未确认暂缓等级。
+4. 领域摘要直接从已校验观察项的 observed 和 rationale 生成，并保留 criterion_ids，不新增模型总结步骤。
+5. 若有 A，先校验交接范围、上下文、材料指纹、规则版本、完整结果结构及引文，再原样保留 explicit_extraction 和 explicit；不重新计算规则。没有 A 时明确显性待接入。
+6. 输出 review_status: draft；每项复核状态 pending、independent_corroboration 为 unverified，复核人、时间和修改理由为空。模型不得生成教师确认。
+
+程序校验结构和引用位置，不能证明语义判断成立。量规、材料、A 结果与 Skill 实现的哈希记录在 provenance；run_id 用于区分输入与执行版本。当前没有持久化历史库，调用方需保存旧结果，不能因有版本标识就宣称历史已自动归档。
 
 ## 3. Skill 的组成与执行方式
 
@@ -263,10 +251,11 @@ Swagger 年报原文中的两个数量可用来理解字段区别：
 | --- | --- | --- |
 | SKILL.md | 声明用途、执行步骤及证据边界 | 调整工作流程或总体约束 |
 | references/explicit-rules.json | 显性字段、六组展示和固定检查规则 | 调整指标、阈值和制度来源 |
-| references/implicit-rubric.json | 隐性条件、允许状态与等级要求 | 修改维度名称、条件或等级；需更新版本 |
+| references/implicit-rubric.json | 分项三档标准、适用上下文、证据条件及误判边界 | 修改维度名称、条件或等级；需更新版本 |
 | scripts/prompts.mjs | 构造每阶段的指令、Schema、配置和材料包 | 调整模型抽取或评价的具体要求 |
 | scripts/schema.mjs、validation.mjs | 数据格式、引用与数字校验 | 修改字段、数量语义和状态约束 |
-| scripts/engine.mjs、portrait-schema.mjs、report.mjs | 统计、规则执行、等级推导、输出格式和报告 | 修改程序计算或展示结果 |
+| scripts/engine.mjs、portrait-schema.mjs、report.mjs | 本地联调统计、分项校验、确定性摘要、输出格式和报告 | 修改程序计算或展示结果 |
+| scripts/handoff.mjs | A 交接 Schema、范围与材料版本校验 | 修改 A/B 交接协议 |
 | scripts/workflow.mjs | 检查 Skill，创建会话并调用 InnoAgent | 修改平台接入和阶段执行 |
 | scripts/adapter.mjs、gateway.mjs | 底层模型请求适配与本机网关 | 调整模型服务；adapter 不是 InnoAgent 平台适配层 |
 
@@ -288,9 +277,9 @@ Swagger 年报原文中的两个数量可用来理解字段区别：
 | --- | --- |
 | YAML name / description | 技能名称和用途；当前显式调用，不代表自动路由已验证 |
 | 范围与输入 | 限定身份、期间、来源和材料处理边界 |
-| 执行 | 同时说明离线 CLI 和服务端编排；在线模型收到任务包后不执行其中的 CLI 命令 |
+| 执行 | 说明默认独立 B、可选 A 交接和联调模式；在线模型收到任务包后不执行其中的 CLI 命令 |
 | 事实抽取约束 | 规定缺失、数字、状态和清单口径；具体强制校验由脚本执行 |
-| 隐性评价约束 | 要求逐条件证据；语义是否充分仍需复核 |
+| 隐性评价约束 | 要求分项标准、证据状态、等级及出处；语义是否充分仍需复核 |
 | 修改与评价 | 指明配置入口、版本和回归要求 |
 | 可选远端调用 | 描述底层 remote 调试；remote 直接调用模型，不能作为 InnoAgent 接入的证明 |
 
@@ -309,9 +298,9 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synt
 
 ```sh
 node .agents/skills/graduate-portrait/scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
-# 按任务包生成 extraction.json 和 assessment.json 后再执行：
-node .agents/skills/graduate-portrait/scripts/cli.mjs validate --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json
-node .agents/skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json --out local-runs/result --mode offline_replay
+# 按任务包生成 assessment.json 后再执行；有 A 时增加 --a-result：
+node .agents/skills/graduate-portrait/scripts/cli.mjs validate --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json
+node .agents/skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --out local-runs/result --mode offline_replay
 ```
 
 上述 build 示例记录为离线重放。实际按 Skill 完成的新语义工作可记录为 skill_execution；助手整理样例使用 assistant_curated。不能根据材料是否真实来决定执行来源。
@@ -320,7 +309,7 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/
 
 | 接口 | 行为 |
 | --- | --- |
-| POST /api/portraits | 提交 { "bundle": ... }，返回 202、任务 ID 和 Location；202 仅表示接收 |
+| POST /api/portraits | 提交 bundle 及可选 aResult、mode，返回 202、任务 ID 和 Location；202 仅表示接收 |
 | GET /api/portraits/{id} | 查询 running、completed 或 failed；完成后读取 portrait |
 | GET /api/portrait-config | 查看显性规则和隐性评价配置 |
 | GET /docs/、GET /openapi.json | 调试界面和接口描述 |
@@ -330,7 +319,7 @@ API 默认只监听本机，输入上限 1 MiB。任务存于内存，默认保�
 CLI workflow 走 InnoAgent + Skill；remote 直接调用模型接口，仅用于底层适配调试。
 
 ```sh
-node --test tests/unit/portrait.test.mjs tests/integration/portrait-adapter.test.mjs tests/integration/portrait-cli.test.mjs tests/integration/portrait-workflow.test.mjs
+node --test tests/unit/portrait*.test.mjs tests/integration/portrait*.test.mjs
 npm --prefix apps/server/portrait test
 npm --prefix apps/server/portrait run typecheck
 npm --prefix apps/server/portrait run build
@@ -347,54 +336,50 @@ OCR 另有负责人，A、B 均从已解析材料开始。双方先约定学生�
 
 ### 5.1 A 交给 B 的内容
 
-以下是交接的数据约定，新增部分尚不是当前 HTTP Schema 的可用字段。实施时统一定义版本化契约并同步 Swagger，不允许调用方自行扩展严格 Schema。
+HTTP 的 aResult 使用 a-handoff-1.0。完整示例见 Swagger 的 annualWithAResult；[交接 Schema 与校验](../../.agents/skills/graduate-portrait/scripts/handoff.mjs)为可执行契约。
 
-| 交接内容 | 约定 | 当前支持情况 |
-| --- | --- | --- |
-| 学生与任务范围 | 学生标识、任务标识、观察期间、报告阶段；培养类别、年级及支持条件未知时明示未知 | bundle 已有 student_id、period、stage；任务背景需扩展 |
-| 可引用的材料 | 原文、来源文件、文档版本或哈希、物理页码、稳定分段及解析覆盖状态 | bundle.documents 和 segments 已提供基础结构；更细的上游解析追溯记录待接入 |
-| 显性事实 | facts、items、coverage 及各自引用，区分自报、逐项记录、状态和统计范围 | 现有 extraction 可以复用 |
-| 固定规则结果 | 每条规则的标识、版本、适用范围、制度或比较口径来源、输入事实引用、结果和待复核原因 | 当前由共享引擎计算；接收外部 A 结果仍需实现 |
-| 执行与版本来源 | 契约版本、A 的输出版本、材料版本集合、生成时间和执行来源 | 新交接契约需补全，不能用当前时间伪造上游记录 |
+| 交接内容 | 已实现的约定 |
+| --- | --- |
+| 学生与任务范围 | student_id、period、stage、task_id；task_context_sha256 绑定完整任务上下文 |
+| 材料版本 | material_fingerprints 绑定原文件 SHA-256 与解析文本、页段、身份、解析状态等内容指纹 |
+| 显性事实 | extraction 保留 facts、items、coverage 及原文引用 |
+| 固定规则结果 | explicit 含完整指标、成果状态统计、分组、规则标识、版本、适用范围、来源、输入引用及结果 |
+| 执行来源 | output_version、generated_at、producer 和 rules_version 来自 A，合成和重放不能冒称模型实测 |
 
-B 合并前核对身份、任务、期间、材料版本及契约版本。相同范围和材料才能合并；不匹配时返回具体原因，并保留可单独查看的隐性草稿，不能生成声称已完成整合的画像。模型不重新计算或改写 A 的固定规则；显性冲突和待复核状态原样保留，可能影响隐性判断时另附提示。
+合并前核对全部范围、版本和引用。每类成果须保留全部状态键；未知数量用 null，不允许缺键。规则状态须符合规则类型，输入引文须来自 A 对应事实或成果；这些检查不重新计算 A 的结果。B 保留 A 的显性冲突和待复核状态。
 
-B 可直接从已解析原文开始，不要求 A 先完成全部显性规则。没有 A 结果时必须标注缺少显性部分；正式交付的整合样例需同时包含 A 的结果和 B 的评价。
-
-当前 HTTP 入口只接收 bundle，在线工作流仍自行执行抽取，再由引擎计算显性检查。离线 build 可以接收准备好的 extraction 和 assessment，但仍会执行共享规则。**直接接收 A 已算好的显性结果并合并，尚未实现，不能把现有材料入口视为已经完成 A/B 交接。**
+不匹配的请求在模型调用前拒绝；需要独立 B 草稿时可以去掉 aResult 重新提交，不悄悄忽略错误 A。当前提供 A 构造工具和完整合成示例；真实 A 团队的输出仍需按同一契约接入。
 
 ### 5.2 B 的交付与验收
 
-| 交付 | 目标与验收重点 | 当前差距 |
+| 交付 | 已实现内容 | 尚待完成 |
 | --- | --- | --- |
-| 试用评价标准 | 七领域组织候选观察项，按任务逐项启用；每项写清三档标准、证据要求和误判边界 | 当前是四维材料支持等级；新量规仍需编写并校准 |
-| 评价 Skill | InnoAgent 原生加载；按新量规给出逐项判断、引用、限制及补充建议 | 已有调用链；配置、提示、Schema 和校验需同步迁移 |
-| 可追溯画像 | 分开显示 A 结果、B 分项评价、领域摘要和证据缺口；结论能回到原文件版本及页段 | 已有基础引用；新状态、摘要约束与人工复核记录待完善 |
-| A/B 整合入口 | 验证交接版本和材料范围，保留 A 的固定规则结果，拒绝错误合并 | 外部 A 结果直接接入仍待适配及联调 |
-| 完整演示与复核 | Swagger 保留年度、开题完整示例；经授权真实材料用于本地核验，逐项记录复核差异 | 旧片段流程有运行记录；新量规和完整真实材料尚未验收 |
+| 试用量规 | 七领域23观察项，三档标准、证据条件和误判边界 | 教师校准、评价者一致性检查 |
+| 评价 Skill | InnoAgent 原生调用，默认独立 B，严格结构和引用校验 | 实际语义质量须逐样例复核 |
+| 可追溯画像 | 文件版本、物理页段、原句、分项理由、限制和领域摘要 | 可信人工复核记录由后续业务服务接入 |
+| A/B 整合 | 版本化交接、前置校验、原样合并 | A 团队真实输出联调 |
+| 完整示例 | Swagger 年报、开题和年报+A；真实材料仅保留在受控本地 | 验收范围按第6节记录 |
 
-程序验收至少覆盖：缺证据不判为待改进；计划不记为已完成；自述不当作独立核验结果；冲突暂缓相关项；无协作记录不自动判不适用；标准或培养背景不足时不套用不适用的阈值；引用和版本错误能够被识别；领域摘要不新增判断；合并不改变 A 结果。测试命令沿用第4节，新增行为应补充对应测试，不能用旧测试通过记录代替新方案验收。
+程序测试覆盖缺证据不判低档、计划与完成分开、自述不自动核验、冲突暂缓、上下文缺失不套用专属阈值、引用及版本错误拒绝、摘要不新增判断、A 原样保留，以及 HTTP 序列化不丢出处。
 
-语义复核先用现有经授权材料逐项检查引用、判断及过度推断，记录一致处和分歧，修订试用量规；有条件时由两位评价者独立判断后讨论分歧。未经教师校准的输出统一标为“项目试用标准下的初评，待教师复核”，不声称达到已验证准确率。真实材料和评审记录保留在受控本地目录，不写入公开示例或 Git。
-
-B 的完成条件是：一份符合约定的 A 交接数据和对应材料，经过 InnoAgent 评价 Skill 生成包含显性结果、隐性判断及引用的画像；上述状态边界有程序检查和材料复核记录。软件联调完成与教师校准完成分别记录，接口成功不等于评价有效。
+软件联调和教师校准分别验收。输出统一为“项目试用标准下的初评，待教师复核”，不声称准确率已验证。真实材料及逐项复核记录不写入 Git 或公开示例。
 
 ## 6. 已验证范围与待办边界
 
-现有原型已实现 Skill、规则配置、CLI、InnoAgent 工作流、异步 API 和 Swagger。已有核心回归48项、API测试12项以及类型检查、构建的通过记录；这是程序验证，不代表模型准确率。
+七领域分项评价、外部 A 交接、CLI、InnoAgent 工作流、异步 API 和 Swagger 已实现。核心回归70项、API测试20项、类型检查与构建通过。独立复审指出的成果状态键不完整问题已修复并补测试；隔离副本中的评级门禁变异被测试识别。这些是程序验证，不代表模型准确率。
 
-三个授权真实材料输入样例曾完成 API 全流程，输入为当时整理的文本片段，并非完整 PDF 自动解析。另一次本地提取已处理17份 PDF、96页并补充 OCR，保留文字层、OCR和页码；这批全文尚未重新完成画像工作流验收。OCR完成也不表示手写、日期和勾选已准确识别。
+真实材料联调采用一份3页扫描年报的完整上游 OCR 和一份13页开题报告的完整文字输入，保留物理页与原文件哈希，解析状态保持 partial。首轮两项调用均超时；后续年报重试首次仅输出一个领域，被校验拒绝并触发修正。完整新量规的在线成功结果尚未确认，不能沿用旧四维片段成功记录。
 
-第1节的新设计尚未在运行代码中生效。B 仍需完成观察项量规与证据状态的迁移、外部 A 结果的交接适配、隐性评价的教师一致性检查和完整材料的端到端质量复核。学校适用规则由 A 与指标负责人确认后交接；真实额度耗尽后的备用全流程也尚待验证。自动 Skill 路由和 Claude/Codex 完整运行尚未验证。数据库、权限、正式审核与档案写入属于后续业务接入。
+待确认事项包括真实 InnoAgent 完整评价质量、A 团队真实交接、教师量规校准和一致性检查。学校适用规则由 A 与指标负责人确认后交接；真实额度耗尽后的备用全流程、自动 Skill 路由和 Claude/Codex 完整运行尚未验证。数据库、权限、正式审核与档案写入属于后续业务接入。
 
 ## 附录：当前 graduate-portrait Skill 原文
 
-以下为本次文档整理时的 SKILL.md 快照。实际运行以仓库 Skill 文件及 InnoAgent 安装版本为准；维护本文时同步此附录，修改附录本身不会改变运行行为。
+以下与当前入口文件一致。修改 Skill 后须同步本附录。
 
 ````markdown
 ---
 name: graduate-portrait
-description: 从已解析的研究生年度报告、开题报告和证明材料提取有出处的事实，按可改规则生成显性检查和逐项隐性评价草稿。适用于画像、材料核对及评价配置迭代。
+description: 从已解析的年度、开题报告按七领域试用量规评价可观察表现，校验逐项引用，合并版本化显性结果，生成待教师复核的科研能力与研究素养初评。
 ---
 
 # 研究生画像
@@ -403,7 +388,7 @@ description: 从已解析的研究生年度报告、开题报告和证明材料�
 
 InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills` 中该 Skill 的 enabled 与 loaded 均为 true；平台负责加载 Skill，随后按本文件准备任务包、抽取和评价，服务端脚本核验并生成草稿。自动选择 Skill 及 Claude/Codex 完整运行尚未实测。
 
-使用已有解析文本执行固定流程：准备任务包 → 提取事实 → 核验出处 → 逐项评价 → 生成画像。脚本、规则和合成样例均在本 Skill 内，安装到其他位置后仍可运行。依赖 Node.js 22 以上，首次在 scripts 内执行 npm ci。
+默认流程：已解析材料与上下文 → 准备隐性评价任务 → 逐项评价与引用 → 程序校验 → 领域摘要 → 合并 A 结果 → 画像草稿。A 缺失时保留独立隐性初评并注明显性结果待接入。脚本、规则和合成样例均在本 Skill 内，安装到其他位置后仍可运行。依赖 Node.js 22 以上，首次在 scripts 内执行 npm ci。
 
 ## 范围与输入
 
@@ -421,11 +406,11 @@ InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills
 node scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
 ~~~
 
-prepare 生成 extraction-task.json、assessment-task.json 及各自 JSON Schema。读取任务包，按 instructions 和 configuration 完成两份 JSON；当前 Agent 可离线执行，不要求 API。事实抽取与逐项评价是语义工作，脚本不以关键词或随机值代替。
+prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；程序不以关键词或随机值代替语义工作。
 
 ~~~sh
-node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json
-node scripts/cli.mjs build --bundle local-runs/input/bundle.json --extraction local-runs/input/extraction.json --assessment local-runs/input/assessment.json --out local-runs/result --mode skill_execution --producer-note '当前Agent依据Skill执行，待教师复核'
+node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --a-result local-runs/input/a-result.json
+node scripts/cli.mjs build --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --a-result local-runs/input/a-result.json --out local-runs/result --mode skill_execution --producer-note '当前Agent依据Skill执行，待教师复核'
 node scripts/cli.mjs demo --out local-runs/synthetic
 ~~~
 
@@ -433,7 +418,7 @@ node scripts/cli.mjs demo --out local-runs/synthetic
 
 装载后的 Agent 不应调用 workflow 再递归调用平台；它直接执行抽取与评价。业务服务通过 scripts/workflow.mjs 的 runPortraitWorkflow 调用 InnoAgent，每个学生使用新建的独立工作区和 session，并强制 /skill:graduate-portrait。外部服务也可执行 `node scripts/cli.mjs workflow --bundle <明确路径> --out <明确路径>`。
 
-build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 仅由 remote 真实请求记录；本地 build 不接受该模式。重放只表示本次离线运行，不能伪称新模型调用；合成、整理及重放模式的 model 必须为空。合成 demo 明确标为 synthetic/offline_replay。
+build 输出 portrait.json 和 portrait.md。不传 --a-result 时显性部分为 null、explicit_status 为 pending；本地联调可显式传 --extraction，标为 local_pipeline。workflow 默认 implicit_only；--workflow-mode bundle_pipeline 才运行抽取，已提供 A 时始终只运行评价。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 仅由 remote 真实请求记录；本地 build 不接受该模式。重放只表示本次离线运行，不能伪称新模型调用；合成、整理及重放模式的 model 必须为空。合成 demo 明确标为 synthetic/offline_replay。
 
 ## 事实抽取约束
 
@@ -447,17 +432,31 @@ build 输出 portrait.json 和 portrait.md。mode 选择实际执行方式：ski
 
 ## 隐性评价约束
 
-按 references/implicit-rubric.json 的每个 criterion 输出 judgment、work_status、rationale、evidence、missing_evidence。只支持符合 description 的原文，不能用论文数、关键词数、领先自评或服务人数替代具体证据。开题计划可支持问题分析和方案设计，不能支持完成实验、验证结果或改进成效。description 中的所有必需并列条件都须有直接引文，rationale 逐条件对应；缺一用 not_observed 并说明缺项。资源可用、GPU 或拟用工具不能替代具体约束及风险应对；文献的一般困难不能当作本人不足或已执行改进。引文应表达完整命题，孤立半句不足以支持条件。
+bundle、extraction 保留 1.0，assessment、portrait 使用 2.0，旧四维支持等级和累计等级量规明确拒绝，不转换为三档表现等级。七领域含23个独立观察项；每项均输出，领域只归纳已校验项，不给领域等级，不生成隐性总分。量规是 draft_uncalibrated，项目试用标准尚需教师校准。
 
-缺证据用 not_observed 并说明缺什么。evidence 为空时 work_status 必须为 unknown；任何非 unknown 工作状态都须有直接引文。allowed_work_statuses 是标准允许的状态，不能直接抄成实际状态。not_observed 不表示矛盾、不合格、低能力或零分；contradicted 必须有直接反证。等级由配置的累计 requires 确定性导出，模型不得输出等级、score、人格或正式审核决定。等级只表示本次材料的支持程度；配置为 draft_uncalibrated，需要教师核对及校准，隐性等级不纳入显性总分。
+每项保持精炼：observed与rationale各用1–2个短句，准确覆盖事实与必需条件；limitations、missing_evidence、suggestions各优先1–2条具体内容，不重复通用提醒。保留全部配置观察项；默认量规23项逐项输出，不能省略未评价项。引用选择足够证明条件的最少完整必要引文，保留限定条件，不截断原句或删字；必要反证和多条引用必须保留。缺证据时直接说明具体缺口，勿重复无关的长成果清单；evidence可为空，贡献未知保留null。精炼不得省略判断条件、降低证据要求或改变状态标准。
+
+每项分开写 observed（可观察事实）、rationale（按标准的判断）、limitations（范围和未排除解释）、missing_evidence（具体缺口）、suggestions（对应下一步）。先判 evidence_state：evaluable、insufficient、conflicting、not_applicable。证据不足与未解释冲突的 performance_grade 必须 null；不提协作不等于不适用。不适用须有任务条件或原文说明没有展示机会。不同时间或版本的变化先核对，不随意当冲突；冲突只暂缓相关项。
+
+可评价且标准适用时，按观察项预先写明的标准选择 needs_improvement、meets_requirements、well_demonstrated。待改进须有直接证据表明关键要求未满足；材料缺失、实验失败、负结果、目标未达不自动降级。表现充分须先满足达到要求，再满足附加条件，证据多或文件齐全不等于高档。criterion_standard_status 由程序检查阶段和 required_context，标准待确认时保留事实并暂缓定级。培养类别、年级未知时不套用专属门槛，通用任务标准可用。
+
+证据引用 document_id、segment_id、quote、supports，逐条说明支持哪项条件，可多段共同支持；同一引用重复使用不算独立佐证。文件名、上游哈希和原 PDF 物理页由 bundle 派生，不由模型补造。page 为 null 时保持未知。证据性质 evidence_nature 用 observed 表示材料直接展示的方案或论证，self_report 表示所述行动或结果，混合为 mixed，未知为 unknown。贡献 individual、指导 guidance、工具 tools 无明确依据时为 null；成品、署名不能证明独立完成。AI 不输出教师确认、签名、复核人或正式审核结论，程序统一 pending。
+
+计划与已完成研究分开，开题质量不证明研究已开展。实施、分析、结果推理及效果检查须有对应过程/结果。文献比较需定位具体作品、条件与局限；泛泛研究类别和阅读数量不足。反馈理解、调整行动和效果检查分别观察，不用一条已修改满足全部。规范记录缺失不推断不诚信或学术不端。结论只描述当前任务和材料中的表现。
+
+## A 交接
+
+外部 A 使用 a-handoff-1.0：student_id、period、stage、task_id、task_context_sha256、material_fingerprints、output_version、generated_at、producer、rules_version、extraction、explicit。generated_at 与 output_version 来自 A，不用当前时间伪造上游记录。producer 记录实际执行方式和可用模型；重放、合成或整理不命名模型。
+
+合并前校验范围、任务上下文、原文件哈希及解析文本指纹、规则版本、完整检查项和所有引文。B 保留 A extraction 和规则结果，不重新计算，不修改冲突、待复核或规则待配置状态。buildAResult 仅供 A 或明确联调准备固定规则结果。缺 A 可先生成 B 草稿；完整整合验收需有效 A 数据。不匹配时拒绝整合，可去掉 A 重新输出显性待接入的 B 草稿。
 
 ## 修改与评价
 
-references/explicit-rules.json 定义字段、六组及 consistency、minimum、material_comparison 检查；references/implicit-rubric.json 定义维度、观察条件、允许材料状态及累计等级锚点。维度可增减或改名，不依赖固定顺序。变更时更新配置版本，再用相同样例重放。输入、抽取、评价、规则、rubric 和 Skill 实现均有哈希；相同文件与执行来源生成相同 run_id。
+references/explicit-rules.json 定义字段、六组及 consistency、minimum、material_comparison 检查；references/implicit-rubric.json 定义七领域观察项、任务范围、三档表现标准、证据条件及误判边界。领域可改名或排序，不依赖固定顺序。变更时更新配置版本，再用相同样例重放。输入、抽取、评价、规则、rubric 和 Skill 实现均有哈希；相同文件与执行来源生成相同 run_id。材料、A 结果、量规变化会生成新版本标识，保留旧结果；跨量规版本不直接相减形成成长分数。
 
 minimum 只有明确阈值、适用 stage 和非空制度来源时启用，缺少条件输出 pending_rule。配置者负责确认制度版本、培养类别、年级及有效期的适用性；来源字符串的存在不能证明制度真实有效。学分 material_comparison 只核对已修与要求的材料记录，不表示学校制度达标。官方权重及阈值尚未确认，overall_score 为 null。
 
-合成回放与关键断言见 evals/evals.json。仓库内运行 node --test tests/unit/portrait.test.mjs tests/integration/portrait-adapter.test.mjs tests/integration/portrait-cli.test.mjs。测试证明约束及流程可运行，不能证明模型抽取准确、稳定能力或学习效果。
+合成回放与关键断言见 evals/evals.json。仓库内运行 node --test tests/unit/portrait*.test.mjs tests/integration/portrait*.test.mjs。测试证明约束及流程可运行，不能证明模型抽取准确、稳定能力或学习效果。
 
 ## 可选远端调用
 
