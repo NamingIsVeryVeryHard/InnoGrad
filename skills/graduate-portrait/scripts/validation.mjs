@@ -10,7 +10,7 @@ function assessmentFail(message,path,category){const error=new Error(message);er
 function atPath(path,operation){try{return operation();}catch(error){error.validation_issues??=[{path,category:error.message.includes('quote not found')?'QUOTE_NOT_IN_SEGMENT':error.message.includes('numeric')?'NUMERIC_TOKEN':error.message.includes('scope')?'SCOPE_MISMATCH':'VALIDATION'}];throw error;}}
 export function repairFeedback(error){
   const issues=error instanceof SyntaxError?[{path:'',category:'JSON_PARSE',...jsonParseLocation(error)}]:error.validation_issues??[{path:'',category:'VALIDATION'}];
-  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。可评价状态须属于当前criterion.allowed_work_statuses；不能为了合规把planned捏造为completed，也不能把unknown捏造为已执行。只有原文依据确足才认定真实状态；只有计划且该项要求已执行时用insufficient/null，状态未知而无法证明允许状态时也用insufficient/null，保留真实work_status并写具体缺口。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子；QUOTE_NOT_IN_SEGMENT要同时核对原句与document_id、segment_id，不能把其他页的原句挂在当前页。SCHEMA_TYPE按expected_type修正字段类型，array即数组，即使只有一条也用数组，无内容用空数组。只输出JSON，不加Markdown代码块。';
+  return '本地校验错误（仅路径、类别与可用数字位置）：'+JSON.stringify(issues.slice(0,12))+'。逐项修复并重新输出完整JSON。'+(error instanceof SyntaxError?'JSON_PARSE数字位置指待解析JSON内层文本；按schema检查每层数组[]与对象{}的配对及闭合，重新以多行缩进输出（非minified），不要自动补造或改写字段内容。':'')+'numeric_token只能写数字本身，例如数字3、120、20的字符串，不能含篇、场、余等单位或限定词；限定程度单独写qualifier。非unknown的work_status必须附直接引文，无引文改为unknown。可评价状态须属于当前criterion.allowed_work_statuses；不能为了合规把planned捏造为completed，也不能把unknown捏造为已执行。只有原文依据确足才认定真实状态；只有计划且该项要求已执行时用insufficient/null，状态未知而无法证明允许状态时也用insufficient/null，保留真实work_status并写具体缺口。quote必须是所指segment中连续的原文，不改写、不拼接不同位置句子；QUOTE_NOT_IN_SEGMENT要同时核对原句与document_id、segment_id，不能把其他页的原句挂在当前页。OUTSIDE_REPORT_STAGE表示配置已确定该项不适用于本报告阶段，evidence_state与standard_status均须not_applicable且等级为null；这不同于适用项缺证据时的insufficient。EVALUABLE_WITHOUT_GRADE须按证据和必要条件修正状态，缺证据改insufficient，不为填满等级编造支持。SCHEMA_TYPE按expected_type修正字段类型，array即数组，即使只有一条也用数组，无内容用空数组。只输出JSON，不加Markdown代码块。';
 }
 
 export function validateShape(schema, data, label) {
@@ -193,13 +193,13 @@ export function validateAssessment(bundle, assessment, rubric) {
           }
         }
         if (c.standard_status !== configured && !(configured === 'applicable' && c.standard_status === 'not_applicable' && c.evidence_state === 'not_applicable' && c.evidence.length)) fail('standard scope or context mismatch');
-        if (c.evidence_state !== 'evaluable' && c.performance_grade !== null) fail('non-evaluable criterion cannot have performance grade');
-        if (c.standard_status !== 'applicable' && c.performance_grade !== null) fail('pending or inapplicable standard cannot have performance grade');
-        if (c.evidence_state === 'evaluable' && c.standard_status === 'applicable' && c.performance_grade === null) fail('applicable evaluable criterion requires performance grade');
+        if (c.evidence_state !== 'evaluable' && c.performance_grade !== null) assessmentFail('non-evaluable criterion cannot have performance grade',pointer+'/performance_grade','NON_EVALUABLE_GRADE');
+        if (c.standard_status !== 'applicable' && c.performance_grade !== null) assessmentFail('pending or inapplicable standard cannot have performance grade',pointer+'/performance_grade','STANDARD_GRADE_CONFLICT');
+        if (c.evidence_state === 'evaluable' && c.standard_status === 'applicable' && c.performance_grade === null) assessmentFail('applicable evaluable criterion requires performance grade',pointer+'/evidence_state','EVALUABLE_WITHOUT_GRADE');
         if (c.evidence_state === 'insufficient' && !c.missing_evidence.length) fail('missing explanation of evidence gap');
         if (c.evidence_state === 'conflicting' && new Set(c.evidence.map(e=>JSON.stringify([e.document_id,e.segment_id,compact(e.quote)]))).size < 2) fail('conflicting evidence requires opposing references');
-        if (c.evidence_state === 'not_applicable' && c.standard_status !== 'not_applicable') fail('not applicable requires task justification');
-        if (configured === 'not_applicable' && c.evidence_state !== 'not_applicable') fail('criterion outside report stage');
+        if (c.evidence_state === 'not_applicable' && c.standard_status !== 'not_applicable') assessmentFail('not applicable requires task justification',pointer+'/evidence_state','APPLICABILITY_CONFLICT');
+        if (configured === 'not_applicable' && c.evidence_state !== 'not_applicable') assessmentFail('criterion outside report stage',pointer+'/evidence_state','OUTSIDE_REPORT_STAGE');
         if (c.evidence_state === 'evaluable' && c.evidence_nature === 'unknown') assessmentFail('evaluable evidence nature required',pointer+'/evidence_nature','EVIDENCE_NATURE_REQUIRED');
         if (!c.evidence.length && c.evidence_nature !== 'unknown') assessmentFail('evidence nature without evidence',pointer+'/evidence_nature','EVIDENCE_NATURE_WITHOUT_EVIDENCE');
         if (c.evidence_state === 'evaluable' && !criterion.allowed_work_statuses.includes(c.work_status)) assessmentFail('work status cannot support this criterion',pointer+'/work_status','WORK_STATUS_NOT_ALLOWED');

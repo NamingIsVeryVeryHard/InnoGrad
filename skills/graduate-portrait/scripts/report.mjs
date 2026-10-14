@@ -4,7 +4,7 @@ const labels={unobserved:'未观察',explicit_pending:'显性结果待接入',ap
 const label=value=>labels[value]??value;
 function number(value,qualifier,unit){if(value===null)return '材料未提供';return (qualifier&&qualifier!=='exact'?label(qualifier)+' ':'')+text(value)+(unit?' '+text(unit):'');}
 export function renderPortrait(p) {
- const source=e=>{const d=p.sources.find(s=>s.document_id===e.document_id);const page=d?.pages.find(s=>s.segment_id===e.segment_id)?.page;return text(d?.source_name??e.document_id)+' / '+(page?'第'+page+'页':'段 '+text(e.segment_id))+'；“'+text(e.quote)+'”';};
+ const source=e=>{const d=p.sources.find(s=>s.document_id===e.document_id);const page=d?.pages.find(s=>s.segment_id===e.segment_id)?.page;return text(d?.source_name??e.document_id)+' / '+(page?'第'+page+'页；':'')+'段 '+text(e.segment_id)+'；“'+text(e.quote)+'”';};
  const lines=['# 研究生画像草稿','', '学生：'+text(p.student_id)+'；期间：'+(p.period===null?'期间待确认':text(p.period))+'；阶段：'+(p.stage==='annual'?'年度报告':'开题报告'),'', '状态：待人工复核。材料记载和自述未经独立验证。显性结果沿用上游口径；科研能力与研究素养初评使用项目试用标准，领域不定级。','', '生成方式：'+text(p.provenance.producer.mode)+'；运行标识：'+p.run_id];
  if(p.warnings.length)lines.push('','待确认：'+p.warnings.map(label).join('、'));
  if(p.synthesis){
@@ -25,7 +25,30 @@ export function renderPortrait(p) {
  lines.push('','未列明不表示实际零；计划、非本期和期间待确认记录保留在上方，本期完成数量不包含这些记录。');for(const c of p.explicit.potential_duplicates)lines.push('- 同名记录待核对：'+c.item_ids.map(text).join('、')+'。'+c.reason);
  lines.push('','## 规则检查','');for(const c of p.explicit.checks)lines.push('- '+text(c.label)+'：'+label(c.status)+(c.self_report!==undefined?'（自报 '+c.self_report+'；逐项 '+c.listed+'）':'')+(c.interpretation?'；'+c.interpretation:''));
  }else{lines.push('','## 显性结果','','显性结果待接入，当前包含科研能力与研究素养初评。');}
- lines.push('','## 隐性材料评价','','量规版本：'+text(p.implicit.rubric_version)+'；'+text(p.implicit.interpretation),'');for(const d of p.implicit.dimensions){lines.push('### '+text(d.label),'');for(const c of d.criteria){lines.push('', '- '+text(c.criterion_label)+'：'+label(c.evidence_state)+'；'+label(c.standard_status)+'；表现等级 '+(c.performance_grade===null?'暂缓':label(c.performance_grade))+'；'+label(c.work_status)+'。'+text(c.observed),'  判断：'+text(c.rationale),'  证据性质：'+label(c.evidence_nature)+'；个人贡献 '+text(c.contribution.individual)+'；教师复核待完成。');for(const check of c.condition_checks??[])lines.push('  条件 '+(check.condition_index+1)+'：'+label(check.status)+'。'+text(check.reason));for(const gap of c.missing_evidence)lines.push('  缺失证据：'+text(gap));for(const e of c.evidence)lines.push('  出处：'+source(e)+'；支持：'+text(e.supports)+'；文件哈希 '+e.sha256);for(const l of c.limitations)lines.push('  限制：'+text(l));for(const advice of c.suggestions)lines.push('  建议：'+text(advice));}}
+ lines.push('','## 隐性材料评价','','量规版本：'+text(p.implicit.rubric_version)+'；'+text(p.implicit.interpretation),'');
+ for(const d of p.implicit.dimensions){
+  lines.push('### '+text(d.label),'');
+  for(const c of d.criteria){
+   lines.push('#### '+text(c.criterion_label),'',label(c.evidence_state)+'；'+label(c.standard_status)+'；表现等级：'+(c.performance_grade===null?'暂缓':label(c.performance_grade))+'；工作状态：'+label(c.work_status)+'。','',
+    '**观察：** '+text(c.observed),'','**判断：** '+text(c.rationale),'',
+    '证据性质：'+label(c.evidence_nature)+'；教师复核待完成。','',
+    '- 个人贡献：'+text(c.contribution.individual),'- 指导支持：'+text(c.contribution.guidance),'- 工具支持：'+text(c.contribution.tools),'');
+   if(c.condition_checks?.length){
+    lines.push('| 必要条件 | 状态 | 理由 |','| --- | --- | --- |');
+    for(const check of c.condition_checks)lines.push('| '+(check.condition_index+1)+' | '+label(check.status)+' | '+text(check.reason)+' |');
+    lines.push('');
+   }
+   for(const gap of c.missing_evidence)lines.push('- 待补证据：'+text(gap));
+   for(const l of c.limitations)lines.push('- 限制：'+text(l));
+   for(const advice of c.suggestions)lines.push('- 建议：'+text(advice));
+   if(c.evidence.length){
+    lines.push('','原文依据：','');
+    for(const e of c.evidence)lines.push('- '+source(e)+'；支持：'+text(e.supports)+'；文件哈希 '+e.sha256);
+   }else lines.push('','当前材料没有提供可定位的本项原文依据。');
+   lines.push('');
+  }
+ }
+
  if(p.synthesis){
   lines.push('','## 概览引用索引','');
   const used=new Set(Object.values(p.synthesis).flatMap(items=>items.flatMap(item=>item.source_refs)));
