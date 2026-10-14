@@ -47,3 +47,12 @@ test('评价提示要求精炼全部观察项而保留必要条件引用和反�
  assert.match(instructions,/observed.*rationale.*各.*1.?2.*短句/);assert.match(instructions,/limitations.*missing_evidence.*suggestions.*1.?2/);assert.match(instructions,/最少.*完整.*引文/);assert.match(instructions,/缺证据.*长成果清单/);assert.match(instructions,/保留全部.*观察项/);assert.match(instructions,/必要反证.*多条引用/);
  assert.equal(task.configuration.dimensions.flatMap(d=>d.criteria).length,23);assert.deepEqual(task.schema,assessmentSchema(f.rubric));assert.ok(!JSON.stringify(task.schema).includes('maxLength'));
 });
+test('评价schema直接限定领域与各自观察项清单，漏域漏项及跨域项在结构层拒绝',async()=>{
+ const {validateShape}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const f=fixture();const schema=assessmentSchema(f.rubric);assert.equal(schema.properties.dimensions.minItems,f.rubric.dimensions.length);assert.equal(schema.properties.dimensions.maxItems,f.rubric.dimensions.length);
+ for(const mutate of [a=>{a.dimensions.pop();},a=>{a.dimensions[0].criteria.pop();},a=>{a.dimensions[0].criteria[0].criterion_id=a.dimensions[1].criteria[0].criterion_id;},a=>{a.dimensions[0]=structuredClone(a.dimensions[1]);}]){const a=structuredClone(f.assessment);mutate(a);assert.throws(()=>validateShape(schema,a,'assessment'));}
+ assert.doesNotThrow(()=>validateShape(schema,f.assessment,'assessment'));
+});
+test('任务输出动态完整清单，改量规后的数量与ID同步并要求结束前自查',async()=>{
+ const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();f.rubric.dimensions=f.rubric.dimensions.slice(0,2);f.rubric.dimensions[0].criteria=f.rubric.dimensions[0].criteria.slice(0,1);const task=prepareTask(f,'assessment');
+ assert.deepEqual(task.expected_dimension_ids,f.rubric.dimensions.map(d=>d.id));assert.deepEqual(task.expected_criterion_ids,Object.fromEntries(f.rubric.dimensions.map(d=>[d.id,d.criteria.map(c=>c.id)])));assert.match(task.instructions.join('\n'),/结束前.*expected_dimension_ids.*expected_criterion_ids.*自查/);assert.equal(task.schema.properties.dimensions.minItems,2);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.criteria.minItems,1);
+});

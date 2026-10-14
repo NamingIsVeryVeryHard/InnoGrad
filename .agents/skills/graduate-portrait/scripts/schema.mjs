@@ -67,11 +67,27 @@ export const criterionSchema = object({
   limitations: array(text), missing_evidence: array(text), suggestions: array(text),
 });
 export function assessmentSchema(rubric) {
-  return object({
-    ...scope, schema_version: { const: '2.0' }, rubric_version: { const: rubric.version },
-    dimensions: array(object({
-      dimension_id: choice(rubric.dimensions.map(d => d.id)), criteria: array(criterionSchema),
-    })),
-  });
+  const containsId = (key, id) => ({ contains: { type: 'object', properties: { [key]: { const: id } }, required: [key] } });
+  const branches = rubric.dimensions.map(d => object({
+    dimension_id: { const: d.id },
+    criteria: {
+      type: 'array', minItems: d.criteria.length, maxItems: d.criteria.length,
+      items: { allOf: [
+        { $ref: '#/definitions/criterion' },
+        { type: 'object', properties: { criterion_id: choice(d.criteria.map(c => c.id)) } },
+      ] },
+      allOf: d.criteria.map(c => containsId('criterion_id', c.id)),
+    },
+  }));
+  return {
+    ...object({
+      ...scope, schema_version: { const: '2.0' }, rubric_version: { const: rubric.version },
+      dimensions: {
+        type: 'array', minItems: rubric.dimensions.length, maxItems: rubric.dimensions.length,
+        items: { oneOf: branches }, allOf: rubric.dimensions.map(d => containsId('dimension_id', d.id)),
+      },
+    }),
+    definitions: { criterion: criterionSchema },
+  };
 }
 export const schemas = { bundle: bundleSchema, extraction: extractionSchema, assessment: assessmentSchema };

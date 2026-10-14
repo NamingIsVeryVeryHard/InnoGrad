@@ -27,7 +27,7 @@ InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills
 node scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
 ~~~
 
-prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；程序不以关键词或随机值代替语义工作。
+prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；输出结束前对照 expected_dimension_ids、expected_criterion_ids 自查，每个领域及其全部观察项恰好出现一次，证据不足、不适用或冲突项也须保留；程序不以关键词或随机值代替语义工作。
 
 ~~~sh
 node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --a-result local-runs/input/a-result.json
