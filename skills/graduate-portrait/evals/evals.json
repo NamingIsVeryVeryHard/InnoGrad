@@ -1,135 +1,52 @@
 {
-  "version": "0.3.0",
-  "data_mode": "synthetic",
-  "command": "node scripts/cli.mjs demo --out <local-directory>",
+  "skill_name": "graduate-portrait",
+  "version": "0.4.0",
+  "input_policy": "使用同一 Swagger 完整输入的显性结果和能力 Skill 实际输出；真实学生产物只在忽略目录留存。",
   "cases": [
     {
-      "id": "conflicting-paper-count",
-      "input": "scripts/synthetic.mjs",
+      "id": "complete-portrait",
+      "prompt": "依据已有显性结果及科研能力底稿生成导师可读画像",
       "expect": [
-        "papers_reported.value=3",
-        "ledger.paper.published=2",
-        "papers-consistency.status=needs_review"
+        "有重点的研究进展概览",
+        "原值原状态保留",
+        "概览逐点能展开到来源",
+        "至多三项具体行动和可核查材料"
       ]
     },
     {
-      "id": "missing-evidence",
-      "input": "scripts/synthetic.mjs",
+      "id": "partial-results",
+      "prompt": "只有能力底稿，生成部分画像",
       "expect": [
-        "credits_earned.value=null",
-        "implementation-reasoning.criteria[*].performance_grade=null",
-        "review_status=draft"
+        "显性结果待接入",
+        "不编造成果数和年度分数"
       ]
     },
     {
-      "id": "planned-vs-completed",
-      "replay": "unit test: 计划不能支持已完成的检验；无证据不评为低能力",
+      "id": "rules-only",
+      "prompt": "只有年度规则设计，生成画像",
       "expect": [
-        "planned rejected for evaluable completion-only criterion",
-        "insufficient cannot have performance grade"
+        "说明缺少学生结果",
+        "不编造学生画像"
       ]
     },
     {
-      "id": "missing-proposal-period",
-      "replay": "unit test: 开题期次未知时允许null且禁止本期计数，年报不允许未知期次",
+      "id": "mixed-periods",
+      "prompt": "不同期间的显性结果和能力评价",
       "expect": [
-        "period_unconfirmed",
-        "in_scope forbidden when period=null"
+        "分开展示",
+        "不假定同一观察窗口",
+        "不推导成长分数"
       ]
     },
     {
-      "id": "external-a-immutable-merge",
-      "replay": "unit tests: portrait-handoff.test.mjs",
+      "id": "insufficient-evidence",
+      "prompt": "将证据不足的底稿整理成画像",
       "expect": [
-        "matching scope and material fingerprints required",
-        "explicit retained without recomputation",
-        "missing A produces explicit_status=pending"
-      ]
-    },
-    {
-      "id": "criterion-states",
-      "replay": "unit tests: portrait-v2.test.mjs",
-      "expect": [
-        "insufficient and conflicting cannot have performance grade",
-        "no collaboration record is insufficient",
-        "teacher review cannot be model-confirmed",
-        "pending standards cannot grade"
+        "不写成能力薄弱",
+        "保留缺口及补证动作",
+        "不新增等级"
       ]
     }
   ],
-  "scope_cases": [
-    {
-      "request": "年度报告证据画像",
-      "expected": "invoke"
-    },
-    {
-      "request": "已解析文本论文数及学分核对",
-      "expected": "invoke"
-    },
-    {
-      "request": "原始扫描件OCR",
-      "expected": "out_of_scope"
-    },
-    {
-      "request": "判定正式考核通过或随意能力总分",
-      "expected": "refuse_official_decision_and_score"
-    },
-    {
-      "request": "混合两个student_id材料",
-      "expected": "reject_input"
-    },
-    {
-      "request": "博士研究生填为年级",
-      "expected": "do_not_extract_grade_label"
-    }
-  ],
-  "semantic_cases": [
-    {
-      "id": "negative-result-is-not-low-performance",
-      "execution": "按完整任务包人工或授权模型逐项复核；自动结构检查不证明语义质量",
-      "criterion_ids": [
-        "claim-evidence",
-        "effect-check"
-      ],
-      "expect": {
-        "boundary": "负结果、目标未达本身不降级，评价证据推理与检查方法。"
-      }
-    },
-    {
-      "id": "available-resources-without-risk-response",
-      "execution": "按完整任务包人工或授权模型逐项复核；未自动调用模型",
-      "criterion_id": "feasibility-risk",
-      "expect": {
-        "evidence_state": "insufficient",
-        "performance_grade": null,
-        "boundary": "资源可用不能替代明确约束与风险应对。"
-      }
-    },
-    {
-      "id": "feedback-stages-separated",
-      "execution": "现有年度完整示例annual-page-2、annual-page-3人工或授权模型复核",
-      "criterion_ids": [
-        "feedback-understanding",
-        "adjustment-action",
-        "effect-check"
-      ],
-      "expect": {
-        "boundary": "反思可初评，所述行动仍自述，独立验证未完成不能宣称效果已核验。"
-      }
-    },
-    {
-      "id": "public-proposal-limits",
-      "execution": "现有开题完整示例proposal-page-2、3、4人工或授权模型复核",
-      "criterion_ids": [
-        "literature-comparison",
-        "problem-definition",
-        "method-fit",
-        "validation-design",
-        "feasibility-risk"
-      ],
-      "expect": {
-        "boundary": "具体计划可支持方案评价；文献正式条目未给不能宣称已完成文献核验；独立贡献未知。"
-      }
-    }
-  ]
+  "automated_checks": "tests/integration/portrait-synthesis.test.mjs 与既有工作流、API 回归覆盖实际数据边界；语义质量单独审读"
 }

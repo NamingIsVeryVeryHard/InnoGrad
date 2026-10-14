@@ -1,3 +1,4 @@
+import {validateSynthesis,synthesisSourceIndex} from './synthesis.mjs';
 import { validateAResult } from './handoff.mjs';
 export { validateAResult, aResultSchema, materialFingerprints, buildAResult } from './handoff.mjs';
 import { createHash } from 'node:crypto';
@@ -5,7 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { validateExtraction, validateAssessment, unique, compact } from './validation.mjs';
 import { itemStatuses } from './schema.mjs';
 export { validateExtraction, validateAssessment } from './validation.mjs';
-export const skillVersion = '0.2.0';
+export const skillVersion = '0.4.0';
 export function canonical(value) {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
@@ -14,7 +15,7 @@ export function canonical(value) {
 export const hash = value => createHash('sha256').update(typeof value === 'string' ? value : canonical(value)).digest('hex');
 function implementationHash() {
   const files = readdirSync(new URL('.', import.meta.url)).filter(f => /\.(mjs|json)$/.test(f)).sort();
-  return hash(files.map(f => [f, readFileSync(new URL(f, import.meta.url),'utf8')]).concat([['SKILL.md',readFileSync(new URL('../SKILL.md',import.meta.url),'utf8')]]));
+  return hash(files.map(f => [f, readFileSync(new URL(f, import.meta.url),'utf8')]).concat(['../SKILL.md','../../graduate-implicit-assessment/SKILL.md'].map(f=>[f,readFileSync(new URL(f,import.meta.url),'utf8')])));
 }
 function validateConfig(rules, rubric) {
   if (!rules.version || !rubric.version || !rules.fields?.length || !rules.item_kinds?.length || !rubric.dimensions?.length) throw new Error('invalid configuration');
@@ -149,7 +150,7 @@ export function buildExplicit({bundle,extraction,rules}) {
   }));
   return {overall_score:null,metrics,ledger,ledger_details,item_conflicts,potential_duplicates,items,checks,groups:rules.groups.map(g=>({id:g.id,label:g.label,fields:g.fields,item_kinds:g.item_kinds}))};
 }
-export function buildPortrait({bundle,extraction,assessment,rules,rubric,aResult,provenance={}}) {
+export function buildPortrait({bundle,extraction,assessment,rules,rubric,aResult,synthesis,provenance={}}) {
   validateConfig(rules,rubric);validateAssessment(bundle,assessment,rubric);
   if(aResult&&extraction)throw Error('choose external A or local extraction');
   if(aResult)validateAResult(bundle,aResult,rules);
@@ -162,5 +163,7 @@ export function buildPortrait({bundle,extraction,assessment,rules,rubric,aResult
   const hashes={input:hash(bundle),extraction:extraction?hash(extraction):aResult?hash(aResult.extraction):null,assessment:hash(assessment),rules:hash(rules),rubric:hash(rubric),skill:implementationHash(),a_result:aResult?hash(aResult):null};
   const versions={schema:'2.0',rules:rules.version,rubric:rubric.version,skill:skillVersion};
   const a_handoff=aResult?structuredClone(Object.fromEntries(['schema_version','output_version','generated_at','producer','material_fingerprints','rules_version'].map(k=>[k,aResult[k]]))):null;
-  return {schema_version:'2.0',student_id:bundle.student_id,period:bundle.period,stage:bundle.stage,task_context:structuredClone(bundle.task_context??null),run_id:hash({hashes,versions,producer}),review_status:'draft',warnings:[...(bundle.period===null?['period_unconfirmed']:[]),...(!explicit?['explicit_pending']:[])],provenance:{producer,hashes,versions},sources:bundle.documents.map(d=>({document_id:d.document_id,source_name:d.source_name,sha256:d.sha256,parse_status:d.parse_status,pages:d.segments.map(s=>({segment_id:s.segment_id,page:s.page}))})),explicit_extraction:structuredClone(aResult?.extraction??extraction??null),explicit,explicit_status:aResult?'merged':extraction?'local_pipeline':'pending',a_handoff,implicit:implicitFor(bundle,assessment,rubric)};
+  const portrait={schema_version:'2.0',student_id:bundle.student_id,period:bundle.period,stage:bundle.stage,task_context:structuredClone(bundle.task_context??null),run_id:hash({hashes,versions,producer}),review_status:'draft',warnings:[...(bundle.period===null?['period_unconfirmed']:[]),...(!explicit?['explicit_pending']:[])],provenance:{producer,hashes,versions},sources:bundle.documents.map(d=>({document_id:d.document_id,source_name:d.source_name,sha256:d.sha256,parse_status:d.parse_status,pages:d.segments.map(s=>({segment_id:s.segment_id,page:s.page}))})),explicit_extraction:structuredClone(aResult?.extraction??extraction??null),explicit,explicit_status:aResult?'merged':extraction?'local_pipeline':'pending',a_handoff,implicit:implicitFor(bundle,assessment,rubric)};
+  if(synthesis){validateSynthesis(portrait,synthesis);portrait.synthesis=structuredClone(synthesis);portrait.synthesis_sources=synthesisSourceIndex(portrait);portrait.run_id=hash({base_run_id:portrait.run_id,synthesis});}
+  return portrait;
 }

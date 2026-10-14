@@ -66,7 +66,14 @@ export const criterionSchema = object({
   contribution: object({ individual: nullableText, guidance: nullableText, tools: nullableText }),
   limitations: array(text), missing_evidence: array(text), suggestions: array(text),
 });
-export function assessmentSchema(rubric) {
+// Optional on stored v2 assessments; required by new online task schemas.
+criterionSchema.properties.condition_checks = array(object({
+  condition_index: {type: 'integer', minimum: 0},
+  status: choice(['supported', 'contradicted', 'unobserved']),
+  evidence_indices: {type:'array',uniqueItems:true,items:{type:'integer',minimum:0}},
+  reason: text,
+}));
+export function assessmentSchema(rubric, {requireConditions = false} = {}) {
   const containsId = (key, id) => ({ contains: { type: 'object', properties: { [key]: { const: id } }, required: [key] } });
   const branches = rubric.dimensions.map(d => object({
     dimension_id: { const: d.id },
@@ -87,7 +94,7 @@ export function assessmentSchema(rubric) {
         items: { oneOf: branches }, allOf: rubric.dimensions.map(d => containsId('dimension_id', d.id)),
       },
     }),
-    definitions: { criterion: criterionSchema },
+    definitions: { criterion: {...criterionSchema, required: requireConditions ? [...criterionSchema.required, 'condition_checks'] : criterionSchema.required} },
   };
 }
 export const schemas = { bundle: bundleSchema, extraction: extractionSchema, assessment: assessmentSchema };

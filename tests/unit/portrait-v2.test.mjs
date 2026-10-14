@@ -11,18 +11,18 @@ test('评价任务保留已校验A事实和出处，但不向模型提供显性�
  const aResult=buildAResult({...f,metadata:{output_version:'synthetic-a-context.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:'synthetic A context',model:null}}});
  const before=structuredClone(aResult);
  for(const task of [prepareTask({...f,aResult},'assessment'),prepareDimensionTask({...f,aResult},f.rubric.dimensions[0].id)]){
-  assert.deepEqual(task.a_context.extraction,aResult.extraction);
-  assert.equal(task.a_context.task_id,f.bundle.task_context.task_id);
-  assert.equal(task.a_context.rules_version,aResult.rules_version);
-  assert.deepEqual(task.a_context.material_fingerprints,aResult.material_fingerprints);
-  assert.equal(Object.hasOwn(task.a_context,'explicit'),false);
+  assert.deepEqual(task.explicit_context.extraction,aResult.extraction);
+  assert.equal(task.explicit_context.task_id,f.bundle.task_context.task_id);
+  assert.equal(task.explicit_context.rules_version,aResult.rules_version);
+  assert.deepEqual(task.explicit_context.material_fingerprints,aResult.material_fingerprints);
+  assert.equal(Object.hasOwn(task.explicit_context,'explicit'),false);
   assert.equal(Object.hasOwn(task,'aResult'),false);
   assert.deepEqual(task.bundle,f.bundle);
-  task.a_context.extraction.facts.length=0;
+  task.explicit_context.extraction.facts.length=0;
  }
  assert.deepEqual(aResult,before);
- assert.equal(Object.hasOwn(prepareTask(f,'assessment'),'a_context'),false);
- assert.equal(Object.hasOwn(prepareTask({...f,aResult},'extraction'),'a_context'),false);
+ assert.equal(Object.hasOwn(prepareTask(f,'assessment'),'explicit_context'),false);
+ assert.equal(Object.hasOwn(prepareTask({...f,aResult},'extraction'),'explicit_context'),false);
  const invalid=structuredClone(aResult);invalid.student_id='other';
  assert.throws(()=>prepareTask({...f,aResult:invalid},'assessment'));
 });
@@ -64,11 +64,6 @@ test('年级专属标准只在明确上下文下适用，通用开题标准可�
  const f=fixture();const c=criterion(f);f.rubric.dimensions[1].criteria[0].required_context=['training_year'];c.standard_status='pending_confirmation';c.performance_grade=null;assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
  f.bundle.task_context={task_id:'T1',observation_period:null,training_category:null,training_year:2,support_conditions:null};c.standard_status='applicable';c.performance_grade='meets_requirements';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
 });
-test('评价提示要求精炼全部观察项而保留必要条件引用和反证',async()=>{
- const {prepareTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();const task=prepareTask(f,'assessment');const instructions=task.instructions.join('\n');
- assert.match(instructions,/observed.*rationale.*各.*1.?2.*短句/);assert.match(instructions,/limitations.*missing_evidence.*suggestions.*1.?2/);assert.match(instructions,/最少.*完整.*引文/);assert.match(instructions,/缺证据.*长成果清单/);assert.match(instructions,/保留全部.*观察项/);assert.match(instructions,/必要反证.*多条引用/);
- assert.equal(task.configuration.dimensions.flatMap(d=>d.criteria).length,23);assert.deepEqual(task.schema,assessmentSchema(f.rubric));assert.ok(!JSON.stringify(task.schema).includes('maxLength'));
-});
 test('评价schema直接限定领域与各自观察项清单，漏域漏项及跨域项在结构层拒绝',async()=>{
  const {validateShape}=await import('../../skills/graduate-portrait/scripts/validation.mjs');const f=fixture();const schema=assessmentSchema(f.rubric);assert.equal(schema.properties.dimensions.minItems,f.rubric.dimensions.length);assert.equal(schema.properties.dimensions.maxItems,f.rubric.dimensions.length);
  for(const mutate of [a=>{a.dimensions.pop();},a=>{a.dimensions[0].criteria.pop();},a=>{a.dimensions[0].criteria[0].criterion_id=a.dimensions[1].criteria[0].criterion_id;},a=>{a.dimensions[0]=structuredClone(a.dimensions[1]);}]){const a=structuredClone(f.assessment);mutate(a);assert.throws(()=>validateShape(schema,a,'assessment'));}
@@ -76,7 +71,7 @@ test('评价schema直接限定领域与各自观察项清单，漏域漏项及�
 });
 test('任务输出动态完整清单，改量规后的数量与ID同步并要求结束前自查',async()=>{
  const {prepareTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();f.rubric.dimensions=f.rubric.dimensions.slice(0,2);f.rubric.dimensions[0].criteria=f.rubric.dimensions[0].criteria.slice(0,1);const task=prepareTask(f,'assessment');
- assert.deepEqual(task.expected_dimension_ids,f.rubric.dimensions.map(d=>d.id));assert.deepEqual(task.expected_criterion_ids,Object.fromEntries(f.rubric.dimensions.map(d=>[d.id,d.criteria.map(c=>c.id)])));assert.match(task.instructions.join('\n'),/结束前.*expected_dimension_ids.*expected_criterion_ids.*自查/);assert.equal(task.schema.properties.dimensions.minItems,2);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.criteria.minItems,1);
+ assert.deepEqual(task.expected_dimension_ids,f.rubric.dimensions.map(d=>d.id));assert.deepEqual(task.expected_criterion_ids,Object.fromEntries(f.rubric.dimensions.map(d=>[d.id,d.criteria.map(c=>c.id)])));assert.equal(task.schema.properties.dimensions.minItems,2);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.criteria.minItems,1);
 });
 
 test('分域任务仅含当前动态领域配置与schema，但保留完整原文和身份范围',async()=>{
@@ -85,19 +80,12 @@ test('分域任务仅含当前动态领域配置与schema，但保留完整原�
   const task=prepareDimensionTask(f,d.id);assert.equal(task.phase,'assessment');assert.equal(task.dimension_id,d.id);assert.deepEqual(task.bundle,f.bundle);assert.deepEqual(task.configuration,{...f.rubric,dimensions:[d]});
   assert.deepEqual(task.expected_dimension_ids,[d.id]);assert.deepEqual(task.expected_criterion_ids,{[d.id]:d.criteria.map(c=>c.id)});assert.deepEqual(Object.keys(task.criterion_standard_status),d.criteria.map(c=>c.id));
   assert.equal(task.schema.properties.dimensions.minItems,1);assert.equal(task.schema.properties.dimensions.maxItems,1);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.dimension_id.const,d.id);
-  assert.match(task.instructions.join('\n'),/只.*当前领域/);assert.match(task.instructions.join('\n'),/前.*领域.*不.*依据/);
-  const local={...f.assessment,dimensions:f.assessment.dimensions.filter(x=>x.dimension_id===d.id)};assert.doesNotThrow(()=>validateShape(task.schema,local,'assessment'));assert.throws(()=>validateShape(task.schema,f.assessment,'assessment'));
+  const local={...f.assessment,dimensions:structuredClone(f.assessment.dimensions.filter(x=>x.dimension_id===d.id))};
+  for(const c of local.dimensions[0].criteria)c.condition_checks=d.criteria.find(x=>x.id===c.criterion_id).required_conditions.map((_,i)=>({condition_index:i,status:'unobserved',evidence_indices:[],reason:'仅验证领域结构。'}));
+  assert.doesNotThrow(()=>validateShape(task.schema,local,'assessment'));assert.throws(()=>validateShape(task.schema,f.assessment,'assessment'));
  }
  assert.throws(()=>prepareDimensionTask(f,'unknown-domain'));assert.equal(prepareTask(f,'assessment').schema.properties.dimensions.minItems,f.rubric.dimensions.length);
 });
-
-test('评价提示逐条核对所有必需条件，缺信息暂缓而直接反例才待改进',async()=>{
- const {prepareTask,prepareDimensionTask}=await import('../../skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();
- for(const task of [prepareTask(f,'assessment'),prepareDimensionTask(f,f.rubric.dimensions[0].id)]){
-  const instructions=task.instructions.join('\n');assert.match(instructions,/每个必需条件.*逐条/);assert.match(instructions,/任何必需条件.*未有证据.*insufficient.*null/);assert.match(instructions,/meets_requirements.*所有必需条件/);assert.match(instructions,/直接反例.*needs_improvement/);assert.match(instructions,/多行.*缩进.*非minified/);
- }
-});
-
 
 test('可评价工作状态不符合当前观察项时给精确类别，计划可保留为证据不足',async()=>{
  const {repairFeedback}=await import('../../skills/graduate-portrait/scripts/validation.mjs');

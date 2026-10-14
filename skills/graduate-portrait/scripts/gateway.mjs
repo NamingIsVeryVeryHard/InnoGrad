@@ -14,9 +14,9 @@ export function createModelGateway({config,fetchImpl=fetch,onAttempt=()=>{}}) {
       const payload=JSON.parse(text);if(!payload||typeof payload!=='object'||!Array.isArray(payload.messages))throw failure('INVALID_INPUT','invalid body');
       const user=payload.messages.findLast(m=>m.role==='user');
       const userText=typeof user?.content==='string'?user.content:Array.isArray(user?.content)?user.content.filter(c=>c.type==='text').map(c=>c.text).join(''):'';
-      const boundary=userText.indexOf('</skill>');const argumentsText=boundary>=0?userText.slice(boundary+'</skill>'.length).trimStart():'';
+      const boundary=userText.indexOf('</skill>');const argumentsText=boundary>=0?userText.slice(boundary+'</skill>'.length).trimStart():userText;
       const marker=/^portrait_run_id:([0-9a-f-]{36})(?: |\n)/.exec(argumentsText);const runId=marker?.[1];
-      // Only the original /skill wrapper's first argument selects the audit run; never scan materials.
+      // Only the leading caller marker selects the audit run; never scan student materials.
       function record(value){onAttempt(value);if(runId){if(!audit.has(runId)){if(audit.size>=200)audit.delete(audit.keys().next().value);audit.set(runId,[]);}audit.get(runId).push(value);}}
       const providers=[config,...(config.fallbacks??[])];
       for(let i=0;i<providers.length;i++) {

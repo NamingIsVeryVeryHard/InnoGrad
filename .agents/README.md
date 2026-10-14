@@ -71,7 +71,7 @@ Skills 提供操作指引；执行 GitHub 操作仍需要可用的 `gh`、账号
 - 关闭 Issue、将任务标为完成之前，核对交付与验收结果。读取现有 Workflows，检查字段更新是否会触发关联 Issue 的状态变化。
 - Skills 不会新增 API 能力。内置 Workflows 的配置和 Insights 图表设置等操作，仍可能需要 GitHub 网页。
 
-[graduate-portrait](../skills/graduate-portrait/SKILL.md) 是本项目维护的业务 Skill，位于仓库根 skills/graduate-portrait/，须显式安装到 InnoAgent，不属于 Codex 团队开发 Skills 或下方第三方来源清单。输入约定、运行方式和未验证边界见[画像方法说明](../docs/algorithm/graduate_portrait.md)。
+[graduate-implicit-assessment](../skills/graduate-implicit-assessment/SKILL.md) 与 [graduate-portrait](../skills/graduate-portrait/SKILL.md) 是本项目维护的能力评价和画像整合 Skill，位于仓库根 skills/，须显式安装到 InnoAgent，不属于 Codex 团队开发 Skills 或下方第三方来源清单。输入约定、运行方式和未验证边界见[画像方法说明](../docs/algorithm/graduate_portrait.md)。
 
 ## 来源与更新
 

@@ -5,7 +5,7 @@ const read = name => JSON.parse(readFileSync(new URL(name, root), 'utf8'));
 const cite = quote => [{ document_id: 'annual-1', segment_id: 'body', quote }];
 
 export function fixture() {
-  const rubric = read('implicit-rubric.json');
+  const rubric = JSON.parse(readFileSync(new URL('../../graduate-implicit-assessment/references/implicit-rubric.json', import.meta.url), 'utf8'));
   return {
     rules: read('explicit-rules.json'), rubric,
     bundle: {

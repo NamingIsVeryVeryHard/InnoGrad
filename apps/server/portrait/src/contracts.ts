@@ -48,6 +48,7 @@ export interface CriterionAssessment {
   work_status: WorkStatus;
   observed: string;
   rationale: string;
+  condition_checks?: { condition_index: number; status: 'supported' | 'contradicted' | 'unobserved'; evidence_indices: number[]; reason: string }[];
   evidence: (EvidenceRef & { supports: string })[];
   evidence_nature: 'observed' | 'self_report' | 'mixed' | 'unknown';
   contribution: { individual: string | null; guidance: string | null; tools: string | null };
@@ -77,6 +78,14 @@ export interface PortraitCriterion extends Omit<CriterionAssessment, 'evidence'>
   };
 }
 
+export interface PortraitClaim { text: string; source_refs: string[]; }
+export interface PortraitSynthesis {
+  current_work: PortraitClaim[];
+  demonstrated: PortraitClaim[];
+  attention: PortraitClaim[];
+  next_steps: (PortraitClaim & { completion_evidence: string })[];
+}
+
 export interface Portrait {
   schema_version: '2.0';
   student_id: string;
@@ -88,6 +97,8 @@ export interface Portrait {
   task_context: TaskContext | null;
   explicit_status: 'pending' | 'local_pipeline' | 'merged';
   a_handoff: AHandoffMetadata | null;
+  synthesis?: PortraitSynthesis;
+  synthesis_sources?: { id: string; kind: 'explicit' | 'implicit'; label: string; pointer: string }[];
   provenance: {
     producer: { mode: ProducerMode; model: string | null; description: string | null };
     hashes: {

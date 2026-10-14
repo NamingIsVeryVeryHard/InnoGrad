@@ -20,7 +20,7 @@ async function main() {
   if(command==='demo'){const f=fixture();f.provenance={mode:'synthetic',description:'synthetic/offline_replay'};const out=resolve(o.out??'local-runs/synthetic');await mkdir(out,{recursive:true,mode:0o700});for(const k of ['bundle','extraction','assessment'])await save(join(out,k+'.json'),f[k]);await output(out,f);console.log('synthetic/offline_replay completed');return;}
   if(!['prepare','validate','build','remote','workflow'].includes(command))throw new Error('commands: prepare, validate, build, demo, remote');
   if(!o.bundle)throw new Error('--bundle required');const bundle=await json(o.bundle);
-  const rules=await json(o.rules??new URL('../references/explicit-rules.json',import.meta.url));const rubric=await json(o.rubric??new URL('../references/implicit-rubric.json',import.meta.url));
+  const rules=await json(o.rules??new URL('../references/explicit-rules.json',import.meta.url));const rubric=await json(o.rubric??new URL('../../graduate-implicit-assessment/references/implicit-rubric.json',import.meta.url));
   const out=o.out&&resolve(o.out);
   const workflowMode=o['workflow-mode']??'implicit_only';if(!['implicit_only','bundle_pipeline'].includes(workflowMode))throw new Error('unknown workflow mode');
   const aResult=o['a-result']?await json(o['a-result']):undefined;if(aResult)validateAResult(bundle,aResult,rules);

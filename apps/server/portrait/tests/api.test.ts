@@ -239,6 +239,9 @@ test('v2 criterion grades and complete source references survive Fastify seriali
   const fixture = await syntheticFixture();
   fixture.bundle.documents[0]!.segments[0]!.page = 7;
   const result = await syntheticPortrait(fixture);
+  result.synthesis_sources = [{id:'R1',kind:'explicit',label:'论文数量',pointer:'/explicit/metrics/papers_reported'}];
+  result.implicit.dimensions[0]!.criteria[0]!.condition_checks = [{condition_index:0,status:'unobserved',evidence_indices:[],reason:'缺少概念界定。'}];
+  result.synthesis = { current_work: [{text: '材料呈现本期论文记录，数量差异保留待核对。', source_refs: ['R1']}], demonstrated: [], attention: [], next_steps: [] };
   const app = await createPortraitServer({ workflow: async () => result });
   t.after(() => app.close());
   const created = await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: fixture.bundle } });

@@ -158,6 +158,26 @@ export function validateAssessment(bundle, assessment, rubric) {
           error.validation_issues = [{ path: pointer + '/work_status', category: 'WORK_STATUS_WITHOUT_EVIDENCE' }];
           throw error;
         }
+        if (c.condition_checks) {
+          const checks = c.condition_checks;
+          const count = criterion.required_conditions?.length ?? 0;
+          if (checks.length !== count || new Set(checks.map(check => check.condition_index)).size !== count ||
+              checks.some(check => check.condition_index >= count)) {
+            assessmentFail('required conditions must each occur once', pointer+'/condition_checks', 'CONDITION_COVERAGE');
+          }
+          for (const [index, check] of checks.entries()) {
+            if ((check.status !== 'unobserved' && !check.evidence_indices.length) ||
+                check.evidence_indices.some(value => value >= c.evidence.length)) {
+              assessmentFail('condition support requires valid evidence indices', pointer+'/condition_checks/'+index, 'CONDITION_EVIDENCE');
+            }
+          }
+          if (['meets_requirements', 'well_demonstrated'].includes(c.performance_grade) && checks.some(check => check.status !== 'supported')) {
+            assessmentFail('positive grade requires all necessary conditions supported', pointer+'/performance_grade', 'CONDITION_GRADE_CONFLICT');
+          }
+          if (c.performance_grade === 'needs_improvement' && !checks.some(check => check.status === 'contradicted')) {
+            assessmentFail('low grade requires a direct counterexample', pointer+'/performance_grade', 'CONDITION_COUNTEREXAMPLE_REQUIRED');
+          }
+        }
         const configured = standardStatus(bundle, criterion);
         if (c.standard_status !== configured && !(configured === 'applicable' && c.standard_status === 'not_applicable' && c.evidence_state === 'not_applicable' && c.evidence.length)) fail('standard scope or context mismatch');
         const requiresEvidence = ['evaluable', 'conflicting'].includes(c.evidence_state) || (c.evidence_state === 'not_applicable' && configured !== 'not_applicable');

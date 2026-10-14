@@ -1,6 +1,6 @@
 # 研究生画像原型 API
 
-本地服务把已解析材料交给 InnoAgent 的 `graduate-portrait` Skill，返回待人工复核的画像草稿。默认只执行 B 的隐性评价，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
+本地服务先调用 InnoAgent 的 `graduate-implicit-assessment` 评价已解析材料，再调用 `graduate-portrait` 整合显性结果与评价底稿。返回带来源概览和完整依据的待人工复核画像，默认不重新抽取显性事实，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
 
 ## 准备本地运行环境
 
@@ -38,13 +38,15 @@ git -C local-runs/innoagent-source checkout --detach 5be785f8cc0a89394b858c123d6
 
 ### 安装 Skill 与隔离配置
 
-画像业务 Skill 位于仓库根 `skills/graduate-portrait/`，与 `.agents/skills/` 中的团队开发流程分开。InnoAgent 不会自动发现仓库业务 Skill，须显式安装。首次在新的运行目录安装[画像 Skill](../../../skills/graduate-portrait/SKILL.md)，排除依赖和环境文件；以后修改 Skill 时同步这些文件，再重启 InnoAgent。工作流会检查平台加载的 `SKILL.md`与仓库文件完全一致。
+两个业务 Skill 位于仓库根 `skills/graduate-implicit-assessment/` 与 `skills/graduate-portrait/`，与 `.agents/skills/` 中的团队开发流程分开。InnoAgent 不会自动发现仓库业务 Skill，须显式安装。首次在新的运行目录安装两个 Skill，排除依赖和环境文件；以后修改 Skill 时同步这些文件，再重启 InnoAgent。工作流会检查平台加载的 `SKILL.md`与仓库文件完全一致。
 
 ```sh
-mkdir -p local-runs/innoagent/skills/graduate-portrait
+mkdir -p local-runs/innoagent/skills/graduate-portrait local-runs/innoagent/skills/graduate-implicit-assessment
 mkdir -p local-runs/innoagent/home local-runs/innoagent/data local-runs/innoagent/workspace
 rsync -a --exclude=node_modules --exclude='.env' --exclude='.env.*' \
   skills/graduate-portrait/ local-runs/innoagent/skills/graduate-portrait/
+rsync -a --exclude=node_modules --exclude='.env' --exclude='.env.*' \
+  skills/graduate-implicit-assessment/ local-runs/innoagent/skills/graduate-implicit-assessment/
 npm --prefix local-runs/innoagent/skills/graduate-portrait/scripts ci
 ```
 
@@ -122,7 +124,7 @@ node --import "$(pwd)/local-runs/innoagent/loopback.mjs" \
   --port 3147
 ```
 
-先确认 [InnoAgent Skills](http://127.0.0.1:3147/api/skills)中的 `graduate-portrait`同时满足 `loaded: true`与 `enabled: true`。终端三启动画像 API：
+先确认 [InnoAgent Skills](http://127.0.0.1:3147/api/skills)中的 `graduate-implicit-assessment` 与 `graduate-portrait` 均满足 `loaded: true`与 `enabled: true`。终端三启动画像 API：
 
 ```sh
 PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
@@ -142,9 +144,9 @@ PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
 | `GET /docs/` | 浏览并调试 API |
 | `GET /openapi.json` | 获取 OpenAPI 3 文档 |
 
-`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。`bundle`与显性事实抽取仍使用`schema_version: "1.0"`；隐性评价和画像使用`schema_version: "2.0"`，不再接受旧的累计领域等级格式。
+`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。画像兼容增加可选 `synthesis` 概览及 `synthesis_sources` 来源索引，后者用 JSON Pointer 指向本份画像的原始评价记录；离线旧结果可以不含这些字段。`bundle`与显性事实抽取仍使用`schema_version: "1.0"`；隐性评价和画像使用`schema_version: "2.0"`，不再接受旧的累计领域等级格式。
 
-请求可选字段`mode`取`implicit_only`或`bundle_pipeline`，默认`implicit_only`。仅传`bundle`时只调用 B 的评价阶段，画像中的`explicit`为`null`、`explicit_status`为`pending`，并附`explicit_pending`提示。`bundle_pipeline`会先抽取事实、计算显性结果，再评价隐性部分，适合完整原型演示。传入`aResult`时只执行评价阶段，沿用已校验的 A 结果；即使同时选择`bundle_pipeline`也优先合并 A。
+请求可选字段`mode`取`implicit_only`或`bundle_pipeline`，默认`implicit_only`。仅传`bundle`时调用能力评价与画像整合两个阶段，画像中的`explicit`为`null`、`explicit_status`为`pending`，并附`explicit_pending`提示。`bundle_pipeline`会先抽取事实、计算显性结果，再评价隐性部分，适合完整原型演示。传入`aResult`时执行能力评价与画像整合，沿用已校验的显性结果；即使同时选择`bundle_pipeline`也优先合并 A。
 
 `bundle.task_context`可提供任务标识、观察期间、培养类别、培养年级和支持条件。该对象可省略；提供时五个字段均须填写，缺少的信息保持`null`。接口在分配任务前核对 A 的契约版本、学生、期间、阶段、任务背景、文档及段落指纹、规则来源和输入事实引用。不一致返回`422`，不会调用 InnoAgent；结构不合法返回`400`。错误响应仅返回固定类别，不回传上游材料或错误原文。
 
@@ -161,7 +163,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，并附待教师复核状态。
 
-在线 B 评价按量规中的领域顺序执行。每次提供完整 `bundle` 原文、当前领域的量规和严格单领域 Schema，在同一独立工作区与 session 中完成。session 保留此前调用历史，但此前领域的模型评价不能作为证据；当前判断只依据任务包中的原文。每域无效输出最多修正一次，仍未通过即停止；全部领域通过后还需整体验证，才生成画像。任一领域失败均不返回部分画像。
+在线 B 评价按量规中的领域顺序执行。每次提供完整 `bundle` 原文、当前领域的量规和严格单领域 Schema，在同一独立工作区与 session 中完成。session 保留此前调用历史，但此前领域的模型评价不能作为证据；当前判断只依据任务包中的原文。在线结果逐项返回 `condition_checks`，记录每个必要条件的状态、证据下标和理由。程序拒绝必要条件缺失却给出达到要求或表现充分的结果；旧离线评价可不含该字段，仍按原约束读取。每域无效输出最多修正一次，仍未通过即停止；全部领域通过后还需整体验证，再由画像 Skill 生成概览；概览 source_refs 须能定位到源记录，未评价能力项不能作为正面表现依据。最终渲染保留所有原评价和证据。任一领域失败均不返回部分画像。
 
 生成过程是异步任务。`202`只表示接受任务，按响应中的 `Location`查询结果。任务失败时，`error.code`说明配置、网络、超时、配额或结构校验问题；响应不包含上游错误原文。超过任务等待上限会停止本地等待（默认5分钟），任务状态为 `failed`、错误代码为 `JOB_TIMEOUT`。InnoAgent 后端可能仍在执行，晚到结果不保存；确认上游执行结束前请勿重试。成功结果的 `review_status`始终为 `draft`。
 

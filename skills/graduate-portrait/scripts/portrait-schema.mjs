@@ -1,3 +1,4 @@
+import {synthesisSchema} from './synthesis.mjs';
 import { evidenceSchema, itemStatuses, criterionSchema, taskContextSchema, extractionSchema } from './schema.mjs';
 import { readFileSync } from 'node:fs';
 const defaultRules=JSON.parse(readFileSync(new URL('../references/explicit-rules.json',import.meta.url),'utf8'));
@@ -25,7 +26,7 @@ const item = object({
 const enrichedEvidence = object({ ...criterionSchema.properties.evidence.items.properties, source_name: text, sha256: text, page: { type: ['integer','null'], minimum: 1 } });
 const criterion = object({ ...criterionSchema.properties, criterion_label: text, evidence: array(enrichedEvidence),
   review: object({ status: {const:'pending'}, reviewer: {type:'null'}, reviewed_at: {type:'null'}, modification_reason: {type:'null'}, independent_corroboration: {const:'unverified'} }),
-});
+}, [...criterionSchema.required, 'criterion_label', 'review']);
 const check = object({
   rule_version: text, applicable_scope: object({ student_id: text, period: nullableText, stage: choice(['annual','proposal']) }), input_evidence: evidence,
   id: text, label: text, kind: choice(['minimum', 'consistency', 'material_comparison']),
@@ -91,3 +92,10 @@ export const portraitSchema = object({
     })),
   }),
 });
+
+// Optional for compatibility with offline replay results created before synthesis.
+portraitSchema.properties.synthesis=synthesisSchema;
+
+portraitSchema.properties.synthesis_sources = array(object({
+  id: text, kind: choice(['explicit', 'implicit']), label: text, pointer: text,
+}));

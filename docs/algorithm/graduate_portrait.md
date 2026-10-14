@@ -2,11 +2,11 @@
 
 本原型接收已解析的年度报告、开题报告及证明材料，默认生成隐性评价草稿，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供本地 API 接入原型，尚未接入正式审核。材料解析由上游负责。
 
-本轮主交付是 `skills/graduate-portrait/` 中的业务 Skill，与 `.agents/skills/` 中的开发协作 Skill 分开维护：A、B 读取共享学生材料，B 的隐性判断引用原文，画像直接参考 A 的结果，不复查 A 的整理。A 可提供 JSON、Markdown、表格或其他可读内容，无需符合固定交接 Schema。当前采用七领域、23个观察项的项目试用量规。完整评价设计、共享内容约定及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
+本轮主交付是 `skills/graduate-implicit-assessment/` 的能力评价 Skill 和 `skills/graduate-portrait/` 的画像整合 Skill，与 `.agents/skills/` 中的开发协作 Skill 分开维护：A、B 读取共享学生材料，B 的隐性判断引用原文，画像直接参考 A 的结果，不复查 A 的整理。A 可提供 JSON、Markdown、表格或其他可读内容，无需符合固定交接 Schema。当前采用七领域、23个观察项的项目试用量规。完整评价设计、共享内容约定及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
 
 ## 处理方法
 
-一次任务只处理一名学生、一个报告期间和一个培养阶段。直接调用 Skill 时，Agent 阅读共享原文与 A 内容，生成带来源的 Markdown 草稿。以下为已有 API/CLI 结构化模式的实现：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样合并可选 A 结果 → 生成画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
+一次任务只处理一名学生、一个报告期间和一个培养阶段。直接调用时，能力 Skill 从共享原文形成评价底稿，画像 Skill 根据显性结果与底稿生成带来源的概览和完整画像。以下为已有 API/CLI 结构化模式的实现：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样保留可选显性结果 → 画像 Skill 生成带源记录引用的概览 → 校验并渲染完整画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
 
 下面六组是本地联调原型的展示方式，不替代 A 的实际年度规则或语雀修订方案；画像保留 A 输入的名称、版本及结果。该本地原型不直接生成分数：
 
@@ -35,7 +35,7 @@
 | [Google LangExtract：结构化输出与原文定位](https://developers.googleblog.com/introducing-langextract-a-gemini-powered-information-extraction-library/) | 每项记录绑定文件、分段和原句；本地核验引用 | 借鉴溯源方法，未引入该库，也未实现其字符偏移定位 |
 | [Agent Skills 规范](https://agentskills.io/specification)及[评价指南](https://agentskills.io/skill-creation/evaluating-skills) | 拆分指令、配置、脚本和回放样例，变更后复查同一组案例 | 格式检查和程序测试不能替代真实模型评价 |
 
-Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时显式选择 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。早期四维样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；因此隐性结果仅作为可修改的演示草稿，须由教师逐项核对，尚未通过语义准确性或教师一致性验证。
+Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时分别显式选择 graduate-implicit-assessment 和 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。早期四维样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；因此隐性结果仅作为可修改的演示草稿，须由教师逐项核对，尚未通过语义准确性或教师一致性验证。
 
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
 
@@ -64,7 +64,7 @@ node skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synthetic
 
 合成示例生成 portrait.json 和 portrait.md，来源标为 synthetic/offline_replay。它验证流程与数据约定，不代表真实模型抽取效果。
 
-结构化调用由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，显式执行 [graduate-portrait Skill](../../skills/graduate-portrait/SKILL.md)，再由本地程序校验与生成结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
+结构化调用由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，依次执行[能力评价 Skill](../../skills/graduate-implicit-assessment/SKILL.md)与[画像整合 Skill](../../skills/graduate-portrait/SKILL.md)，由本地程序校验来源并保留原结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
 
 API 提供异步生成、结果查询、只读规则配置，以及可调试的 Swagger UI 和 OpenAPI JSON。模型配置由服务端读取本项目的 .env，默认使用 ECNU Plus；明确额度耗尽时才切换配置好的 CLIProxy Grok 或 Gemini。普通限速、超时、无效 JSON 或缺失证据不触发换模型。备用推理档位为 low，响应来源记录区分请求别名与服务实际模型。密钥、真实材料和中间输出均不进入版本库。
 
@@ -82,7 +82,7 @@ PDF 可能同时包含文字页和扫描页。整份文件能提取文字，不�
 
 当前 minimum 检查只在有阈值、适用阶段和制度来源时启用。适用学院、培养类别、年级及有效期由规则配置者核对，原型尚未自动匹配完整制度。缺少规则时输出 pending_rule；仅核对材料记载的已修与要求学分时，会明确标为材料比较，不作制度达标结论。正式权重和总分暂不生成。
 
-- 维度名称、观察条件、等级锚点：修改 [implicit-rubric.json](../../skills/graduate-portrait/references/implicit-rubric.json)，增加版本号后重放样例。
+- 维度名称、观察条件、等级锚点：修改 [implicit-rubric.json](../../skills/graduate-implicit-assessment/references/implicit-rubric.json)，增加版本号后重放样例。
 - 显性字段、分组、固定阈值：修改 [explicit-rules.json](../../skills/graduate-portrait/references/explicit-rules.json)，确认制度适用性与证据要求。
 - 输出字段、计数语义、证据校验或接口版本：同步修改代码和测试。
 

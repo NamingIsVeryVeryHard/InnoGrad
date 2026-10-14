@@ -80,9 +80,9 @@ test('CLI prepare retains full Swagger annual material and A extraction without 
     execFileSync(process.execPath, [cli, 'prepare', '--bundle', join(directory, 'bundle.json'), '--a-result', join(directory, 'a-result.json'), '--out', join(directory, 'task')]);
     const task = JSON.parse(await readFile(join(directory, 'task', 'assessment-task.json'), 'utf8'));
     assert.deepEqual(task.bundle, bundle);
-    assert.deepEqual(task.a_context.extraction, aResult.extraction);
-    assert.equal(task.a_context.producer.mode, 'synthetic');
-    assert.equal(Object.hasOwn(task.a_context, 'explicit'), false);
+    assert.deepEqual(task.explicit_context.extraction, aResult.extraction);
+    assert.equal(task.explicit_context.producer.mode, 'synthetic');
+    assert.equal(Object.hasOwn(task.explicit_context, 'explicit'), false);
     assert.equal(Object.hasOwn(task, 'aResult'), false);
     assert.equal(task.configuration.dimensions.length, 7);
   } finally {
