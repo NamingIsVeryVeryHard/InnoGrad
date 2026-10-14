@@ -32,3 +32,36 @@ test('默认B只评价；显式联调才抽取，已有A结果绝不重算',asyn
  const {buildAResult}=await import('../../.agents/skills/graduate-portrait/scripts/handoff.mjs');const aResult=buildAResult({...f,metadata:{output_version:'A-synthetic.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:null,model:null}}});
  phases.length=0;p=await runPortraitWorkflow({...f,aResult,mode:'bundle_pipeline',runner});assert.deepEqual(phases,['assessment']);assert.deepEqual(p.explicit,aResult.explicit);
 });
+
+test('平台创建会话409 session_busy明确报告忙且不重试',async()=>{
+ let creationCalls=0;
+ const config={url:'http://localhost',timeoutMs:1000};
+ const fetchImpl=async url=>{
+  if(url.endsWith('/api/skills'))return reply([{name:'graduate-portrait',loaded:true,enabled:true}]);
+  if(url.endsWith('/content'))return reply({content:skillBody});
+  if(url.endsWith('/api/sessions')){creationCalls++;return new Response(JSON.stringify({error:'session_busy',blocking:{sessionId:'other-student',turnId:'active-turn'}}),{status:409});}
+  throw new Error('unexpected request');
+ };
+ await assert.rejects(createInnoAgentRunner(config,{fetchImpl}),e=>e.code==='INNOAGENT_BUSY'&&e.status===409&&!e.message.includes('other-student'));
+ assert.equal(creationCalls,1);
+});
+
+test('平台同会话活跃turn冲突报告忙且不重试或取消既有turn',async()=>{
+ let streamCalls=0;
+ const runner=await createInnoAgentRunner({url:'http://localhost',timeoutMs:1000},{fetchImpl:async url=>{
+  if(url.endsWith('/api/skills'))return reply([{name:'graduate-portrait',loaded:true,enabled:true}]);
+  if(url.endsWith('/content'))return reply({content:skillBody});
+  if(url.endsWith('/api/sessions'))return reply({id:'s',workspaceId:'unique'});
+  if(url.endsWith('/api/sessions/s'))return reply({id:'s'});
+  if(url.endsWith('/api/chat/stream')){streamCalls++;return new Response(JSON.stringify({error:'Session already has an active chat turn'}),{status:409});}
+  throw new Error('unexpected request');
+ }});
+ await assert.rejects(runner.execute({phase:'assessment'},()=>{}),e=>e.code==='INNOAGENT_BUSY'&&e.status===409);
+ assert.equal(streamCalls,1);
+});
+
+test('其他HTTP错误或无法识别的409保留REMOTE_HTTP',async()=>{
+ for(const [status,body] of [[409,'{"error":"unexpected_conflict"}'],[409,'not-json'],[503,'{"error":"session_busy"}']]){
+  await assert.rejects(createInnoAgentRunner({url:'http://localhost',timeoutMs:1000},{fetchImpl:async()=>new Response(body,{status})}),e=>e.code==='REMOTE_HTTP'&&e.status===status);
+ }
+});

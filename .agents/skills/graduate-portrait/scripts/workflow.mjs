@@ -14,16 +14,23 @@ export async function innoAgentConfig(env) {
   if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>900000)throw failure('CONFIGURATION','invalid InnoAgent timeout');
   return {url,timeoutMs,auditUrl:env.INNOAGENT_MODEL_AUDIT_URL?endpoint(env.INNOAGENT_MODEL_AUDIT_URL,'model audit URL').replace(/\/$/,''):null};
 }
+async function innoHttpFailure(response,message) {
+  if(response.status===409) {
+    let body;try{body=await response.json();}catch{}
+    if(body?.error==='session_busy'||body?.error==='Session already has an active chat turn')return failure('INNOAGENT_BUSY','InnoAgent instance has an active turn; retry after it finishes',{status:409});
+  }
+  return failure('REMOTE_HTTP',message,{status:response.status});
+}
 async function http(config,path,{body,signal,fetchImpl=fetch}={}) {
   let response;try{response=await fetchImpl(config.url+path,{method:body?'POST':'GET',redirect:'error',headers:{'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(config.timeoutMs)]):AbortSignal.timeout(config.timeoutMs)});}catch(e){throw requestFailure(e,signal);}
-  if(!response.ok)throw failure('REMOTE_HTTP','InnoAgent HTTP request failed',{status:response.status});
+  if(!response.ok)throw await innoHttpFailure(response,'InnoAgent HTTP request failed');
   try{return await response.json();}catch{throw failure('INNOAGENT_PROTOCOL','invalid InnoAgent response');}
 }
 async function chatStream(config,sessionId,prompt,{signal,fetchImpl}) {
   const timed=AbortSignal.timeout(config.timeoutMs);const combined=signal?AbortSignal.any([signal,timed]):timed;let turnId=null,text='',done=false;
   try {
     const response=await fetchImpl(config.url+'/api/chat/stream',{method:'POST',redirect:'error',headers:{'content-type':'application/json'},body:JSON.stringify({prompt,sessionId,clientRequestId:randomUUID()}),signal:combined});
-    if(!response.ok)throw failure('REMOTE_HTTP','InnoAgent stream request failed',{status:response.status});
+    if(!response.ok)throw await innoHttpFailure(response,'InnoAgent stream request failed');
     if(!response.body)throw failure('INNOAGENT_PROTOCOL','InnoAgent stream missing');
     const decoder=new TextDecoder();let pending='';
     function line(value){if(!value.startsWith('data: ')||value==='data: [DONE]')return;let envelope;try{envelope=JSON.parse(value.slice(6));}catch{throw failure('INNOAGENT_PROTOCOL','invalid InnoAgent event');}if(envelope.sessionId!==sessionId||typeof envelope.turnId!=='string'||(turnId&&turnId!==envelope.turnId))throw failure('INNOAGENT_PROTOCOL','InnoAgent event scope mismatch');turnId??=envelope.turnId;const event=envelope.event;if(event?.type==='text_delta')text+=event.delta;if(event?.type==='done'){done=true;if(typeof event.fullText==='string')text=event.fullText;}if(event?.type==='permission_request'||event?.type==='question')throw failure('TOOL_APPROVAL_REQUIRED','prepared task unexpectedly requires interactive approval');if(event?.type==='error')throw failure('REMOTE_HTTP','InnoAgent model execution failed');if(event?.type==='aborted')throw failure('ABORTED','InnoAgent turn aborted');}
