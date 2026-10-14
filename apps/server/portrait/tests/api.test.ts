@@ -247,6 +247,7 @@ test('v2 criterion grades and complete source references survive Fastify seriali
   const job = response.json();
   assert.equal(job.status, 'completed');
   assert.equal(job.portrait.schema_version, '2.0');
+  assert.deepEqual(job.portrait.explicit_extraction, fixture.extraction);
   assert.equal(job.portrait.implicit.dimensions.length, 7);
   const domain = job.portrait.implicit.dimensions.find((item: { id: string }) => item.id === 'research-design');
   const criterion = domain.criteria.find((item: { criterion_id: string }) => item.criterion_id === 'problem-definition');
@@ -317,6 +318,7 @@ test('valid external A is preserved and overrides a requested local bundle pipel
   assert.equal(job.status, 'completed');
   assert.equal(job.portrait.explicit_status, 'merged');
   assert.deepEqual(job.portrait.explicit, original.explicit);
+  assert.deepEqual(job.portrait.explicit_extraction, original.extraction);
   assert.equal(job.portrait.a_handoff.generated_at, original.generated_at);
   assert.deepEqual(job.portrait.a_handoff.producer, original.producer);
   assert.deepEqual(job.portrait.a_handoff.material_fingerprints, original.material_fingerprints);
@@ -333,6 +335,7 @@ test('implicit-only output explicitly reports pending A and never fabricates exp
   const job = (await app.inject(created.headers.location!)).json();
   assert.equal(job.status, 'completed');
   assert.equal(job.portrait.explicit, null);
+  assert.equal(job.portrait.explicit_extraction, null);
   assert.equal(job.portrait.explicit_status, 'pending');
   assert.equal(job.portrait.a_handoff, null);
   assert.ok(job.portrait.warnings.includes('explicit_pending'));

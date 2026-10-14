@@ -101,6 +101,7 @@ export interface Portrait {
     pages: { segment_id: string; page: number | null }[];
   }[];
   explicit: ExplicitResult | null;
+  explicit_extraction: Extraction | null;
   implicit: {
     rubric_version: string; status: string; interpretation: string;
     dimensions: {

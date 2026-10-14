@@ -155,7 +155,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 旧[合成材料构造器](../../../.agents/skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
 
-第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果。
+第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果，并通过`explicit_extraction`原样返回 A 的事实、成果条目及覆盖记录；没有 A 或本地抽取结果时该字段为`null`。
 
 v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，并附待教师复核状态。
 
