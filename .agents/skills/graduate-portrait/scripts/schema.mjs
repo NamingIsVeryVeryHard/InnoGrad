@@ -3,7 +3,7 @@ const nullableText = { type: ['string', 'null'], minLength: 1 };
 const array = items => ({ type: 'array', items });
 const object = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 const choice = values => ({ type: 'string', enum: values });
-const scope = {
+export const scope = {
   schema_version: { const: '1.0' },
   student_id: text,
   period: { type: ['string', 'null'], pattern: '^\\d{4}(?:-\\d{4})?$' },
@@ -13,8 +13,14 @@ export const itemStatuses = ['planned', 'in_progress', 'under_review', 'accepted
 export const evidenceSchema = object({ document_id: text, segment_id: text, quote: text });
 const evidence = array(evidenceSchema);
 
+export const taskContextSchema = object({
+  task_id: nullableText, observation_period: nullableText, training_category: nullableText,
+  training_year: { type: ['integer', 'null'], minimum: 1 }, support_conditions: nullableText,
+});
+
 export const bundleSchema = object({
   ...scope,
+  task_context: taskContextSchema,
   documents: {
     type: 'array', minItems: 1,
     items: object({
@@ -26,6 +32,8 @@ export const bundleSchema = object({
     }),
   },
 });
+
+bundleSchema.required = bundleSchema.required.filter(key => key !== 'task_context');
 
 export function extractionSchema(rules) {
   return object({
@@ -45,18 +53,25 @@ export function extractionSchema(rules) {
   });
 }
 
+export const evidenceStates = ['evaluable', 'insufficient', 'conflicting', 'not_applicable'];
+export const performanceGrades = ['needs_improvement', 'meets_requirements', 'well_demonstrated'];
+export const criterionSchema = object({
+  criterion_id: text, evidence_state: choice(evidenceStates),
+  performance_grade: { type: ['string', 'null'], enum: [...performanceGrades, null] },
+  standard_status: choice(['applicable', 'pending_confirmation', 'not_applicable']),
+  work_status: choice(['planned', 'in_progress', 'completed', 'unknown']),
+  observed: text, rationale: text,
+  evidence: array(object({ ...evidenceSchema.properties, supports: text })),
+  evidence_nature: choice(['observed', 'self_report', 'mixed', 'unknown']),
+  contribution: object({ individual: nullableText, guidance: nullableText, tools: nullableText }),
+  limitations: array(text), missing_evidence: array(text), suggestions: array(text),
+});
 export function assessmentSchema(rubric) {
   return object({
-    ...scope, rubric_version: { const: rubric.version },
+    ...scope, schema_version: { const: '2.0' }, rubric_version: { const: rubric.version },
     dimensions: array(object({
-      dimension_id: choice(rubric.dimensions.map(d => d.id)),
-      criteria: array(object({
-        criterion_id: text, judgment: choice(['supported', 'contradicted', 'not_observed']),
-        work_status: choice(['planned', 'in_progress', 'completed', 'unknown']),
-        rationale: text, evidence, missing_evidence: nullableText,
-      })),
+      dimension_id: choice(rubric.dimensions.map(d => d.id)), criteria: array(criterionSchema),
     })),
   });
 }
-
 export const schemas = { bundle: bundleSchema, extraction: extractionSchema, assessment: assessmentSchema };

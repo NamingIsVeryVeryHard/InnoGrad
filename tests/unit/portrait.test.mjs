@@ -48,17 +48,17 @@ test('不接受自动类型转换、额外字段或无依据的数字', () => {
 
 test('计划不能支持已完成的检验；无证据不评为低能力', () => {
   const f = fixture();
-  const criterion = f.assessment.dimensions.find(d => d.dimension_id === 'evidence-reasoning').criteria[0];
-  criterion.judgment = 'supported';
+  const criterion = f.assessment.dimensions.find(d => d.dimension_id === 'implementation-reasoning').criteria[0];
+  criterion.evidence_state = 'evaluable'; criterion.performance_grade='meets_requirements'; criterion.evidence_nature='self_report';
   criterion.work_status = 'planned';
-  criterion.evidence = f.extraction.facts[0].evidence;
+  criterion.evidence = f.extraction.facts[0].evidence.map(e=>({...e,supports:'支持待核结果。'}));
   assert.throws(() => validateAssessment(f.bundle, f.assessment, f.rubric));
-  criterion.judgment = 'not_observed';
+  criterion.evidence_state = 'insufficient'; criterion.performance_grade=null; criterion.evidence_nature='unknown';
   criterion.work_status = 'unknown';
   criterion.evidence = [];
-  const dimension = buildPortrait(f).implicit.dimensions.find(d => d.id === 'evidence-reasoning');
-  assert.equal(dimension.level, null);
-  assert.equal(dimension.status, 'insufficient_evidence');
+  const dimension = buildPortrait(f).implicit.dimensions.find(d => d.id === 'implementation-reasoning');
+  assert.equal(dimension.criteria[0].performance_grade, null);
+  assert.equal(dimension.criteria[0].evidence_state, 'insufficient');
 });
 
 test('固定阈值按规则计算，缺失阈值不推测达标', () => {
@@ -110,16 +110,16 @@ test('重复成果状态冲突不会选取最好状态', () => {
 
 test('开题计划不能伪称完成结果且不接受模型分数', () => {
   const f=fixture(); f.bundle.documents[0].kind='proposal';
-  const c=f.assessment.dimensions[2].criteria[0]; Object.assign(c,{judgment:'supported',work_status:'completed',evidence:f.extraction.facts[0].evidence});
+  const c=f.assessment.dimensions[2].criteria[0]; Object.assign(c,{evidence_state:'evaluable',performance_grade:'meets_requirements',evidence_nature:'self_report',work_status:'completed',evidence:f.extraction.facts[0].evidence.map(e=>({...e,supports:'支持结果陈述。'}))});
   assert.throws(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
-  c.judgment='not_observed'; c.work_status='unknown'; c.evidence=[]; f.assessment.official_decision='通过';
+  c.evidence_state='insufficient'; c.performance_grade=null;c.evidence_nature='unknown';c.work_status='unknown';c.evidence=[]; f.assessment.official_decision='通过';
   assert.throws(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
 });
 
 test('开题期次未知时允许null且禁止本期计数，年报不允许未知期次', () => {
   const f=fixture(); f.bundle.period=null; f.bundle.stage='proposal';f.bundle.documents[0].period=null;f.bundle.documents[0].kind='proposal';
   f.extraction.period=null;f.extraction.stage='proposal';f.assessment.period=null;f.assessment.stage='proposal';
-  assert.throws(()=>buildPortrait(f)); f.extraction.items.forEach(i=>i.period_status='uncertain');
+  assert.throws(()=>buildPortrait(f)); f.extraction.items.forEach(i=>i.period_status='uncertain');for(const d of f.assessment.dimensions)for(const c of d.criteria){const def=f.rubric.dimensions.find(x=>x.id===d.dimension_id).criteria.find(x=>x.id===c.criterion_id);if(!def.applicable_stages.includes('proposal')){c.evidence_state='not_applicable';c.standard_status='not_applicable';}}
   const r=buildPortrait(f);assert.equal(r.period,null);assert.ok(r.warnings.includes('period_unconfirmed'));assert.equal(r.explicit.ledger.paper.published,null);
   f.bundle.stage='annual';assert.throws(()=>buildPortrait(f));
 });
@@ -131,10 +131,9 @@ test('近似数字不自动达标；缺来源阈值待配，学分材料核对�
  f.rules.checks.push({id:'no-source',label:'未配来源',kind:'minimum',metric:'credits_earned',threshold:20,source:null,applicable_stages:['annual']}); assert.equal(buildPortrait(f).explicit.checks.at(-1).status,'pending_rule');
  f.rules.checks.at(-1).source='合成测试制度';f.extraction.facts.find(x=>x.field==='credits_earned').qualifier='approximate'; assert.equal(buildPortrait(f).explicit.checks.at(-1).status,'insufficient_evidence');
 });
-test('维度名称与顺序可改，等级锚点变更确定性生效',()=>{
- const f=fixture(); f.rubric.dimensions.reverse();f.assessment.dimensions.reverse();f.rubric.dimensions.push({id:'custom',label:'自定义材料维度',criteria:[{id:'custom-observation',description:'自定义观察',allowed_work_statuses:['planned']}],levels:[{value:1,label:'自定义锚点',requires:['custom-observation']}]});
- f.assessment.dimensions.push({dimension_id:'custom',criteria:[{criterion_id:'custom-observation',judgment:'not_observed',work_status:'unknown',rationale:'材料未包含此条件。',evidence:[],missing_evidence:'缺少自定义观察。'}]});const r=buildPortrait(f);assert.equal(r.implicit.dimensions.at(-1).id,'custom');assert.equal(r.implicit.dimensions.at(-1).level,null);
- const problem=f.rubric.dimensions.find(d=>d.id==='problem-analysis');problem.levels[0].requires=['problem-context','problem-gap'];assert.equal(buildPortrait(f).implicit.dimensions.find(d=>d.id===problem.id).level,null);
+test('领域顺序可改，新量规拒绝累计领域等级而非转换旧等级',()=>{
+ const f=fixture();f.rubric.dimensions.reverse();f.assessment.dimensions.reverse();assert.equal(buildPortrait(f).implicit.dimensions[0].id,f.rubric.dimensions[0].id);
+ f.rubric.dimensions[0].levels=[{value:1,label:'旧等级',requires:[f.rubric.dimensions[0].criteria[0].id]}];assert.throws(()=>buildPortrait(f),/cumulative/);
 });
 test('完整列表中状态未知不产生已发表实际零',()=>{const f=fixture();f.extraction.items.forEach(i=>i.status='unknown');const r=buildPortrait(f);assert.equal(r.explicit.ledger.paper.published,null);assert.equal(r.explicit.ledger_details.paper.counts.published.listed,0);});
 
@@ -170,6 +169,6 @@ test('离线与合成来源不能伪称模型调用',()=>{for(const mode of ['sy
 
 test('证据修复反馈只含可信路径类别，不含伪造原句',async()=>{const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const f=fixture();f.extraction.facts[0].evidence[0].quote='PRIVATE_FAKE_QUOTE';let caught;try{validateExtraction(f.bundle,f.extraction,f.rules);}catch(error){caught=error;}const feedback=repairFeedback(caught);assert.match(feedback,/QUOTE_NOT_IN_SEGMENT/);assert.match(feedback,/facts\/0/);assert.ok(!feedback.includes('PRIVATE_FAKE_QUOTE'));});
 
-test('未见证据不能陈述实际工作状态，反馈定位criterion且有引文可保留计划',async()=>{const f=fixture();const c=f.assessment.dimensions[2].criteria[0];Object.assign(c,{judgment:'not_observed',work_status:'completed',evidence:[],missing_evidence:'缺少验证结果。'});const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');let caught;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(error){caught=error;}assert.ok(caught);assert.match(repairFeedback(caught),/dimensions\/2\/criteria\/0/);assert.match(repairFeedback(caught),/WORK_STATUS_WITHOUT_EVIDENCE/);c.work_status='unknown';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));c.work_status='planned';c.evidence=f.extraction.facts[0].evidence;assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));});
+test('未见证据不能陈述实际工作状态，反馈定位criterion且有引文可保留计划',async()=>{const f=fixture();const c=f.assessment.dimensions[2].criteria[0];Object.assign(c,{evidence_state:'insufficient',performance_grade:null,work_status:'completed',evidence:[],missing_evidence:['缺少验证结果。']});const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');let caught;try{validateAssessment(f.bundle,f.assessment,f.rubric);}catch(error){caught=error;}assert.ok(caught);assert.match(repairFeedback(caught),/dimensions\/2\/criteria\/0/);assert.match(repairFeedback(caught),/WORK_STATUS_WITHOUT_EVIDENCE/);c.work_status='unknown';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));c.work_status='planned';c.evidence=f.extraction.facts[0].evidence.map(e=>({...e,supports:'支持当前计划记录。'}));c.evidence_nature='self_report';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));});
 
 test('coverage重复的修复反馈定位后出现项及字段',async()=>{const f=fixture();f.extraction.coverage.push(structuredClone(f.extraction.coverage[0]));const {repairFeedback}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');let caught;try{validateExtraction(f.bundle,f.extraction,f.rules);}catch(error){caught=error;}assert.ok(caught);const issue=caught.validation_issues[0];assert.deepEqual(issue.path.split('/').filter(Boolean),['coverage',String(f.extraction.coverage.length-1),'kind']);assert.equal(issue.category,'DUPLICATE_IDENTIFIER');assert.match(repairFeedback(caught),/DUPLICATE_IDENTIFIER/);});

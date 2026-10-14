@@ -1,58 +1,585 @@
 {
-  "version": "implicit-2026-10-13-draft.1",
+  "schema_version": "2.0",
+  "version": "implicit-2026-10-14-trial.1",
   "status": "draft_uncalibrated",
-  "interpretation": "等级表示材料支持程度，不代表经验证的稳定能力；所有评价需教师复核。",
+  "interpretation": "项目试用标准下的科研能力与研究素养初评，限定在本次任务和材料，待教师复核；七领域不定级，不生成隐性总分。",
   "dimensions": [
     {
-      "id": "problem-analysis", "label": "问题分析",
+      "id": "knowledge-literature",
+      "label": "学科知识运用与文献评价",
       "criteria": [
-        { "id": "problem-context", "description": "明确对象、使用情境及具体待解决问题；仅有研究方向名称不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
-        { "id": "problem-gap", "description": "说明现有方法或实践的具体不足，并给出文献、比较或观察依据；仅说创新性强不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
-        { "id": "problem-question", "description": "将不足转换为有明确对象、条件及可检验目标的研究问题。", "allowed_work_statuses": ["planned", "in_progress", "completed"] }
-      ],
-      "levels": [
-        { "value": 1, "label": "描述了具体问题", "requires": ["problem-context"] },
-        { "value": 2, "label": "说明了问题依据", "requires": ["problem-context", "problem-gap"] },
-        { "value": 3, "label": "形成可检验问题", "requires": ["problem-context", "problem-gap", "problem-question"] }
+        {
+          "id": "concept-use",
+          "label": "概念运用",
+          "description": "准确界定任务所用的具体概念，说明其在问题或方法中的用途。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "明确概念被混用或与所述方法相矛盾。",
+            "meets_requirements": "准确界定任务所用的具体概念，说明其在问题或方法中的用途。",
+            "well_demonstrated": "先满足达到要求的条件，再给出概念的适用边界、选择理由或与相近概念的区别。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "literature-comparison",
+          "label": "文献比较与局限分析",
+          "description": "定位被比较的具体工作，围绕同一问题或条件比较方法、结果及局限。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "可定位的比较采用不相容条件，却据此作无条件优劣判断。",
+            "meets_requirements": "定位被比较的具体工作，围绕同一问题或条件比较方法、结果及局限。",
+            "well_demonstrated": "先满足达到要求的条件，再解释比较条件、局限和对本方案的影响，并考虑替代解释。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
       ]
     },
     {
-      "id": "research-design", "label": "研究设计",
+      "id": "research-design",
+      "label": "研究问题与方案设计",
       "criteria": [
-        { "id": "design-method", "description": "将具体研究问题与方法、数据或研究对象相联系，说明关键步骤和选择理由。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
-        { "id": "design-evaluation", "description": "列出可执行的验证设计，包含比较对象或基线，以及数据来源和评价指标；泛称做实验不够。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
-        { "id": "design-feasibility", "description": "说明资源、时间或数据约束，以及针对具体风险的应对方案。", "allowed_work_statuses": ["planned", "in_progress", "completed"] }
-      ],
-      "levels": [
-        { "value": 1, "label": "形成方法方案", "requires": ["design-method"] },
-        { "value": 2, "label": "形成验证方案", "requires": ["design-method", "design-evaluation"] },
-        { "value": 3, "label": "说明执行条件", "requires": ["design-method", "design-evaluation", "design-feasibility"] }
+        {
+          "id": "problem-definition",
+          "label": "问题界定",
+          "description": "明确研究对象、情境、待解决问题及可检验目标。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已明确的问题与目标不一致或关键对象相互矛盾。",
+            "meets_requirements": "明确研究对象、情境、待解决问题及可检验目标。",
+            "well_demonstrated": "先满足达到要求的条件，再解释问题依据、边界以及怎样检验目标。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "method-fit",
+          "label": "方法与问题匹配",
+          "description": "把具体方法和关键步骤对应到研究问题，说明选择理由。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "明确方法不能回答所述问题或步骤与目标矛盾。",
+            "meets_requirements": "把具体方法和关键步骤对应到研究问题，说明选择理由。",
+            "well_demonstrated": "先满足达到要求的条件，再比较替代方案并说明取舍、假设及限制。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "validation-design",
+          "label": "验证设计",
+          "description": "明确数据或对象、比较基线或对照、评价指标及执行步骤。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "所述指标或对照不能检验既定目标。",
+            "meets_requirements": "明确数据或对象、比较基线或对照、评价指标及执行步骤。",
+            "well_demonstrated": "先满足达到要求的条件，再说明划分、偏差控制、不确定性或失败时的解释办法。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "feasibility-risk",
+          "label": "可行性与风险应对",
+          "description": "指出具体资源、时间或数据约束，并给出对应风险及应对。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "材料明确表明关键约束无法满足且现方案无法执行。",
+            "meets_requirements": "指出具体资源、时间或数据约束，并给出对应风险及应对。",
+            "well_demonstrated": "先满足达到要求的条件，再给出备选路径、触发条件和取舍依据。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
       ]
     },
     {
-      "id": "evidence-reasoning", "label": "证据推理",
+      "id": "implementation-reasoning",
+      "label": "研究实施与证据推理",
       "criteria": [
-        { "id": "evidence-result", "description": "给出已完成研究的具体观测、数据或可定位结果；仅说取得领先结果或论文录用不够。", "allowed_work_statuses": ["completed"] },
-        { "id": "evidence-comparison", "description": "用实际结果与基线、对照或其他解释作比较，说明结果如何支持具体结论。", "allowed_work_statuses": ["completed"] },
-        { "id": "evidence-limits", "description": "结合已获结果讨论适用范围、不确定性、失败案例或替代解释。", "allowed_work_statuses": ["completed"] }
-      ],
-      "levels": [
-        { "value": 1, "label": "提供具体结果", "requires": ["evidence-result"] },
-        { "value": 2, "label": "连接证据与结论", "requires": ["evidence-result", "evidence-comparison"] },
-        { "value": 3, "label": "审视结论边界", "requires": ["evidence-result", "evidence-comparison", "evidence-limits"] }
+        {
+          "id": "implementation-anomalies",
+          "label": "实施与异常处理",
+          "description": "呈现已开展的关键步骤及实际异常，说明处理过程。",
+          "applicable_stages": [
+            "annual"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已有过程直接表明异常被忽略并影响关键步骤。",
+            "meets_requirements": "呈现已开展的关键步骤及实际异常，说明处理过程。",
+            "well_demonstrated": "先满足达到要求的条件，再解释异常原因、替代处理及对结果的影响。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "analysis-method",
+          "label": "分析方法",
+          "description": "呈现实际数据、分析步骤及方法选择依据。",
+          "applicable_stages": [
+            "annual"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "实际分析与数据条件或问题明确不相容。",
+            "meets_requirements": "呈现实际数据、分析步骤及方法选择依据。",
+            "well_demonstrated": "先满足达到要求的条件，再检查分析假设、敏感性或替代方法。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "claim-evidence",
+          "label": "结论与证据关系",
+          "description": "将具体已获结果与主张连接，说明支持范围。",
+          "applicable_stages": [
+            "annual"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体结果直接不支持或反驳所作主张。",
+            "meets_requirements": "将具体已获结果与主张连接，说明支持范围。",
+            "well_demonstrated": "先满足达到要求的条件，再讨论不确定性、反例、失败案例或替代解释。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
       ]
     },
     {
-      "id": "reflection-improvement", "label": "反思改进",
+      "id": "academic-argument",
+      "label": "学术表达与论证",
       "criteria": [
-        { "id": "reflection-issue", "description": "指出本人研究中的具体不足、失败或外部反馈，不能仅列泛化的下一年计划。", "allowed_work_statuses": ["in_progress", "completed"] },
-        { "id": "reflection-action", "description": "给出针对上述不足或反馈的具体调整及其理由，明确是计划还是已执行。", "allowed_work_statuses": ["planned", "in_progress", "completed"] },
-        { "id": "reflection-check", "description": "提供调整后的实际检查结果，并与调整前或预期目标比较；只有修改计划不够。", "allowed_work_statuses": ["completed"] }
-      ],
-      "levels": [
-        { "value": 1, "label": "识别具体不足", "requires": ["reflection-issue"] },
-        { "value": 2, "label": "提出对应调整", "requires": ["reflection-issue", "reflection-action"] },
-        { "value": 3, "label": "检查改进结果", "requires": ["reflection-issue", "reflection-action", "reflection-check"] }
+        {
+          "id": "written-expression",
+          "label": "问题方法主张表达",
+          "description": "报告明确呈现问题、方法与主张，使其关系可以核查。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "材料直接呈现关键主张或概念相互矛盾导致关系不明。",
+            "meets_requirements": "报告明确呈现问题、方法与主张，使其关系可以核查。",
+            "well_demonstrated": "先满足达到要求的条件，再准确组织关键条件、边界和取舍，表达支持复核。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "argument-support",
+          "label": "依据与推理呈现",
+          "description": "为具体主张提供可定位依据并说明推理连接。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已有依据与结论出现明确推理矛盾。",
+            "meets_requirements": "为具体主张提供可定位依据并说明推理连接。",
+            "well_demonstrated": "先满足达到要求的条件，再回应限制或替代解释，说明其对主张的影响。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "response-to-question",
+          "label": "回应质疑",
+          "description": "定位具体质疑，解释回应理由或提供相应依据。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "回应与具体质疑无关，或已有依据直接反驳回应。",
+            "meets_requirements": "定位具体质疑，解释回应理由或提供相应依据。",
+            "well_demonstrated": "先满足达到要求的条件，再说明反馈取舍并定位补充验证或修订。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
+      ]
+    },
+    {
+      "id": "self-regulation",
+      "label": "自我调节与反馈改进",
+      "criteria": [
+        {
+          "id": "plan-monitoring",
+          "label": "计划监控与偏差分析",
+          "description": "对照具体计划与当前进展，说明偏差和可能原因。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体已知偏差与所述原因或进度结论明显矛盾。",
+            "meets_requirements": "对照具体计划与当前进展，说明偏差和可能原因。",
+            "well_demonstrated": "先满足达到要求的条件，再讨论可控制因素、限制及后续监控办法。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "feedback-understanding",
+          "label": "反馈理解与取舍",
+          "description": "定位具体反馈，解释其含义、采纳或不采纳的理由。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体反馈被明确误解，且调整与反馈要求冲突。",
+            "meets_requirements": "定位具体反馈，解释其含义、采纳或不采纳的理由。",
+            "well_demonstrated": "先满足达到要求的条件，再结合依据解释取舍、影响和未解决问题。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "adjustment-action",
+          "label": "调整行动",
+          "description": "呈现针对问题或反馈的具体调整及理由，区分计划与执行。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已有具体行动直接与既定调整目标矛盾。",
+            "meets_requirements": "呈现针对问题或反馈的具体调整及理由，区分计划与执行。",
+            "well_demonstrated": "先满足达到要求的条件，再解释备选行动、取舍和执行限制；未执行时保持计划。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "effect-check",
+          "label": "效果检查",
+          "description": "给出调整后实际检查，与调整前或预期目标比较。",
+          "applicable_stages": [
+            "annual"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "实际检查直接表明预设关键目标未满足。",
+            "meets_requirements": "给出调整后实际检查，与调整前或预期目标比较。",
+            "well_demonstrated": "先满足达到要求的条件，再解释检查条件、误差、替代解释及下一步核验。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
+      ]
+    },
+    {
+      "id": "traceability",
+      "label": "研究规范与可追溯性",
+      "criteria": [
+        {
+          "id": "source-attribution",
+          "label": "来源标注",
+          "description": "可定位具体主张或资料的来源标注及对应条目。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已有记录直接显示引用与被引主张不匹配。",
+            "meets_requirements": "可定位具体主张或资料的来源标注及对应条目。",
+            "well_demonstrated": "先满足达到要求的条件，再说明来源版本、定位及核查边界。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "method-version",
+          "label": "方法与版本记录",
+          "description": "呈现与任务相关的方法、数据或版本记录，能回溯关键步骤。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "已提供记录中的方法或版本明确矛盾且影响复现。",
+            "meets_requirements": "呈现与任务相关的方法、数据或版本记录，能回溯关键步骤。",
+            "well_demonstrated": "先满足达到要求的条件，再给出关键变化原因、复现步骤和限制。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "contribution-record",
+          "label": "贡献说明",
+          "description": "呈现当前学生的具体职责、成果对应贡献及支持条件。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "现有贡献记录存在明确责任或归属矛盾。",
+            "meets_requirements": "呈现当前学生的具体职责、成果对应贡献及支持条件。",
+            "well_demonstrated": "先满足达到要求的条件，再区分个人、指导、工具与共同贡献并给出可查过程。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "authorization-ethics",
+          "label": "授权与伦理记录",
+          "description": "任务涉及相关要求时，定位适用要求及具体授权或伦理记录。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "明确适用要求与已提供处理记录相矛盾。",
+            "meets_requirements": "任务涉及相关要求时，定位适用要求及具体授权或伦理记录。",
+            "well_demonstrated": "先满足达到要求的条件，再说明授权范围、限制及落实记录。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
+      ]
+    },
+    {
+      "id": "research-collaboration",
+      "label": "科研协作与共同推进",
+      "criteria": [
+        {
+          "id": "division-responsibility",
+          "label": "分工与责任",
+          "description": "呈现具体协作任务、分工及学生所承担的责任。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "planned",
+            "in_progress",
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体任务分工或责任记录相互矛盾。",
+            "meets_requirements": "呈现具体协作任务、分工及学生所承担的责任。",
+            "well_demonstrated": "先满足达到要求的条件，再说明责任边界、协调取舍及可核查贡献。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "task-handoff",
+          "label": "任务交接",
+          "description": "呈现具体交接内容、接收对象及交接状态。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体交接记录表明关键要求未满足。",
+            "meets_requirements": "呈现具体交接内容、接收对象及交接状态。",
+            "well_demonstrated": "先满足达到要求的条件，再说明交接依赖、确认或问题处理及限制。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        },
+        {
+          "id": "joint-problem-solving",
+          "label": "共同问题处理",
+          "description": "定位协作中的共同问题、学生行动及推进过程。",
+          "applicable_stages": [
+            "annual",
+            "proposal"
+          ],
+          "task_scope": "只评价本次报告所展示的任务表现；方案和计划不代表研究完成。",
+          "required_context": [],
+          "allowed_work_statuses": [
+            "completed"
+          ],
+          "standards": {
+            "needs_improvement": "具体行动与已明确共同目标相矛盾。",
+            "meets_requirements": "定位协作中的共同问题、学生行动及推进过程。",
+            "well_demonstrated": "先满足达到要求的条件，再解释各方依据、取舍、处理结果及未解决限制。"
+          },
+          "acceptable_evidence": "原文中完整必要的命题，可组合多段但分别说明支持内容。直接展示方案或论证与自述行动、结果分开记录。",
+          "pitfalls": "缺失材料不能判待改进；自述不证明独立核验；篇数、署名、工具和文风不代表稳定能力。",
+          "missing_policy": "保留证据不足及具体缺口；任务无展示机会须有任务条件或引文依据。"
+        }
       ]
     }
   ]

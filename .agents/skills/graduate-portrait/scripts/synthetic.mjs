@@ -26,15 +26,21 @@ export function fixture() {
       coverage: [{ kind: 'paper', status: 'complete', evidence: cite('逐项成果：A方法已发表；B方法已发表。') }],
     },
     assessment: {
-      schema_version: '1.0', student_id: 'SYNTHETIC-001', period: '2025-2026', stage: 'annual', rubric_version: rubric.version,
-      dimensions: rubric.dimensions.map((d, i) => ({
+      schema_version: '2.0', student_id: 'SYNTHETIC-001', period: '2025-2026', stage: 'annual', rubric_version: rubric.version,
+      dimensions: rubric.dimensions.map(d => ({
         dimension_id: d.id,
-        criteria: d.criteria.map((c, j) => ({
-          criterion_id: c.id, judgment: i === 0 && j === 0 ? 'supported' : 'not_observed',
-          work_status: i === 0 && j === 0 ? 'planned' : 'unknown',
-          rationale: i === 0 && j === 0 ? '指出小样本课堂反馈的具体问题。' : '材料未提供足够信息。',
-          evidence: i === 0 && j === 0 ? cite('研究问题是在小样本课堂数据中提高反馈准确性。') : [],
-          missing_evidence: i === 0 && j === 0 ? null : '需要对应条件的原文证据。',
+        criteria: d.criteria.map(c => ({
+          criterion_id: c.id, evidence_state: c.id === 'problem-definition' ? 'evaluable' : 'insufficient',
+          performance_grade: c.id === 'problem-definition' ? 'meets_requirements' : null,
+          standard_status: 'applicable', work_status: c.id === 'problem-definition' ? 'planned' : 'unknown',
+          observed: c.id === 'problem-definition' ? '材料界定了小样本课堂反馈准确性的研究问题。' : '未定位到本项所需表现。',
+          rationale: c.id === 'problem-definition' ? '对象、情境和目标具体，按试用问题界定标准初评。' : '缺少对应任务表现与依据，暂不评级。',
+          evidence: c.id === 'problem-definition' ? cite('研究问题是在小样本课堂数据中提高反馈准确性。').map(e => ({ ...e, supports: '支持研究对象、情境与目标。' })) : [],
+          evidence_nature: c.id === 'problem-definition' ? 'observed' : 'unknown',
+          contribution: { individual: null, guidance: null, tools: null },
+          limitations: ['仅描述报告中的表现，独立贡献与效果未经核验。'],
+          missing_evidence: c.id === 'problem-definition' ? [] : ['需要本观察项对应的具体原文。'],
+          suggestions: ['按当前任务补充可定位材料并请教师复核。'],
         })),
       })),
     },

@@ -1,9 +1,11 @@
+import { validateAResult } from './handoff.mjs';
+export { validateAResult, aResultSchema, materialFingerprints, buildAResult } from './handoff.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { validateExtraction, validateAssessment, unique, compact } from './validation.mjs';
 import { itemStatuses } from './schema.mjs';
 export { validateExtraction, validateAssessment } from './validation.mjs';
-export const skillVersion = '0.1.0';
+export const skillVersion = '0.2.0';
 export function canonical(value) {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
@@ -26,13 +28,14 @@ function validateConfig(rules, rubric) {
     if (c.kind==='consistency' && (c.metric.split('.').length!==2 || !rules.fields.some(f=>f.id===c.reported_field && f.type==='number'))) throw new Error('invalid reported field');
     if (c.kind==='material_comparison' && (!rules.fields.some(f=>f.id===c.metric && f.type==='number') || !rules.fields.some(f=>f.id===c.required_field && f.type==='number'))) throw new Error('invalid required field');
   }
+  if (rubric.schema_version !== '2.0') throw new Error('unsupported rubric version');
   for (const d of rubric.dimensions) {
-    if (!d.criteria?.length || !d.levels?.length) throw new Error('empty rubric dimension');
-    unique(d.criteria.map(c=>c.id),'rubric criterion'); unique(d.levels.map(l=>l.value),'rubric level');
-    for (const c of d.criteria) if (!c.allowed_work_statuses?.length || c.allowed_work_statuses.some(s=>!['planned','in_progress','completed'].includes(s))) throw new Error('invalid criterion work status');
-    const levels=[...d.levels].sort((a,b)=>a.value-b.value);
-    for (let i=0;i<levels.length;i++) {
-      const l=levels[i]; if (!Number.isInteger(l.value) || l.value<1 || !l.requires?.length || l.requires.some(id=>!d.criteria.some(c=>c.id===id)) || (i && levels[i-1].requires.some(id=>!l.requires.includes(id)))) throw new Error('invalid cumulative rubric level');
+    if (!d.criteria?.length || d.levels) throw new Error('unsupported cumulative rubric levels');
+    unique(d.criteria.map(c=>c.id), 'rubric criterion');
+    for (const c of d.criteria) {
+      if (!c.allowed_work_statuses?.length || c.allowed_work_statuses.some(s=>!['planned','in_progress','completed'].includes(s))) throw new Error('invalid criterion work status');
+      if (!c.applicable_stages?.length || c.applicable_stages.some(s=>!['annual','proposal'].includes(s)) || !Array.isArray(c.required_context)) throw new Error('invalid criterion scope');
+      if (c.standards && ['needs_improvement','meets_requirements','well_demonstrated'].some(g=>!c.standards[g]?.trim())) throw new Error('invalid criterion standards');
     }
   }
 }
@@ -117,23 +120,47 @@ function checkRules(bundle,rules,metrics,details) {
     return {...base,status,self_report:reference.value,listed:m.listed,listing_coverage:details[c.metric.split('.')[0]].coverage};
   });
 }
-function implicitFor(assessment,rubric) {
-  return {rubric_version:rubric.version,status:rubric.status,interpretation:rubric.interpretation,overall_score:null,dimensions:rubric.dimensions.map(d=> {
-    const criteria=structuredClone(assessment.dimensions.find(x=>x.dimension_id===d.id).criteria);
-    const supported=new Set(criteria.filter(c=>c.judgment==='supported').map(c=>c.criterion_id));
-    const level=[...d.levels].sort((a,b)=>b.value-a.value).find(l=>l.requires.every(id=>supported.has(id)));
-    return {id:d.id,label:d.label,level:level?.value??null,level_label:level?.label??null,status:level?'supported':criteria.some(c=>c.judgment==='contradicted')?'contradicted':'insufficient_evidence',criteria,unmet_criteria:d.criteria.filter(c=>!supported.has(c.id)).map(c=>c.id),review_required:true};
-  })};
+export function enrichEvidence(bundle, evidence) {
+  return evidence.map(e => {
+    const doc = bundle.documents.find(d => d.document_id === e.document_id);
+    const segment = doc.segments.find(s => s.segment_id === e.segment_id);
+    return { ...structuredClone(e), source_name: doc.source_name, sha256: doc.sha256, page: segment.page };
+  });
 }
-export function buildPortrait({bundle,extraction,assessment,rules,rubric,provenance={}}) {
-  validateConfig(rules,rubric);validateExtraction(bundle,extraction,rules);validateAssessment(bundle,assessment,rubric);
+function implicitFor(bundle, assessment, rubric) {
+  return { rubric_version: rubric.version, status: rubric.status, interpretation: rubric.interpretation,
+    dimensions: rubric.dimensions.map(d => {
+      const criteria = assessment.dimensions.find(x => x.dimension_id === d.id).criteria.map(c => ({
+        ...structuredClone(c), evidence: enrichEvidence(bundle, c.evidence),
+        criterion_label: d.criteria.find(x=>x.id===c.criterion_id).label,
+        review: { status: 'pending', reviewer: null, reviewed_at: null, modification_reason: null, independent_corroboration: 'unverified' },
+      }));
+      return { id: d.id, label: d.label, criteria,
+        summary: criteria.map(c => ({ criterion_ids: [c.criterion_id], text: c.observed + ' ' + c.rationale })), review_required: true };
+    }) };
+}
+export function buildExplicit({bundle,extraction,rules}) {
+  validateExtraction(bundle,extraction,rules);
+  const metrics=metricsFor(extraction,rules);
+  const {ledger,ledger_details,item_conflicts,potential_duplicates,items}=ledgerFor(extraction,rules,bundle);
+  const checks=checkRules(bundle,rules,metrics,ledger_details).map(c=>({ ...c, rule_version:rules.version,
+    applicable_scope:{student_id:bundle.student_id,period:bundle.period,stage:bundle.stage},
+    input_evidence:extraction.facts.filter(f=>[c.metric,rules.checks.find(r=>r.id===c.id)?.reported_field,rules.checks.find(r=>r.id===c.id)?.required_field].includes(f.field)).flatMap(f=>structuredClone(f.evidence)).concat(extraction.items.filter(i=>i.kind===c.metric.split('.')[0]).flatMap(i=>structuredClone(i.evidence))),
+  }));
+  return {overall_score:null,metrics,ledger,ledger_details,item_conflicts,potential_duplicates,items,checks,groups:rules.groups.map(g=>({id:g.id,label:g.label,fields:g.fields,item_kinds:g.item_kinds}))};
+}
+export function buildPortrait({bundle,extraction,assessment,rules,rubric,aResult,provenance={}}) {
+  validateConfig(rules,rubric);validateAssessment(bundle,assessment,rubric);
+  if(aResult&&extraction)throw Error('choose external A or local extraction');
+  if(aResult)validateAResult(bundle,aResult,rules);
+  const explicit=aResult?structuredClone(aResult.explicit):extraction?buildExplicit({bundle,extraction,rules}):null;
   const mode=provenance.mode??'offline_replay';
   if(!['offline_replay','synthetic','assistant_curated','skill_execution','remote_model'].includes(mode))throw new Error('unknown producer mode');
   if(['synthetic','assistant_curated','offline_replay'].includes(mode)&&provenance.model)throw new Error('replay or curated provenance cannot name a model');
   const producer={mode,model:provenance.model??null,description:provenance.description??null};
   if(mode==='remote_model'&&!producer.model)throw new Error('remote model provenance required');
-  const hashes={input:hash(bundle),extraction:hash(extraction),assessment:hash(assessment),rules:hash(rules),rubric:hash(rubric),skill:implementationHash()};
-  const versions={schema:'1.0',rules:rules.version,rubric:rubric.version,skill:skillVersion};
-  const metrics=metricsFor(extraction,rules);const {ledger,ledger_details,item_conflicts,potential_duplicates,items}=ledgerFor(extraction,rules,bundle);
-  return {schema_version:'1.0',student_id:bundle.student_id,period:bundle.period,stage:bundle.stage,run_id:hash({hashes,versions,producer}),review_status:'draft',warnings:bundle.period===null?['period_unconfirmed']:[],provenance:{producer,hashes,versions},sources:bundle.documents.map(d=>({document_id:d.document_id,source_name:d.source_name,sha256:d.sha256,parse_status:d.parse_status,pages:d.segments.map(s=>({segment_id:s.segment_id,page:s.page}))})),explicit:{overall_score:null,metrics,ledger,ledger_details,item_conflicts,potential_duplicates,items,checks:checkRules(bundle,rules,metrics,ledger_details),groups:rules.groups.map(g=>({id:g.id,label:g.label,fields:g.fields,item_kinds:g.item_kinds}))},implicit:implicitFor(assessment,rubric)};
+  const hashes={input:hash(bundle),extraction:extraction?hash(extraction):aResult?hash(aResult.extraction):null,assessment:hash(assessment),rules:hash(rules),rubric:hash(rubric),skill:implementationHash(),a_result:aResult?hash(aResult):null};
+  const versions={schema:'2.0',rules:rules.version,rubric:rubric.version,skill:skillVersion};
+  const a_handoff=aResult?structuredClone(Object.fromEntries(['schema_version','output_version','generated_at','producer','material_fingerprints','rules_version'].map(k=>[k,aResult[k]]))):null;
+  return {schema_version:'2.0',student_id:bundle.student_id,period:bundle.period,stage:bundle.stage,task_context:structuredClone(bundle.task_context??null),run_id:hash({hashes,versions,producer}),review_status:'draft',warnings:[...(bundle.period===null?['period_unconfirmed']:[]),...(!explicit?['explicit_pending']:[])],provenance:{producer,hashes,versions},sources:bundle.documents.map(d=>({document_id:d.document_id,source_name:d.source_name,sha256:d.sha256,parse_status:d.parse_status,pages:d.segments.map(s=>({segment_id:s.segment_id,page:s.page}))})),explicit,explicit_status:aResult?'merged':extraction?'local_pipeline':'pending',a_handoff,implicit:implicitFor(bundle,assessment,rubric)};
 }

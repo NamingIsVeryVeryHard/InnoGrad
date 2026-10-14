@@ -1,6 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-import {buildPortrait,validateExtraction,validateAssessment} from './engine.mjs';
+import {buildPortrait,validateExtraction,validateAssessment,validateAResult} from './engine.mjs';
 import {validateBundle,repairFeedback} from './validation.mjs';
 import {prepareTask} from './prompts.mjs';
 import {loadProjectEnv} from './env.mjs';
@@ -52,12 +52,14 @@ export async function createInnoAgentRunner(config,{signal,fetchImpl=fetch}={}) 
     }
   }};
 }
-export async function runPortraitWorkflow({bundle,rules,rubric,config,runner,signal}={}) {
+export async function runPortraitWorkflow({bundle,rules,rubric,aResult,mode='implicit_only',config,runner,signal}={}) {
   try{validateBundle(bundle);}catch{throw failure('INVALID_INPUT','invalid portrait bundle');}
   const defaults=await loadConfiguration();rules??=defaults.rules;rubric??=defaults.rubric;
+  if(!['implicit_only','bundle_pipeline'].includes(mode))throw failure('INVALID_INPUT','invalid workflow mode');
+  if(aResult)validateAResult(bundle,aResult,rules);
   const active=runner??await createInnoAgentRunner(config??await innoAgentConfig(await loadProjectEnv()),{signal});
-  const extraction=await active.execute(prepareTask({bundle,rules,rubric}),d=>validateExtraction(bundle,d,rules));
+  const extraction=!aResult&&mode==='bundle_pipeline'?await active.execute(prepareTask({bundle,rules,rubric}),d=>validateExtraction(bundle,d,rules)):undefined;
   const assessment=await active.execute(prepareTask({bundle,rules,rubric},'assessment'),d=>validateAssessment(bundle,d,rubric));
   const origin=typeof active.provenance==='function'?await active.provenance():{model:null,model_attempts:[],model_record_status:'unavailable'};
-  return buildPortrait({bundle,rules,rubric,extraction,assessment,provenance:{mode:'skill_execution',model:origin.model,description:JSON.stringify({platform:'InnoAgent',...origin,installed_skill_hash:active.installed_skill_hash??null,installed_resource_scope:'SKILL.md verified; local engine/configuration hashes recorded separately',session_id:active.session_id??null,phases:active.records??[],runner:runner?'injected':'http'})}});
+  return buildPortrait({bundle,rules,rubric,aResult,extraction,assessment,provenance:{mode:'skill_execution',model:origin.model,description:JSON.stringify({platform:'InnoAgent',workflow_mode:aResult?'implicit_only':mode,...origin,installed_skill_hash:active.installed_skill_hash??null,installed_resource_scope:'SKILL.md verified; local engine/configuration hashes recorded separately',session_id:active.session_id??null,phases:active.records??[],runner:runner?'injected':'http'})}});
 }

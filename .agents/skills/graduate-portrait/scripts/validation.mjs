@@ -129,29 +129,48 @@ export function validateExtraction(bundle, extraction, rules) {
   return extraction;
 }
 
+export function standardStatus(bundle, criterion) {
+  if (!criterion.applicable_stages.includes(bundle.stage)) return 'not_applicable';
+  if (!criterion.standards || criterion.required_context.some(key => bundle.task_context?.[key] == null)) return 'pending_confirmation';
+  return 'applicable';
+}
+
 export function validateAssessment(bundle, assessment, rubric) {
   validateBundle(bundle);
+  if (rubric.schema_version !== '2.0') fail('unsupported rubric version');
   validateShape(assessmentSchema(rubric), assessment, 'assessment');
   sameScope(bundle, assessment);
   unique(assessment.dimensions.map(d => d.dimension_id), 'dimension_id');
   if (assessment.dimensions.length !== rubric.dimensions.length) fail('missing rubric dimension');
-  for (const [dimensionIndex,dimension] of assessment.dimensions.entries()) {
+  for (const [dimensionIndex, dimension] of assessment.dimensions.entries()) {
     const definition = rubric.dimensions.find(d => d.id === dimension.dimension_id);
     unique(dimension.criteria.map(c => c.criterion_id), 'criterion_id');
     if (dimension.criteria.length !== definition.criteria.length) fail('missing rubric criterion');
-    for (const [criterionIndex,c] of dimension.criteria.entries()) {
-      atPath('/dimensions/'+dimensionIndex+'/criteria/'+criterionIndex,()=>{
-      const criterion = definition.criteria.find(x => x.id === c.criterion_id);
-      if (!criterion) fail('unknown criterion');
-      if(c.work_status!=='unknown'&&!c.evidence.length){const error=new Error('work status requires direct evidence');error.validation_issues=[{path:'/dimensions/'+dimensionIndex+'/criteria/'+criterionIndex+'/work_status',category:'WORK_STATUS_WITHOUT_EVIDENCE'}];throw error;}
-      validateEvidence(bundle, c.evidence, c.judgment !== 'not_observed');
-      if (c.judgment === 'not_observed' && !c.missing_evidence?.trim()) fail('missing explanation of evidence gap');
-      if (c.judgment === 'supported' && !criterion.allowed_work_statuses.includes(c.work_status)) fail('work status cannot support this criterion');
-      if (c.judgment === 'supported' && c.work_status === 'completed' &&
-          criterion.allowed_work_statuses.every(s => s === 'completed') &&
-          c.evidence.every(e => bundle.documents.find(d => d.document_id === e.document_id).kind === 'proposal')) {
-        fail('completed result requires annual or supporting evidence');
-      }
+    for (const [criterionIndex, c] of dimension.criteria.entries()) {
+      const pointer = '/dimensions/' + dimensionIndex + '/criteria/' + criterionIndex;
+      atPath(pointer, () => {
+        const criterion = definition.criteria.find(x => x.id === c.criterion_id);
+        if (!criterion) fail('unknown criterion');
+        if (c.work_status !== 'unknown' && !c.evidence.length) {
+          const error = new Error('work status requires direct evidence');
+          error.validation_issues = [{ path: pointer + '/work_status', category: 'WORK_STATUS_WITHOUT_EVIDENCE' }];
+          throw error;
+        }
+        const configured = standardStatus(bundle, criterion);
+        if (c.standard_status !== configured && !(configured === 'applicable' && c.standard_status === 'not_applicable' && c.evidence_state === 'not_applicable' && c.evidence.length)) fail('standard scope or context mismatch');
+        const requiresEvidence = ['evaluable', 'conflicting'].includes(c.evidence_state) || (c.evidence_state === 'not_applicable' && configured !== 'not_applicable');
+        validateEvidence(bundle, c.evidence, requiresEvidence);
+        if (c.evidence_state !== 'evaluable' && c.performance_grade !== null) fail('non-evaluable criterion cannot have performance grade');
+        if (c.standard_status !== 'applicable' && c.performance_grade !== null) fail('pending or inapplicable standard cannot have performance grade');
+        if (c.evidence_state === 'evaluable' && c.standard_status === 'applicable' && c.performance_grade === null) fail('applicable evaluable criterion requires performance grade');
+        if (c.evidence_state === 'insufficient' && !c.missing_evidence.length) fail('missing explanation of evidence gap');
+        if (c.evidence_state === 'conflicting' && new Set(c.evidence.map(e=>JSON.stringify([e.document_id,e.segment_id,compact(e.quote)]))).size < 2) fail('conflicting evidence requires opposing references');
+        if (c.evidence_state === 'not_applicable' && c.standard_status !== 'not_applicable') fail('not applicable requires task justification');
+        if (configured === 'not_applicable' && c.evidence_state !== 'not_applicable') fail('criterion outside report stage');
+        if (c.evidence_state === 'evaluable' && c.evidence_nature === 'unknown') fail('evaluable evidence nature required');
+        if (!c.evidence.length && c.evidence_nature !== 'unknown') fail('evidence nature without evidence');
+        if (c.evidence_state === 'evaluable' && !criterion.allowed_work_statuses.includes(c.work_status)) fail('work status cannot support this criterion');
+        if (c.evidence_state === 'evaluable' && criterion.allowed_work_statuses.every(s => s === 'completed') && c.evidence.every(e => bundle.documents.find(d => d.document_id === e.document_id).kind === 'proposal')) fail('completed result requires annual or supporting evidence');
       });
     }
   }
