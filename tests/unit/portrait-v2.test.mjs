@@ -30,3 +30,15 @@ test('冲突不能重复同条引用凑数量；可评价证据性质不能unkno
  const f=fixture();const c=criterion(f);c.evidence_state='conflicting';c.performance_grade=null;c.evidence.push(structuredClone(c.evidence[0]));assert.throws(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
  c.evidence_state='evaluable';c.performance_grade='meets_requirements';c.evidence_nature='unknown';assert.throws(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
 });
+test('多条引用分别保留支持说明，未知页码和贡献不补造',()=>{
+ const f=fixture();const c=criterion(f);c.evidence.push({...c.evidence[0],quote:'小样本课堂数据',supports:'仅支持研究情境，与首条不是独立佐证。'});const p=buildPortrait(f);const actual=p.implicit.dimensions[1].criteria[0];assert.equal(actual.evidence.length,2);assert.equal(actual.evidence[1].supports,c.evidence[1].supports);assert.equal(actual.evidence[1].page,null);assert.deepEqual(actual.contribution,{individual:null,guidance:null,tools:null});
+});
+test('负结果可以支持检查表现；完成自述保持未独立核验',()=>{
+ const f=fixture();f.bundle.documents[0].segments[0].text+=' 同一留出集调整后准确率未提高；比较前后样本一致，报告区间重叠，因此尚不能确认有效。';
+ const c=f.assessment.dimensions[4].criteria.find(x=>x.criterion_id==='effect-check');Object.assign(c,{evidence_state:'evaluable',performance_grade:'well_demonstrated',work_status:'completed',evidence_nature:'self_report',observed:'自述以同一留出集比较前后效果，尚不能确认有效。',rationale:'提供了比较条件和区间限制，负结果本身不降级。',evidence:[{document_id:'annual-1',segment_id:'body',quote:'同一留出集调整后准确率未提高；比较前后样本一致，报告区间重叠，因此尚不能确认有效。',supports:'支持检查设计、结果解释和限制。'}],missing_evidence:[]});
+ const p=buildPortrait(f);const actual=p.implicit.dimensions[4].criteria.find(x=>x.criterion_id==='effect-check');assert.equal(actual.performance_grade,'well_demonstrated');assert.equal(actual.review.independent_corroboration,'unverified');assert.match(f.rubric.dimensions[4].criteria.find(x=>x.id==='effect-check').standards.needs_improvement,/目标未达或负结果本身不降级/);
+});
+test('年级专属标准只在明确上下文下适用，通用开题标准可以使用',()=>{
+ const f=fixture();const c=criterion(f);f.rubric.dimensions[1].criteria[0].required_context=['training_year'];c.standard_status='pending_confirmation';c.performance_grade=null;assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
+ f.bundle.task_context={task_id:'T1',observation_period:null,training_category:null,training_year:2,support_conditions:null};c.standard_status='applicable';c.performance_grade='meets_requirements';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
+});

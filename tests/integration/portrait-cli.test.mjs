@@ -43,3 +43,7 @@ test('CLI只评价准备和B-only构建，以及完整A结果重放',async()=>{
  await run(process.execPath,[script,'build','--bundle',join(dir,'bundle.json'),'--assessment',join(dir,'assessment.json'),'--a-result',join(dir,'a-result.json'),'--out',join(dir,'merged')]);p=JSON.parse(await readFile(join(dir,'merged','portrait.json')));assert.equal(p.explicit_status,'merged');assert.deepEqual(p.explicit,aResult.explicit);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('年度与开题完整公共材料保留原文并生成七领域任务包',async()=>{
+ const {validateBundle}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const {loadConfiguration}=await import('../../.agents/skills/graduate-portrait/scripts/workflow.mjs');const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const {rubric,rules}=await loadConfiguration();
+ for(const name of ['annual-report.synthetic.json','proposal-report.synthetic.json']){const {bundle}=JSON.parse(await readFile(new URL('../../apps/server/portrait/examples/'+name,import.meta.url),'utf8'));validateBundle(bundle);const before=structuredClone(bundle);const task=prepareTask({bundle,rubric,rules},'assessment');assert.deepEqual(task.bundle,before);assert.equal(task.configuration.dimensions.length,7);assert.equal(task.schema.properties.schema_version.const,'2.0');assert.equal(task.criterion_standard_status['effect-check'],bundle.stage==='proposal'?'not_applicable':'applicable');}
+});

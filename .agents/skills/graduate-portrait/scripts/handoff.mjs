@@ -6,7 +6,8 @@ import {buildExplicit} from './engine.mjs';
 const text={type:'string',minLength:1};
 const nullableText={type:['string','null'],minLength:1};
 const object=properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
-const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function canonical(value){if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';return JSON.stringify(value);}
+const digest=value=>createHash('sha256').update(canonical(value)).digest('hex');
 export function materialFingerprints(bundle){
  return bundle.documents.map(d=>({document_id:d.document_id,sha256:d.sha256,content_sha256:digest({source_name:d.source_name,kind:d.kind,student_id:d.student_id,period:d.period,parse_status:d.parse_status,segments:d.segments})})).sort((a,b)=>a.document_id.localeCompare(b.document_id));
 }
@@ -22,11 +23,15 @@ export function validateAResult(bundle,aResult,rules){
  validateBundle(bundle);validateShape(aResultSchema(rules),aResult,'aResult');
  for(const key of ['student_id','period','stage'])if(aResult[key]!==bundle[key])throw Error('A scope mismatch: '+key);
  if(aResult.task_id!==(bundle.task_context?.task_id??null)||aResult.task_context_sha256!==digest(bundle.task_context??null))throw Error('A task context mismatch');
- if(JSON.stringify(aResult.material_fingerprints)!==JSON.stringify(materialFingerprints(bundle)))throw Error('A material fingerprints mismatch');
+ if(canonical([...aResult.material_fingerprints].sort((a,b)=>a.document_id.localeCompare(b.document_id)))!==canonical(materialFingerprints(bundle)))throw Error('A material fingerprints mismatch');
  if(!Number.isFinite(Date.parse(aResult.generated_at)))throw Error('A generation date invalid');
  if(aResult.producer.mode==='remote_model'&&!aResult.producer.model)throw Error('A remote provenance missing model');
  if(['synthetic','offline_replay','assistant_curated'].includes(aResult.producer.mode)&&aResult.producer.model)throw Error('A replay cannot name a model');
  validateExtraction(bundle,aResult.extraction,rules);
+ function sameKeys(actual,expected,label){if(canonical(Object.keys(actual).sort())!==canonical([...expected].sort()))throw Error('A '+label+' mismatch');}
+ sameKeys(aResult.explicit.metrics,rules.fields.map(f=>f.id),'metric fields');
+ sameKeys(aResult.explicit.ledger,rules.item_kinds,'ledger kinds');sameKeys(aResult.explicit.ledger_details,rules.item_kinds,'ledger detail kinds');
+ if(canonical(aResult.explicit.groups)!==canonical(rules.groups.map(g=>({id:g.id,label:g.label,fields:g.fields,item_kinds:g.item_kinds}))))throw Error('A explicit groups mismatch');
  unique(aResult.explicit.checks.map(c=>c.id),'A rule checks');
  if(aResult.explicit.checks.length!==rules.checks.length)throw Error('A missing rule checks');
  for(const check of aResult.explicit.checks){
@@ -37,6 +42,11 @@ export function validateAResult(bundle,aResult,rules){
   if(!definition||check.rule_version!==rules.version)throw Error('A rule version mismatch');
   if(!check.applicable_scope||['student_id','period','stage'].some(key=>check.applicable_scope[key]!==bundle[key]))throw Error('A rule scope mismatch');
   validateEvidence(bundle,check.input_evidence,['met','not_met','consistent'].includes(check.status));
+  if(!definition.applicable_stages.includes(bundle.stage)&&check.status!=='not_applicable')throw Error('A stage requires not applicable');
+  if(definition.applicable_stages.includes(bundle.stage)&&check.status==='not_applicable')throw Error('A rule stage mismatch');
+  if(bundle.period===null&&definition.applicable_stages.includes(bundle.stage)&&check.status!=='period_unconfirmed')throw Error('A unconfirmed period cannot evaluate rule');
+  if(bundle.period!==null&&check.status==='period_unconfirmed')throw Error('A confirmed period mismatch');
+  if(definition.kind==='minimum'&&Object.hasOwn(check,'threshold')&&check.threshold!==definition.threshold)throw Error('A threshold version mismatch');
   if(check.kind!==definition.kind||check.metric!==definition.metric||check.source!==(definition.source??null))throw Error('A rule definition mismatch');
   if(definition.kind==='minimum'&&(definition.threshold==null||!definition.source?.trim())&&check.status!=='pending_rule'&&definition.applicable_stages.includes(bundle.stage)&&bundle.period!==null)throw Error('A unconfirmed rule must remain pending');
  }

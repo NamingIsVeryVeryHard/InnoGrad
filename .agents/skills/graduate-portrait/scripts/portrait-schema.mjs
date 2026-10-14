@@ -1,4 +1,10 @@
-import { evidenceSchema, itemStatuses, criterionSchema, taskContextSchema } from './schema.mjs';
+import { evidenceSchema, itemStatuses, criterionSchema, taskContextSchema, extractionSchema } from './schema.mjs';
+import { readFileSync } from 'node:fs';
+const defaultRules=JSON.parse(readFileSync(new URL('../references/explicit-rules.json',import.meta.url),'utf8'));
+const portraitExtractionSchema=extractionSchema(defaultRules);
+portraitExtractionSchema.properties.facts.items.properties.field={type:'string',minLength:1};
+portraitExtractionSchema.properties.items.items.properties.kind={type:'string',minLength:1};
+portraitExtractionSchema.properties.coverage.items.properties.kind={type:'string',minLength:1};
 
 const text = { type: 'string' };
 const nullableText = { type: ['string', 'null'] };
@@ -72,6 +78,7 @@ export const portraitSchema = object({
     parse_status: choice(['complete', 'partial', 'failed']),
     pages: array(object({ segment_id: text, page: { type: ['integer', 'null'], minimum: 1 } })),
   })),
+  explicit_extraction: {anyOf:[portraitExtractionSchema,{type:'null'}]},
   explicit: { anyOf: [explicitSchema, {type:'null'}] },
   explicit_status: choice(['pending','local_pipeline','merged']),
   a_handoff: { anyOf: [object({schema_version:text,output_version:text,generated_at:text,producer:object({mode:text,name:nullableText,model:nullableText}),material_fingerprints:array(object({document_id:text,sha256:text,content_sha256:text})),rules_version:text}), {type:'null'}] },
