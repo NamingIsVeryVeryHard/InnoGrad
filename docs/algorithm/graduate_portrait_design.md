@@ -44,36 +44,18 @@ CLI 的 `prepare` 同时导出两个任务包，供离线执行；在线 `workfl
 
 ### 2.1 输入 bundle
 
-一次任务只处理一个 `student_id`、一个 `period` 和一个 `stage`。以下全虚构示例符合当前输入契约；哈希对应示例句子的 UTF-8 字节，没有原始 PDF：
+一次任务只处理一个 `student_id`、一个 `period` 和一个 `stage`。本文统一使用 Swagger 已有的完整请求示例，不另建简化材料。
 
-```json
-{
-  "schema_version": "1.0",
-  "student_id": "SYNTHETIC-001",
-  "period": "2027-2028",
-  "stage": "annual",
-  "documents": [
-    {
-      "document_id": "annual-1",
-      "source_name": "全虚构示例.txt",
-      "sha256": "9a883f56557d3e3ba2807dd9199434d5c84a8ce57060f2e7c502dd1159068d54",
-      "kind": "annual",
-      "student_id": "SYNTHETIC-001",
-      "period": "2027-2028",
-      "parse_status": "complete",
-      "segments": [
-        {
-          "segment_id": "summary",
-          "page": null,
-          "text": "本年度已发表论文两篇。"
-        }
-      ]
-    }
-  ]
-}
-```
+打开 [Swagger 的画像生成接口](http://127.0.0.1:3001/docs/#/画像/createPortrait)，在 `POST /api/portraits` 的请求示例下拉框选择：
 
-实际 HTTP 请求体为 `{ "bundle": 上述对象 }`。较完整的年报、开题输入见 [API 示例目录](../../apps/server/portrait/examples/)。
+| Swagger 示例 | 完整 JSON 来源 | 主要内容 |
+| --- | --- | --- |
+| annualReport：博士年报 | [年度报告请求示例](../../apps/server/portrait/examples/annual-report.synthetic.json) | 4 个模拟页，包含本期与累计成果、发表与录用及在审状态、个人角色和下一学年计划 |
+| proposalReport：开题报告 | [开题报告请求示例](../../apps/server/portrait/examples/proposal-report.synthetic.json) | 6 个模拟页，包含研究问题、方法、风险和进度；period 为 null |
+
+两个文件就是 Swagger 加载的请求体，已包含外层 `{ "bundle": ... }`，复制使用时不要再包一层 bundle。CLI 的 `--bundle` 读取内层 bundle 对象。切换示例只查看内容；点击 Execute 提交 POST 才会启动生成任务。
+
+这些是 API 现有的合成示例，不是真实学生报告。模拟页码和文本哈希的含义沿用 [API 示例说明](../../apps/server/portrait/README.md)，本文不重复维护一份 JSON。
 
 | 字段 | 当前约定 |
 | --- | --- |
@@ -92,45 +74,17 @@ CLI 的 `prepare` 同时导出两个任务包，供离线执行；在线 `workfl
 
 | 字段 | 含义 | 示例 |
 | --- | --- | --- |
-| facts | 材料明确陈述的字段值，附原文依据 | 自报本年度发表两篇论文 |
-| items | 逐项成果或活动，含状态、角色和期间 | 一篇论文已录用，学生为第二作者 |
+| facts | 材料明确陈述的字段值，附原文依据 | 年报自报本年度正式发表一篇 |
+| items | 逐项成果或活动，含状态、角色和期间 | 年报中的录用未见刊论文，学生为第三作者 |
 | coverage | 每类清单的覆盖声明，每类最多一条 | 完整列举、部分列举、未提供清单 |
 
-上述短材料对应的抽取结果可以是：
+阅读 Swagger 的 annualReport 时，重点区分：
 
-```json
-{
-  "schema_version": "1.0",
-  "student_id": "SYNTHETIC-001",
-  "period": "2027-2028",
-  "stage": "annual",
-  "facts": [
-    {
-      "field": "papers_reported",
-      "value": 2,
-      "qualifier": "exact",
-      "numeric_token": "两",
-      "evidence": [
-        {
-          "document_id": "annual-1",
-          "segment_id": "summary",
-          "quote": "本年度已发表论文两篇。"
-        }
-      ]
-    }
-  ],
-  "items": [],
-  "coverage": [
-    {
-      "kind": "paper",
-      "status": "not_reported",
-      "evidence": []
-    }
-  ]
-}
-```
+- “本年度正式发表一篇”是本期已发表自报数量；“累计已发表论文两篇”不能填入同一本期字段。
+- 已发表、录用未见刊、审稿中和未投稿工作稿分别记录为成果条目，不能加成已发表总数。
+- 作者角色绑定对应条目，不能把第二作者、第一作者和第三作者混用。
 
-原文只给总数，没有列出具体论文，因此不能编造两个 items。缺失字段不加入 facts；`facts[].value` 不接受 null，画像构建时才将未观察指标输出为 null。明确为零与没有记载必须区分。
+这些是对输入示例的解释，不是已经运行得到的模型结果；实际输出以生成任务返回值为准。缺失字段不加入 facts；`facts[].value` 不接受 null，画像构建时才将未观察指标输出为 null。明确为零与没有记载必须区分。
 
 论文状态区分 `planned/in_progress/under_review/accepted/published/unknown`，不能用 completed 替代发表状态。`papers_reported` 只记录明确属于本期的已发表自报总数，不能填录用数或累计数。期间不明使用 uncertain，跨期使用 out_of_scope；任务期间为空时禁止 in_scope。
 
@@ -143,13 +97,14 @@ CLI 的 `prepare` 同时导出两个任务包，供离线执行；在线 `workfl
 - `qualifier`：数量的精确程度。
 - `evidence.quote`：保留指标和上下文的原句。
 
-| 原文数量 | value | numeric_token | qualifier |
+Swagger 年报原文中的两个数量可用来理解字段区别：
+
+| 示例原句 | value | numeric_token | 统计口径 |
 | --- | --- | --- | --- |
-| 两篇 | 2 | "两" | exact |
-| 2篇 | 2 | "2" | exact |
-| 二十场 | 20 | "二十" | exact |
-| 120余篇 | 120 | "120" | lower_bound |
-| 约120篇 | 120 | "120" | approximate |
+| 本年度正式发表一篇 | 1 | "一" | 本期已发表自报数，qualifier 为 exact |
+| 累计已发表论文两篇 | 2 | "两" | 累计口径，不能填入本期 papers_reported |
+
+第二行只解释原文数字如何对应数值，不代表当前配置存在累计发表数字段。
 
 程序把原数字片段解析成数值并与 value 比较，还检查它是否在引用对应的原文中独立出现。例如不能从“100篇”截取“10”并填 value 为 10；原文是“两”，不能把原文片段伪写成“2”。非数字字段的 numeric_token 为 null、qualifier 为 exact。
 
