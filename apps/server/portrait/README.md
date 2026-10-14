@@ -140,7 +140,16 @@ PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
 | `GET /docs/` | 浏览并调试 API |
 | `GET /openapi.json` | 获取 OpenAPI 3 文档 |
 
-`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。可参考[合成材料构造器](../../../.agents/skills/graduate-portrait/scripts/synthetic.mjs)理解输入；合成样例只用于调试，不代表真实学生。
+`bundle` 使用 Skill 的共享 JSON Schema，包括学生标识、期间、阶段、文档哈希和原文段落。材料必须已经完成解析，文件上传和 OCR 不在此服务范围内。输入上限为 1 MiB。
+
+Swagger 的请求示例下拉框提供两份独立编写的全虚构报告，也可直接读取 JSON 用于本地调试：
+
+- [年度报告示例](examples/annual-report.synthetic.json)：封面、2027—2028学年学习科研总结、下一学年计划和未勾选评定意见。正文区分本期与累计成果、已发表、录用未见刊、审稿及写作状态，并说明作者角色和交流情况。
+- [开题报告示例](examples/proposal-report.synthetic.json)：基本信息、研究意义与现状、问题目标、方法实验计划、可行性风险、进度安排及未填写评审意见。`period: null`表示没有确认统计学年，计划不算已完成成果。
+
+示例中的姓名、学校、题目和数字均为虚构，没有复制真实材料正文。两份文本分别按4页和6页模拟分页；`page`只用于定位合成文本，不对应真实PDF。`sha256`是按 `segments`顺序将各段 `text`以换页符 `\f`连接后，计算 UTF-8 字节所得的哈希，不是PDF文件哈希。示例没有原始PDF，来源名称和各页均作了标注。`parse_status: complete`只说明这些合成文本完整提供，不证明真实材料完成解析。
+
+旧[合成材料构造器](../../../.agents/skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
 
 生成过程是异步任务。`202`只表示接受任务，按响应中的 `Location`查询结果。任务失败时，`error.code`说明配置、网络、超时、配额或结构校验问题；响应不包含上游错误原文。超过5分钟会停止本地等待，任务状态为 `failed`、错误代码为 `JOB_TIMEOUT`。InnoAgent 后端可能仍在执行，晚到结果不保存；确认上游执行结束前请勿重试。成功结果的 `review_status`始终为 `draft`。
 

@@ -4,6 +4,7 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import { bundleSchema, portraitSchema, validateBundle, validatePortrait, loadConfiguration, runWorkflow } from '../skill-bridge.mjs';
 import type { ParsedMaterialBundle, PortraitJob, PublicError, Workflow } from './contracts.js';
+import { portraitExamples } from './examples.js';
 
 interface ServerOptions {
   workflow?: Workflow;
@@ -70,6 +71,15 @@ export async function createPortraitServer(options: ServerOptions = {}) {
   });
   await app.register(swagger, {
     refResolver: { buildLocalReference: json => String(json.$id) },
+    transformObject: document => {
+      if (!('openapiObject' in document)) return document.swaggerObject;
+      const requestBody = document.openapiObject.paths?.['/api/portraits']?.post?.requestBody;
+      if (requestBody && !('$ref' in requestBody)) {
+        const mediaType = requestBody.content?.['application/json'];
+        if (mediaType) mediaType.examples = portraitExamples;
+      }
+      return document.openapiObject;
+    },
     openapi: {
       openapi: '3.0.3',
       info: {
@@ -97,17 +107,7 @@ export async function createPortraitServer(options: ServerOptions = {}) {
     schema: {
       tags: ['画像'], operationId: 'createPortrait', summary: '提交画像生成任务',
       description: '异步调用 InnoAgent。202不表示已生成，使用Location或GET查询任务。相同输入再次POST仍会新建任务。失败任务的error提供固定错误类别，不包含上游原文或密钥。超时停止本地等待，上游执行可能继续，确认其结束前请勿重试。',
-      body: {
-        ...object({ bundle: { $ref: 'ParsedMaterialBundle#' } }),
-        examples: [{ bundle: {
-          schema_version: '1.0', student_id: 'SYNTHETIC-API-001', period: '2025-2026', stage: 'annual',
-          documents: [{
-            document_id: 'annual-1', source_name: '合成调试材料.txt', sha256: 'a'.repeat(64),
-            kind: 'annual', student_id: 'SYNTHETIC-API-001', period: '2025-2026', parse_status: 'complete',
-            segments: [{ segment_id: 'body', page: null, text: '本年度发表论文1篇。逐项成果：课堂反馈方法已发表。' }],
-          }],
-        } }],
-      },
+      body: object({ bundle: { $ref: 'ParsedMaterialBundle#' } }),
       response: { 202: { $ref: 'PortraitJob#' }, 400: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema, 503: errorSchema },
     },
   }, async (request, reply) => {

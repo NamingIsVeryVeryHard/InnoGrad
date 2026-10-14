@@ -44,8 +44,14 @@ test('OpenAPI and Swagger UI describe shared input, task states and read-only co
   const document = response.json();
   assert.equal(document.openapi, '3.0.3');
   assert.ok(document.paths['/api/portraits'].post);
-  const example = document.paths['/api/portraits'].post.requestBody.content['application/json'].example;
-  assert.equal(example.bundle.student_id, 'SYNTHETIC-API-001');
+  const examples = document.paths['/api/portraits'].post.requestBody.content['application/json'].examples;
+  assert.deepEqual(Object.keys(examples), ['annualReport', 'proposalReport']);
+  assert.equal(examples.annualReport.value.bundle.stage, 'annual');
+  assert.equal(examples.proposalReport.value.bundle.stage, 'proposal');
+  for (const example of Object.values(examples) as { description: string; value: { bundle: { student_id: string } } }[]) {
+    assert.match(example.description, /全虚构/);
+    assert.match(example.value.bundle.student_id, /^SYNTHETIC-/);
+  }
   assert.ok(document.paths['/api/portraits/{id}'].get);
   assert.ok(document.components.schemas.ParsedMaterialBundle);
   assert.ok(document.components.schemas.GraduatePortrait);
