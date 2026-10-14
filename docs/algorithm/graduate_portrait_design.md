@@ -314,7 +314,7 @@ node .agents/skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/
 | GET /api/portrait-config | 查看显性规则和隐性评价配置 |
 | GET /docs/、GET /openapi.json | 调试界面和接口描述 |
 
-API 默认只监听本机，输入上限 1 MiB。任务存于内存，默认保留窗口30分钟，重启丢失。重复 POST 会重复调用模型；5分钟等待超时不保证上游同步结束，重试前须确认执行状态。只有明确额度耗尽才切换已配置的备用模型，普通限速或结构校验失败不会切换。
+API 默认只监听本机，输入上限 1 MiB。任务存于内存，默认保留窗口30分钟，重启丢失。重复 POST 会重复调用模型；默认5分钟等待（PORTRAIT_JOB_TIMEOUT_MS 可设1000–900000毫秒）超时不保证上游同步结束，重试前须确认执行状态。只有明确额度耗尽才切换已配置的备用模型，普通限速或结构校验失败不会切换。
 
 CLI workflow 走 InnoAgent + Skill；remote 直接调用模型接口，仅用于底层适配调试。
 
@@ -366,9 +366,9 @@ HTTP 的 aResult 使用 a-handoff-1.0。完整示例见 Swagger 的 annualWithAR
 
 ## 6. 已验证范围与待办边界
 
-七领域分项评价、外部 A 交接、CLI、InnoAgent 工作流、异步 API 和 Swagger 已实现。核心回归70项、API测试20项、类型检查与构建通过。独立复审指出的成果状态键不完整问题已修复并补测试；隔离副本中的评级门禁变异被测试识别。这些是程序验证，不代表模型准确率。
+七领域分项评价、外部 A 交接、CLI、InnoAgent 工作流、异步 API 和 Swagger 已实现。核心回归72项、API测试26项、类型检查与构建通过。独立复审指出的成果状态键不完整问题已修复并补测试；隔离副本中的评级门禁变异被测试识别。这些是程序验证，不代表模型准确率。
 
-真实材料联调采用一份3页扫描年报的完整上游 OCR 和一份13页开题报告的完整文字输入，保留物理页与原文件哈希，解析状态保持 partial。首轮两项调用均超时；后续年报重试首次仅输出一个领域，被校验拒绝并触发修正。完整新量规的在线成功结果尚未确认，不能沿用旧四维片段成功记录。
+真实材料联调采用一份3页扫描年报的完整上游 OCR 和一份13页开题报告的完整文字输入，保留物理页与原文件哈希，解析状态保持 partial。首轮两项调用均超时；后续年报重试首次仅输出一个领域，修正后仍漏掉协作领域，被校验拒绝。语义复审还发现问题界定与方法匹配的引文可能不足以支持“达到要求”；已记录分歧，未作为成功样例发布。当前已加强动态完整项 Schema 并重新联调，完整新量规的在线成功结果尚未确认，不能沿用旧四维片段成功记录。
 
 待确认事项包括真实 InnoAgent 完整评价质量、A 团队真实交接、教师量规校准和一致性检查。学校适用规则由 A 与指标负责人确认后交接；真实额度耗尽后的备用全流程、自动 Skill 路由和 Claude/Codex 完整运行尚未验证。数据库、权限、正式审核与档案写入属于后续业务接入。
 
@@ -406,7 +406,7 @@ InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills
 node scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
 ~~~
 
-prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；程序不以关键词或随机值代替语义工作。
+prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；输出结束前对照 expected_dimension_ids、expected_criterion_ids 自查，每个领域及其全部观察项恰好出现一次，证据不足、不适用或冲突项也须保留；程序不以关键词或随机值代替语义工作。
 
 ~~~sh
 node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --a-result local-runs/input/a-result.json
