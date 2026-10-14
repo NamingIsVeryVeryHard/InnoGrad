@@ -42,3 +42,8 @@ test('年级专属标准只在明确上下文下适用，通用开题标准可�
  const f=fixture();const c=criterion(f);f.rubric.dimensions[1].criteria[0].required_context=['training_year'];c.standard_status='pending_confirmation';c.performance_grade=null;assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
  f.bundle.task_context={task_id:'T1',observation_period:null,training_category:null,training_year:2,support_conditions:null};c.standard_status='applicable';c.performance_grade='meets_requirements';assert.doesNotThrow(()=>validateAssessment(f.bundle,f.assessment,f.rubric));
 });
+test('评价提示要求精炼全部观察项而保留必要条件引用和反证',async()=>{
+ const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();const task=prepareTask(f,'assessment');const instructions=task.instructions.join('\n');
+ assert.match(instructions,/observed.*rationale.*各.*1.?2.*短句/);assert.match(instructions,/limitations.*missing_evidence.*suggestions.*1.?2/);assert.match(instructions,/最少.*完整.*引文/);assert.match(instructions,/缺证据.*长成果清单/);assert.match(instructions,/保留全部.*观察项/);assert.match(instructions,/必要反证.*多条引用/);
+ assert.equal(task.configuration.dimensions.flatMap(d=>d.criteria).length,23);assert.deepEqual(task.schema,assessmentSchema(f.rubric));assert.ok(!JSON.stringify(task.schema).includes('maxLength'));
+});

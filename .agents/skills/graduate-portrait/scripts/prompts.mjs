@@ -12,6 +12,7 @@ export function prepareTask({bundle,rules,rubric}, phase='extraction') {
     'coverage每个kind至多一条，不按不同项目或发表状态重复kind；coverage.complete仅限明确完整清单；部分逐项列举用partial。没有提及不等于零。空白签字、审核表不代表通过。',
   ] : [
     '按项目试用rubric逐观察项输出schema规定字段，只返回裸JSON。每项先判断evidence_state，再用三档performance_grade；领域不评级，不输出隐性总分或正式审核结论。',
+    '每项保持精炼：observed与rationale各用1–2个短句，准确覆盖事实与必需条件；limitations、missing_evidence、suggestions各优先1–2条具体内容，不重复通用提醒。保留全部配置观察项；默认量规23项逐项输出，不能省略未评价项。引用选择足够证明条件的最少完整必要引文，保留限定条件，不截断原句或删字；必要反证和多条引用必须保留。缺证据时直接说明具体缺口，勿重复无关的长成果清单；evidence可为空，贡献未知保留null。精炼不得省略判断条件、降低证据要求或改变状态标准。',
     'evaluable需要可定位的任务表现及贡献范围；insufficient保留具体缺口，缺失绝不评为needs_improvement；conflicting保留至少两条不同的冲突引用、时间或版本差异并暂缓等级；未提协作只是insufficient。not_applicable须有任务条件或引用证明没有展示机会。',
     'criterion_standard_status由程序依照报告阶段与required_context给定，不能自行改为applicable。pending_confirmation保留事实并将performance_grade设null。已知通用任务标准可用，培养类别或年级未知时不可套用专属门槛。',
     '三档分别对应criterion.standards：needs_improvement须已有直接证据证明关键要求未满足；meets_requirements须满足必需条件；well_demonstrated须先满足达到要求，再符合附加条件。文档多、引用多、论文多不等于表现充分。rationale逐条件解释，evidence.supports说明每条引用支持什么。',
