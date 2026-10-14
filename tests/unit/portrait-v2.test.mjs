@@ -56,3 +56,15 @@ test('任务输出动态完整清单，改量规后的数量与ID同步并要求
  const {prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const f=fixture();f.rubric.dimensions=f.rubric.dimensions.slice(0,2);f.rubric.dimensions[0].criteria=f.rubric.dimensions[0].criteria.slice(0,1);const task=prepareTask(f,'assessment');
  assert.deepEqual(task.expected_dimension_ids,f.rubric.dimensions.map(d=>d.id));assert.deepEqual(task.expected_criterion_ids,Object.fromEntries(f.rubric.dimensions.map(d=>[d.id,d.criteria.map(c=>c.id)])));assert.match(task.instructions.join('\n'),/结束前.*expected_dimension_ids.*expected_criterion_ids.*自查/);assert.equal(task.schema.properties.dimensions.minItems,2);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.criteria.minItems,1);
 });
+
+test('分域任务仅含当前动态领域配置与schema，但保留完整原文和身份范围',async()=>{
+ const {prepareDimensionTask,prepareTask}=await import('../../.agents/skills/graduate-portrait/scripts/prompts.mjs');const {validateShape}=await import('../../.agents/skills/graduate-portrait/scripts/validation.mjs');const f=fixture();
+ for(const d of f.rubric.dimensions){
+  const task=prepareDimensionTask(f,d.id);assert.equal(task.phase,'assessment');assert.equal(task.dimension_id,d.id);assert.deepEqual(task.bundle,f.bundle);assert.deepEqual(task.configuration,{...f.rubric,dimensions:[d]});
+  assert.deepEqual(task.expected_dimension_ids,[d.id]);assert.deepEqual(task.expected_criterion_ids,{[d.id]:d.criteria.map(c=>c.id)});assert.deepEqual(Object.keys(task.criterion_standard_status),d.criteria.map(c=>c.id));
+  assert.equal(task.schema.properties.dimensions.minItems,1);assert.equal(task.schema.properties.dimensions.maxItems,1);assert.equal(task.schema.properties.dimensions.items.oneOf[0].properties.dimension_id.const,d.id);
+  assert.match(task.instructions.join('\n'),/只.*当前领域/);assert.match(task.instructions.join('\n'),/前.*领域.*不.*依据/);
+  const local={...f.assessment,dimensions:f.assessment.dimensions.filter(x=>x.dimension_id===d.id)};assert.doesNotThrow(()=>validateShape(task.schema,local,'assessment'));assert.throws(()=>validateShape(task.schema,f.assessment,'assessment'));
+ }
+ assert.throws(()=>prepareDimensionTask(f,'unknown-domain'));assert.equal(prepareTask(f,'assessment').schema.properties.dimensions.minItems,f.rubric.dimensions.length);
+});
