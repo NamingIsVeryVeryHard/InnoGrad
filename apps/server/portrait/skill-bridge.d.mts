@@ -1,5 +1,6 @@
 import type { ParsedMaterialBundle, Portrait, Workflow, AResult, AOutputMetadata, Extraction, Assessment, MaterialFingerprint } from './src/contracts.js';
 
+export function loadProjectEnv(input?: { env?: Record<string, string | undefined>; path?: string }): Promise<Record<string, string | undefined>>;
 export const bundleSchema: Record<string, unknown>;
 export const portraitSchema: Record<string, unknown>;
 export function aResultSchema(rules: Record<string, unknown>): Record<string, unknown>;

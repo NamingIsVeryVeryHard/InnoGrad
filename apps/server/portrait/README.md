@@ -130,6 +130,8 @@ PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
 
 `PORTRAIT_ENV_FILE`明确指定仓库根目录的环境文件，不搜索父目录。在 API 子目录启动时，也须把它设置为该文件的绝对路径。停止服务时在对应终端按 Ctrl+C；重启顺序同上。模型网关的调用记录仅存于进程内，重启后清空。
 
+`PORTRAIT_JOB_TIMEOUT_MS`设置整个画像任务的等待上限，默认`300000`（5分钟），有效范围为`1000–900000`毫秒。完整材料联调可设为`900000`（15分钟）；超出范围、非整数或空值会在启动时拒绝。它与单次 InnoAgent 请求的`INNOAGENT_TIMEOUT_MS`及单次模型请求的`PORTRAIT_API_TIMEOUT_MS`分别生效，整体上限不会自动延长单次请求。API 启动读取明确的`PORTRAIT_ENV_FILE`，已有进程环境变量优先。
+
 默认只监听 `127.0.0.1:3001`。用 `PORTRAIT_PORT` 指定其他端口。浏览器打开 [Swagger UI](http://127.0.0.1:3001/docs/)可查看结构、展开接口并使用 **Try it out** 调试；[OpenAPI JSON](http://127.0.0.1:3001/openapi.json)供其他客户端读取。
 
 | 接口 | 用途 |
@@ -159,7 +161,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，并附待教师复核状态。
 
-生成过程是异步任务。`202`只表示接受任务，按响应中的 `Location`查询结果。任务失败时，`error.code`说明配置、网络、超时、配额或结构校验问题；响应不包含上游错误原文。超过5分钟会停止本地等待，任务状态为 `failed`、错误代码为 `JOB_TIMEOUT`。InnoAgent 后端可能仍在执行，晚到结果不保存；确认上游执行结束前请勿重试。成功结果的 `review_status`始终为 `draft`。
+生成过程是异步任务。`202`只表示接受任务，按响应中的 `Location`查询结果。任务失败时，`error.code`说明配置、网络、超时、配额或结构校验问题；响应不包含上游错误原文。超过任务等待上限会停止本地等待（默认5分钟），任务状态为 `failed`、错误代码为 `JOB_TIMEOUT`。InnoAgent 后端可能仍在执行，晚到结果不保存；确认上游执行结束前请勿重试。成功结果的 `review_status`始终为 `draft`。
 
 ## 原型范围
 

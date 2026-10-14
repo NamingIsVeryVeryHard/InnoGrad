@@ -2,6 +2,8 @@ import { bundleSchema } from '../../../.agents/skills/graduate-portrait/scripts/
 import { portraitSchema } from '../../../.agents/skills/graduate-portrait/scripts/portrait-schema.mjs';
 import { validateShape, validateBundle } from '../../../.agents/skills/graduate-portrait/scripts/validation.mjs';
 
+export { loadProjectEnv } from '../../../.agents/skills/graduate-portrait/scripts/env.mjs';
+
 export { bundleSchema, portraitSchema, validateBundle };
 export { aResultSchema, validateAResult, materialFingerprints, buildAResult } from '../../../.agents/skills/graduate-portrait/scripts/handoff.mjs';
 export const validatePortrait = value => validateShape(portraitSchema, value, 'portrait');

@@ -380,3 +380,11 @@ test('task context preserves explicit unknowns and rejects incomplete context ob
   const incomplete = { ...fixture.bundle, task_context: { task_id: 'synthetic-task' } };
   assert.equal((await app.inject({ method: 'POST', url: '/api/portraits', payload: { bundle: incomplete } })).statusCode, 400);
 });
+
+
+test('OpenAPI describes the configured overall job timeout', async t => {
+  const app = await createPortraitServer({ timeoutMs: 900_000 });
+  t.after(() => app.close());
+  const document = (await app.inject('/openapi.json')).json();
+  assert.match(document.info.description, /整体等待900秒超时/);
+});
