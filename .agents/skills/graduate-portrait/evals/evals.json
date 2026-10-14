@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "data_mode": "synthetic",
   "command": "node scripts/cli.mjs demo --out <local-directory>",
   "cases": [
@@ -17,7 +17,7 @@
       "input": "scripts/synthetic.mjs",
       "expect": [
         "credits_earned.value=null",
-        "evidence-reasoning.level=null",
+        "implementation-reasoning.criteria[*].performance_grade=null",
         "review_status=draft"
       ]
     },
@@ -25,8 +25,8 @@
       "id": "planned-vs-completed",
       "replay": "unit test: 计划不能支持已完成的检验；无证据不评为低能力",
       "expect": [
-        "planned result rejected for completion-only criterion",
-        "not_observed does not produce zero level"
+        "planned rejected for evaluable completion-only criterion",
+        "insufficient cannot have performance grade"
       ]
     },
     {
@@ -35,6 +35,25 @@
       "expect": [
         "period_unconfirmed",
         "in_scope forbidden when period=null"
+      ]
+    },
+    {
+      "id": "external-a-immutable-merge",
+      "replay": "unit tests: portrait-handoff.test.mjs",
+      "expect": [
+        "matching scope and material fingerprints required",
+        "explicit retained without recomputation",
+        "missing A produces explicit_status=pending"
+      ]
+    },
+    {
+      "id": "criterion-states",
+      "replay": "unit tests: portrait-v2.test.mjs",
+      "expect": [
+        "insufficient and conflicting cannot have performance grade",
+        "no collaboration record is insufficient",
+        "teacher review cannot be model-confirmed",
+        "pending standards cannot grade"
       ]
     }
   ],
@@ -66,28 +85,50 @@
   ],
   "semantic_cases": [
     {
-      "id": "available-resources-without-risk-response",
-      "execution": "人工或已授权模型使用prepareTask的assessment任务包评估；未自动运行模型",
-      "criterion_id": "design-feasibility",
-      "synthetic_text": "计划使用现有GPU服务器，并采用公开数据集完成实验。",
+      "id": "negative-result-is-not-low-performance",
+      "execution": "按完整任务包人工或授权模型逐项复核；自动结构检查不证明语义质量",
+      "criterion_ids": [
+        "claim-evidence",
+        "effect-check"
+      ],
       "expect": {
-        "judgment": "not_observed",
-        "missing_evidence": "缺少资源、时间或数据约束，以及具体执行风险和对应方案；现有设备与数据不满足这些条件。"
-      },
-      "boundary": "严格结构与quote校验不能证明所有语义条件得到支持，仍需逐条件复核。"
+        "boundary": "负结果、目标未达本身不降级，评价证据推理与检查方法。"
+      }
     },
     {
-      "id": "literature-difficulty-is-not-personal-revision",
-      "execution": "人工或已授权模型使用prepareTask的assessment任务包评估；未自动运行模型",
-      "criterion_ids": [
-        "reflection-issue",
-        "reflection-action",
-        "reflection-check"
-      ],
-      "synthetic_text": "已有方法常受长尾数据不足影响。拟采用数据增强方法开展后续研究。",
+      "id": "available-resources-without-risk-response",
+      "execution": "按完整任务包人工或授权模型逐项复核；未自动调用模型",
+      "criterion_id": "feasibility-risk",
       "expect": {
-        "judgment": "not_observed",
-        "missing_evidence": "缺少本人研究中实际不足或反馈、针对它的调整及调整后的实际检查。"
+        "evidence_state": "insufficient",
+        "performance_grade": null,
+        "boundary": "资源可用不能替代明确约束与风险应对。"
+      }
+    },
+    {
+      "id": "feedback-stages-separated",
+      "execution": "现有年度完整示例annual-page-2、annual-page-3人工或授权模型复核",
+      "criterion_ids": [
+        "feedback-understanding",
+        "adjustment-action",
+        "effect-check"
+      ],
+      "expect": {
+        "boundary": "反思可初评，所述行动仍自述，独立验证未完成不能宣称效果已核验。"
+      }
+    },
+    {
+      "id": "public-proposal-limits",
+      "execution": "现有开题完整示例proposal-page-2、3、4人工或授权模型复核",
+      "criterion_ids": [
+        "literature-comparison",
+        "problem-definition",
+        "method-fit",
+        "validation-design",
+        "feasibility-risk"
+      ],
+      "expect": {
+        "boundary": "具体计划可支持方案评价；文献正式条目未给不能宣称已完成文献核验；独立贡献未知。"
       }
     }
   ]

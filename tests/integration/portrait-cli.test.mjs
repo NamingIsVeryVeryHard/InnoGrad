@@ -34,3 +34,12 @@ test('Skill独立复制后demo无需仓库fixture且哈希不依赖安装位置'
  await writeFile(join(dir,'invalid.json'),'{"PRIVATE_MARKER":');try{await run(process.execPath,[standalone,'prepare','--bundle',join(dir,'invalid.json'),'--out',join(dir,'task')]);assert.fail('invalid JSON should fail');}catch(e){assert.match(e.stderr,/input JSON file is invalid/);assert.ok(!e.stderr.includes('PRIVATE_MARKER'));}
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('CLI只评价准备和B-only构建，以及完整A结果重放',async()=>{
+ const {fixture}=await import('../fixtures/portrait.mjs');const {buildAResult}=await import('../../.agents/skills/graduate-portrait/scripts/handoff.mjs');const f=fixture();const dir=await mkdtemp(join(tmpdir(),'portrait-b-cli-'));
+ try{for(const key of ['bundle','assessment'])await writeFile(join(dir,key+'.json'),JSON.stringify(f[key]));
+ await run(process.execPath,[script,'prepare','--bundle',join(dir,'bundle.json'),'--out',join(dir,'task')]);await assert.rejects(readFile(join(dir,'task','extraction-task.json')));
+ await run(process.execPath,[script,'build','--bundle',join(dir,'bundle.json'),'--assessment',join(dir,'assessment.json'),'--out',join(dir,'b')]);let p=JSON.parse(await readFile(join(dir,'b','portrait.json')));assert.equal(p.explicit_status,'pending');assert.match(await readFile(join(dir,'b','portrait.md'),'utf8'),/显性结果待接入/);
+ const aResult=buildAResult({...f,metadata:{output_version:'A-fixture.1',generated_at:'2026-10-14T04:00:00Z',producer:{mode:'synthetic',name:null,model:null}}});await writeFile(join(dir,'a-result.json'),JSON.stringify(aResult));
+ await run(process.execPath,[script,'build','--bundle',join(dir,'bundle.json'),'--assessment',join(dir,'assessment.json'),'--a-result',join(dir,'a-result.json'),'--out',join(dir,'merged')]);p=JSON.parse(await readFile(join(dir,'merged','portrait.json')));assert.equal(p.explicit_status,'merged');assert.deepEqual(p.explicit,aResult.explicit);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
