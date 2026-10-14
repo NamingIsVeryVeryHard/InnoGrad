@@ -123,7 +123,7 @@ flowchart LR
 
 OCR 由其他成员负责。本地样例的文字提取与 OCR 试验用于检查输入，不属于画像 API 的正式功能。材料库、登录和正式档案写入暂不开发。
 
-当前工作流为每次画像任务创建独立的 InnoAgent 工作区和会话。默认仅评价；显式 bundle_pipeline 联调模式才在同一会话中先抽取再评价。隔离实例的 L1/L2/L3 持久记忆关闭。后续如需比较成长，应先保留可追溯的历史材料和画像版本，不能用自由生成的记忆替代档案。
+当前工作流为每次画像任务创建独立的 InnoAgent 工作区和会话，按量规配置的领域顺序逐个调用 Skill。每次任务包保留完整原文，只包含当前领域的量规、Schema 和观察项清单；该领域通过校验后才继续，全部完成后再做完整性校验并生成画像。同一会话仍保留此前交互历史，但此前评价不作为材料证据加入当前任务包，Skill 明确禁止引用其作为依据。默认仅评价；显式 bundle_pipeline 联调模式才在同一会话中先抽取再评价。隔离实例的 L1/L2/L3 持久记忆关闭。后续如需比较成长，应先保留可追溯的历史材料和画像版本，不能用自由生成的记忆替代档案。
 
 ## 2. 数据流与共享契约
 
@@ -133,7 +133,7 @@ HTTP 接收 bundle、可选 aResult 和 mode。mode 默认为 implicit_only；�
 
 bundle、extraction 保留1.0；assessment、portrait 为2.0；A 交接为 a-handoff-1.0。旧四维隐性评价不能直接改名为新表现等级，旧 assessment 明确拒绝。
 
-每个任务包包含阶段指令、Schema、配置、上下文和完整材料。无效结构或证据最多修正一次，仍不满足要求则失败，不用合成结果替代。CLI prepare 默认只导出评价任务包，build/workflow 保存 portrait.json 和 portrait.md；API 的任务和结果保存在内存中。
+每个在线评价任务包包含当前领域的阶段指令、Schema、配置、上下文和完整材料。每个领域的无效结构或证据最多修正一次，仍不满足要求则整项任务失败，不发布部分画像，也不用合成结果替代。API 默认同时执行一个任务；容量不足立即返回 503，平台已有活跃调用时任务记录 INNOAGENT_BUSY，不自动排队或重试。CLI prepare 默认只导出评价任务包，build/workflow 保存 portrait.json 和 portrait.md；API 的任务和结果保存在内存中。
 
 ### 2.1 输入 bundle
 
@@ -366,9 +366,9 @@ HTTP 的 aResult 使用 a-handoff-1.0。完整示例见 Swagger 的 annualWithAR
 
 ## 6. 已验证范围与待办边界
 
-七领域分项评价、外部 A 交接、CLI、InnoAgent 工作流、异步 API 和 Swagger 已实现。核心回归72项、API测试26项、类型检查与构建通过。独立复审指出的成果状态键不完整问题已修复并补测试；隔离副本中的评级门禁变异被测试识别。这些是程序验证，不代表模型准确率。
+七领域分项评价、外部 A 交接、CLI、InnoAgent 工作流、异步 API 和 Swagger 已实现。核心回归84项、API测试28项、类型检查与构建通过。独立复审指出的成果状态键不完整问题已修复并补测试；隔离副本中的评级门禁变异被测试识别。这些是程序验证，不代表模型准确率。
 
-真实材料联调采用一份3页扫描年报的完整上游 OCR 和一份13页开题报告的完整文字输入，保留物理页与原文件哈希，解析状态保持 partial。首轮两项调用均超时；后续年报重试首次仅输出一个领域，修正后仍漏掉协作领域，被校验拒绝。语义复审还发现问题界定与方法匹配的引文可能不足以支持“达到要求”；已记录分歧，未作为成功样例发布。当前已加强动态完整项 Schema 并重新联调，完整新量规的在线成功结果尚未确认，不能沿用旧四维片段成功记录。
+真实材料联调采用一份3页扫描年报的完整上游 OCR 和一份13页开题报告的完整文字输入，保留物理页与原文件哈希，解析状态保持 partial。首轮两项调用均超时；后续年报重试首次仅输出一个领域，修正后仍漏掉协作领域，被校验拒绝。语义复审还发现问题界定与方法匹配的引文可能不足以支持“达到要求”；已记录分歧，未作为成功样例发布。已将在线评价改为按领域顺序执行，保留完整材料，并严格接受裸 JSON 对象或单一 json 代码块包装。前后说明、多块和非法内容仍拒绝，完整新量规的在线成功结果正在单独验证，不能沿用旧四维片段成功记录。
 
 待确认事项包括真实 InnoAgent 完整评价质量、A 团队真实交接、教师量规校准和一致性检查。学校适用规则由 A 与指标负责人确认后交接；真实额度耗尽后的备用全流程、自动 Skill 路由和 Claude/Codex 完整运行尚未验证。数据库、权限、正式审核与档案写入属于后续业务接入。
 
@@ -388,7 +388,7 @@ description: 从已解析的年度、开题报告按七领域试用量规评价�
 
 InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills` 中该 Skill 的 enabled 与 loaded 均为 true；平台负责加载 Skill，随后按本文件准备任务包、抽取和评价，服务端脚本核验并生成草稿。自动选择 Skill 及 Claude/Codex 完整运行尚未实测。
 
-默认流程：已解析材料与上下文 → 准备隐性评价任务 → 逐项评价与引用 → 程序校验 → 领域摘要 → 合并 A 结果 → 画像草稿。A 缺失时保留独立隐性初评并注明显性结果待接入。脚本、规则和合成样例均在本 Skill 内，安装到其他位置后仍可运行。依赖 Node.js 22 以上，首次在 scripts 内执行 npm ci。
+默认在线流程：已解析材料与上下文 → 按量规顺序准备单领域任务 → 当前领域逐项评价与引用 → 严格局部校验 → 集合全部领域并整体验证 → 领域摘要 → 合并 A 结果 → 画像草稿。A 缺失时保留独立隐性初评并注明显性结果待接入。脚本、规则和合成样例均在本 Skill 内，安装到其他位置后仍可运行。依赖 Node.js 22 以上，首次在 scripts 内执行 npm ci。
 
 ## 范围与输入
 
@@ -406,7 +406,7 @@ InnoAgent 主入口为 `/skill:graduate-portrait`。先确认平台 `/api/skills
 node scripts/cli.mjs prepare --bundle local-runs/input/bundle.json --out local-runs/task
 ~~~
 
-prepare 默认仅生成 assessment-task.json 与 Schema；--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；输出结束前对照 expected_dimension_ids、expected_criterion_ids 自查，每个领域及其全部观察项恰好出现一次，证据不足、不适用或冲突项也须保留；程序不以关键词或随机值代替语义工作。
+prepare 默认生成完整 assessment-task.json 与 Schema，供离线评价、重放与完整结果检查；在线 workflow 按领域顺序发送局部任务。--workflow-mode bundle_pipeline 可显式准备联调抽取任务。读取完整任务包按 instructions、configuration 和 criterion_standard_status 完成 JSON；输出结束前对照 expected_dimension_ids、expected_criterion_ids 自查，每个领域及其全部观察项恰好出现一次，证据不足、不适用或冲突项也须保留；程序不以关键词或随机值代替语义工作。
 
 ~~~sh
 node scripts/cli.mjs validate --bundle local-runs/input/bundle.json --assessment local-runs/input/assessment.json --a-result local-runs/input/a-result.json
@@ -414,9 +414,9 @@ node scripts/cli.mjs build --bundle local-runs/input/bundle.json --assessment lo
 node scripts/cli.mjs demo --out local-runs/synthetic
 ~~~
 
-若调用服务已提供包含 configuration、schema、bundle 的完整阶段任务包，Agent 直接用这些数据完成该阶段并只返回 JSON：不再读文件、不调用工具、不运行 npm 或脚本。准备、校验与构建由调用服务负责。未提供完整任务包的离线流程仍按上述命令准备、读取必要 references 并执行脚本。
+若调用服务已提供包含 configuration、schema、bundle 的完整阶段任务包，Agent 直接用这些数据完成该阶段并只返回 JSON。assessment 任务有 dimension_id 时，只输出该领域及其全部观察项，不能补写其他领域。每个领域仍使用完整 bundle 原文；此前领域的模型评价不是证据，不作为本次判断依据。不再读文件、不调用工具、不运行 npm 或脚本。准备、校验与构建由调用服务负责。未提供完整任务包的离线流程仍按上述命令准备、读取必要 references 并执行脚本。
 
-装载后的 Agent 不应调用 workflow 再递归调用平台；它直接执行抽取与评价。业务服务通过 scripts/workflow.mjs 的 runPortraitWorkflow 调用 InnoAgent，每个学生使用新建的独立工作区和 session，并强制 /skill:graduate-portrait。外部服务也可执行 `node scripts/cli.mjs workflow --bundle <明确路径> --out <明确路径>`。
+装载后的 Agent 不应调用 workflow 再递归调用平台；它直接执行抽取与评价。业务服务通过 scripts/workflow.mjs 的 runPortraitWorkflow 调用 InnoAgent，每个学生使用新建的独立工作区和 session，并强制 /skill:graduate-portrait。在线 B 在同一隔离 session 内按 rubric 当前顺序逐领域执行，每次仅提供当前领域配置、严格单领域 Schema 和全部原文；每域无效输出最多修正一次，不映射非法值或补造遗漏项。各域均通过后，程序集合并校验完整评价，再生成画像；任一域失败即停止，不输出部分画像。审计保留 assessment 阶段与 dimension_id。任务总超时由调用服务控制，单次模型等待仍受 InnoAgent 超时配置限制；同一平台实例不支持并行 CLI workflow。外部服务也可执行 `node scripts/cli.mjs workflow --bundle <明确路径> --out <明确路径>`。
 
 build 输出 portrait.json 和 portrait.md。不传 --a-result 时显性部分为 null、explicit_status 为 pending；本地联调可显式传 --extraction，标为 local_pipeline。workflow 默认 implicit_only；--workflow-mode bundle_pipeline 才运行抽取，已提供 A 时始终只运行评价。mode 选择实际执行方式：skill_execution 为按本 Skill 完成的语义工作；assistant_curated 为助手整理的示例；offline_replay 为既有结果重放；synthetic 为合成数据。remote_model 仅由 remote 真实请求记录；本地 build 不接受该模式。重放只表示本次离线运行，不能伪称新模型调用；合成、整理及重放模式的 model 必须为空。合成 demo 明确标为 synthetic/offline_replay。
 
