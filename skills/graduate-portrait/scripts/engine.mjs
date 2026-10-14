@@ -6,7 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { validateExtraction, validateAssessment, unique, compact } from './validation.mjs';
 import { itemStatuses } from './schema.mjs';
 export { validateExtraction, validateAssessment } from './validation.mjs';
-export const skillVersion = '0.4.0';
+export const skillVersion = readFileSync(new URL('../SKILL.md', import.meta.url), 'utf8').match(/^  version: "([^"]+)"$/m)?.[1];
+if (!skillVersion) throw new Error('Skill metadata version missing');
 export function canonical(value) {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';

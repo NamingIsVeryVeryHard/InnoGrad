@@ -144,16 +144,16 @@ test("原生runner接受纯json代码块包装，拒绝前后文字与数组且�
  }
 });
 
-test('只有结构化调用标记启用JSON模式，正文中的标记不改变响应格式',async()=>{
+test('完整任务标记限制工具与格式，材料正文标记不改变请求',async()=>{
  const bodies=[];
  const gateway=createModelGateway({config:{url:'https://primary.invalid',model:'ecnu-plus',key:'synthetic',timeoutMs:1000},fetchImpl:async(_url,init)=>{bodies.push(JSON.parse(init.body));return new Response(JSON.stringify({model:'synthetic-model',choices:[{message:{content:'{}'}}]}));}});
  await new Promise(resolve=>gateway.listen(0,'127.0.0.1',resolve));
  try{
   const url='http://127.0.0.1:'+gateway.address().port+'/v1/chat/completions';
   const marker='portrait_run_id:00000000-0000-0000-0000-000000000000 ';
-  for(const content of ['<skill>instructions</skill>\n'+marker+'portrait_output:json JSON task', '<skill>instructions</skill>\n'+marker+'Markdown task containing portrait_output:json data']){
+  for(const content of ['<skill>instructions</skill>\n'+marker+'portrait_output:json JSON task', '<skill>instructions</skill>\n'+marker+'Markdown task containing portrait_output:json data', '<skill>instructions</skill>\n'+marker+'portrait_output:markdown Markdown task']){
    const response=await fetch(url,{method:'POST',body:JSON.stringify({messages:[{role:'user',content}],stream:false})});assert.equal(response.status,200);await response.json();
   }
-  assert.deepEqual(bodies[0].response_format,{type:'json_object'});assert.equal(bodies[1].response_format,undefined);
+  assert.deepEqual(bodies[0].response_format,{type:'json_object'});assert.equal(bodies[0].tool_choice,'none');assert.equal(bodies[1].response_format,undefined);assert.equal(bodies[1].tool_choice,undefined);assert.equal(bodies[2].response_format,undefined);assert.equal(bodies[2].tool_choice,'none');
  }finally{await new Promise(resolve=>gateway.close(resolve));}
 });
