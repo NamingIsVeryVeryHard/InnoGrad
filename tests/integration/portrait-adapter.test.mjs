@@ -15,3 +15,12 @@ test('明确额度耗尽才切备用，普通429与校验失败不换模型',asy
 test('网络与超时错误只保留脱敏类别',async()=>{for(const [name,code]of [['TimeoutError','REMOTE_TIMEOUT'],['TypeError','REMOTE_NETWORK']])await assert.rejects(requestStructured({instructions:[]},{config,validate:()=>{},fetchImpl:async()=>{const e=new Error('sensitive response');e.name=name;throw e;}}),e=>e.code===code&&!e.message.includes('sensitive'));});
 
 test('数字单位的结构错误反馈精确路径且不回显私密输出',async()=>{const f=fixture();const bad=structuredClone(f.extraction);bad.facts[0].numeric_token='3 篇';let calls=0;await requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async(_u,init)=>{const body=JSON.parse(init.body);if(calls++){assert.match(body.messages.at(-1).content,/facts\/0\/numeric_token/);assert.match(body.messages.at(-1).content,/SCHEMA_PATTERN/);assert.ok(!body.messages.at(-1).content.includes('3 篇'));return reply(JSON.stringify(f.extraction));}return reply(JSON.stringify(bad));}});assert.equal(calls,2);});
+
+
+test("remote接受单个json代码块包装且仍严格校验内容",async()=>{
+ const f=fixture();const fence=String.fromCharCode(96).repeat(3);let calls=0;
+ const result=await requestStructured(prepareTask(f),{config,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async()=>{calls++;return reply(" \n"+fence+"json\n"+JSON.stringify(f.extraction)+"\n"+fence+"\n ");}});
+ assert.deepEqual(result.data,f.extraction);assert.equal(calls,1);assert.equal(result.attempts,1);
+ const bad=structuredClone(f.extraction);bad.facts[0].evidence[0].quote="伪造";
+ await assert.rejects(requestStructured(prepareTask(f),{config,repairLimit:0,validate:d=>validateExtraction(f.bundle,d,f.rules),fetchImpl:async()=>reply(fence+"json\n"+JSON.stringify(bad)+"\n"+fence)}),e=>e.code==="STRUCTURED_OUTPUT");
+});

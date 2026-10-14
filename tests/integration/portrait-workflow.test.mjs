@@ -108,3 +108,17 @@ test('分域之间或末域收到取消立即终止，不创建部分画像或�
   await assert.rejects(runPortraitWorkflow({...f,runner,signal:control.signal}),e=>e.code==='ABORTED');assert.deepEqual(seen,f.rubric.dimensions.slice(0,cancelIndex+1).map(d=>d.id));assert.equal(audits,0);
  }
 });
+
+
+test("原生runner接受纯json代码块包装，拒绝前后文字与数组且不改写非法状态",async()=>{
+ const f=fixture();const {prepareDimensionTask}=await import("../../.agents/skills/graduate-portrait/scripts/prompts.mjs");const {validateAssessment}=await import("../../.agents/skills/graduate-portrait/scripts/validation.mjs");const d=f.rubric.dimensions[0];const task=prepareDimensionTask(f,d.id);const local={...f.assessment,dimensions:[f.assessment.dimensions[0]]};const fence=String.fromCharCode(96).repeat(3);const fenced=fence+"json\n"+JSON.stringify(local)+"\n"+fence;
+ const bad=structuredClone(local);bad.dimensions[0].criteria[0].work_status="not_applicable";
+ for(const [content,valid] of [[fenced,true],["解释\n"+fenced,false],[fenced+"\n解释",false],[fence+"json\n[]\n"+fence,false],[fence+"json\n"+JSON.stringify(bad)+"\n"+fence,false]]){
+  let calls=0;const runner=await createInnoAgentRunner({url:"http://localhost",timeoutMs:1000},{fetchImpl:async url=>{
+   if(url.endsWith("/api/skills"))return reply([{name:"graduate-portrait",loaded:true,enabled:true}]);if(url.endsWith("/content"))return reply({content:skillBody});if(url.endsWith("/api/sessions"))return reply({id:"s",workspaceId:"unique"});if(url.endsWith("/api/sessions/s"))return reply({id:"s"});
+   calls++;return new Response("data: "+JSON.stringify({sessionId:"s",turnId:"t"+calls,event:{type:"done",fullText:content}})+"\n\n");
+  }});
+  const execute=()=>runner.execute(task,a=>validateAssessment(f.bundle,a,{...f.rubric,dimensions:[d]}));
+  if(valid){assert.deepEqual(await execute(),local);assert.equal(calls,1);}else{await assert.rejects(execute(),e=>e.code==="STRUCTURED_OUTPUT");assert.equal(calls,2);assert.deepEqual(runner.records,[]);}
+ }
+});

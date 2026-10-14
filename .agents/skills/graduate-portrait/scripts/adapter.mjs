@@ -1,3 +1,4 @@
+import {parseStructuredResponse} from './response.mjs';
 import {repairFeedback} from './validation.mjs';
 import {failure,requestFailure} from './errors.mjs';
 export function endpoint(value,label='remote URL') {
@@ -52,7 +53,7 @@ export async function requestStructured(task,{config,validate,fetchImpl=fetch,re
     const {envelope,attempts}=await requestCompletion({messages,response_format:{type:'json_object'}},{config,fetchImpl,timeoutMs,signal});records.push(...attempts);
     const choice=envelope.choices?.[0];
     if(envelope.choices?.length!==1||choice?.finish_reason!=='stop'||choice?.message?.refusal||choice?.message?.tool_calls?.length||typeof choice?.message?.content!=='string')throw failure('STRUCTURED_OUTPUT','remote completion incomplete or refused');
-    try{const data=JSON.parse(choice.message.content);validate(data);return {data,attempts:attempt+1,model:envelope.model??config.model,requested_model:config.model,records};}catch(error){
+    try{const data=parseStructuredResponse(choice.message.content);validate(data);return {data,attempts:attempt+1,model:envelope.model??config.model,requested_model:config.model,records};}catch(error){
       if(attempt===repairLimit)throw failure('STRUCTURED_OUTPUT','remote structured output failed validation');
       messages.push({role:'user',content:repairFeedback(error)});
     }
