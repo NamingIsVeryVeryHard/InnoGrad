@@ -38,7 +38,7 @@
 
 ### 交付文件与顺序
 
-下表文档已形成草案，尚待业务评审。五项任务已加入 GitHub Issues 与 Project；任务卡包含做法、验收标准、验证方法、依赖和适用 skill。前四项处于“待评审”，评审并提交仓库的任务处于“进行中”，已开展本地一致性与链接检查。草案集中维护在[第二周交付分支](https://github.com/NamingIsVeryVeryHard/InnoGrad/tree/docs/week2-requirements)，评审与修订沿用对应 Issue，任务状态以 Project 为准。
+第二周交付已通过 [PR #10](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/10) 于 2026-10-15 合并到 main，#4–#8、#11、#12 已关闭，Project 相应任务已完成。第二周里程碑仍开放，未关闭 Issue 为 0；是否关闭里程碑由负责人确认。文档中的业务待确认事项继续有效，任务关闭不等于业务规则或运行能力已经验证。
 
 | 任务 | 交付文件 | 前置条件 | 验收标准 |
 | --- | --- | --- | --- |
@@ -122,6 +122,60 @@
 - [x] 本地文档链接、编号、范围映射与领域对象检查完成。
 - [x] 最终版本的五张领域类图完成本地 Mermaid 渲染检查。
 - [ ] 关键业务规则和非功能要求通过评审，反馈已有处理结果。
-- [ ] 文档已获授权提交并推送，GitHub 链接和类图已核验，任务状态已更新。
+- [x] 文档已通过 PR #10 合并到 main，相关 Issue 已关闭，Project 状态已核对为已完成。
 
-已勾选项表示相应草案或本地检查已完成，不表示通过业务评审、已提交 GitHub 或已实现功能。
+已勾选的草案与检查项不表示业务评审通过或功能已经实现；GitHub 提交与任务状态以各自条目为准。
+
+
+## 第三周：用户故事、交互原型与技术调研
+
+小组迭代日期为 **2026 年 10 月 15 日至 21 日**。本节使用[系统设计课件](https://github.com/bettermorn/IntelligentSWEPractice/blob/main/courseware/pages/part2design.md)的“第三周”实践编号；[课程进度表](https://github.com/bettermorn/IntelligentSWEPractice/blob/main/courseware/pages/agenda.md)则将 10 月 15 日起标为第四周“AI 影响研讨”。小组节奏晚一周，两者分别记录。
+
+本周课程要求把既有需求转成故事与可交互演示，并论证技术可行性。当前先完成用户故事和技术调研文档，原型制作与走查作为后续待办。最终技术方案在第六周定稿；文献阅读报告在第四周交付；沟通与风险计划属于第五周。本周不重复编写需求，也不提前宣布完成后续交付。
+
+### 任务与验收
+
+第三周按下表五项任务分别建立 Issue，统一加入 Project「迭代 2」（2026-10-15 至 2026-10-21），Priority 为 P1，关联[第三周里程碑](https://github.com/NamingIsVeryVeryHard/InnoGrad/milestone/2)。负责人和故事点由团队讨论后补充。当前先评审文档初稿，原型尚未开始，完整课程验收仍待完成。
+
+| 任务 | 依赖与交付 | 验收与验证方法 | 适用 skill |
+| --- | --- | --- | --- |
+| [W3-01 编写用户故事与故事地图（#13）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13) | 第二周基线；[user_stories.md](../docs/requirements/user_stories.md) | 至少 5 条 INVEST 故事，每条有角色、价值和 Given / When / Then；主干按流程，按三个 Release 分层；核对 FR、权限及未覆盖范围 | spec-driven-development |
+| [W3-02 制作并走查交互原型（#15）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/15) | W3-01 核心场景；待交付路径 `docs/software/prototype` | 双端能完成提交、复核、整改、归档和查看依据；检查缺项、空输入、初审失败与确认权限制；桌面和窄屏实际点击，记录原型与正式功能的区别 | frontend-ui-engineering |
+| [W3-03 调研核心技术与自学计划（#16）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/16) | 需求、平台边界与用户故事；[architecture.md](../docs/software/architecture.md) | 八项 Agent 选型均有理由、候选、边界和待验证问题；优先核验 InnoSpark 账号与沙箱复用；两周计划有日期、责任职责、实验及里程碑证据 | documentation-and-adrs |
+| [W3-04 开始筛选第四周论文（#17）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/17) | AI4SE / SE for AI 理论；候选记录在本节 | 核对近三年 IEEE/ACM 正式发表信息，选题说明与阅读分工待团队确认；不将检索或初筛写成完成阅读报告 | academic-research-suite（深入阅读时使用） |
+| [W3-05 评审三份交付并提交仓库（#18）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/18) | W3-01 至 W3-03 | 链接与编号一致；按演示路线走查；教师评估原型可行性和选型科学性；反馈修订后，获授权提交、推送并创建关联 PR；远端任务记录真实状态 | code-review-and-quality、git-workflow-and-versioning、gh-cli |
+
+各任务按既有 Project 状态“待规划 → 待开始 → 进行中 → 待评审 → 已完成”分别跟踪。[文档初稿 PR #14](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/14) 关联 #13、#16、#17、#18，原型 #15 另行交付；初稿合并不自动关闭任务，通过各自验收后再关闭。
+
+### 建议的本周安排
+
+- 10/15–10/16：核对故事、首个演示节点和页面任务。
+- 10/17–10/19：核对平台接口、隔离范围及技术候选；文档评审后再制作和走查原型。
+- 10/20：共同评审故事、原型和调研依据；确认论文阅读候选。
+- 10/21：完成修订与课程演示，按授权交付到 GitHub。技术实验继续沿用 architecture.md 的两周里程碑。
+
+以上是建议安排，未指定未经确认的个人负责人；现有团队研究分工可为画像故事和证据页面提供输入，不代替三份课程交付。
+
+### 第四周论文候选初筛
+
+近三年暂按 2024–2026 年正式发表年份筛选。以下仅为候选，不表示已通读、复现或确认适用于培养审核。
+
+| 候选 | 正式发表与原文入口 | 拟阅读问题 |
+| --- | --- | --- |
+| Demystifying LLM-Based Software Engineering Agents | Proc. ACM Softw. Eng. 2, FSE, 2025，DOI 10.1145/3715754；[作者提供的正式论文](https://lingming.cs.illinois.edu/publications/fse2025.pdf) | AI4SE：定位、修复与验证流程的基线如何设计？适用到本项目开发辅助时有哪些边界？ |
+| LLM-Based Multi-Agent Systems for Software Engineering: Literature Review, Vision, and the Road Ahead | ACM TOSEM 34(5), 2025；[出版信息](https://doi.org/10.1145/3712003) | AI4SE：多 Agent 的价值需要什么比较证据？哪些工程问题需要进一步验证？ |
+
+第一篇已核对原文首页的标题、发表年份与 DOI；第二篇目前只核对出版检索信息，正文待获取与通读。第四周再确认最终论文、版本和分工，并形成 `docs/algorithm/research.md`。若教师要求必须包含 SE for AI 实证研究，再补充该方向候选。
+
+### 第三周完成检查
+
+- [x] 用户故事与三层故事地图形成初稿。
+- [x] 技术调研八项与未来两周自学里程碑形成初稿。
+- [x] 文档已说明后续原型的核心流程、异常状态与验收要求。
+- [x] 故事 FR 引用和本地文档链接检查通过。
+- [ ] 制作交互原型与演示步骤，完成桌面、窄屏及异常流程验证。
+- [ ] 学生、导师与审核人员完成走查，反馈已处理。
+- [ ] 教师确认原型可行性与技术选型论证。
+- [ ] 技术接入、数据隔离、恢复与成本实验已记录；未完成项有后续安排。
+- [x] 已按模板创建第三周五项任务并加入 Project「迭代 2」和第三周里程碑。
+- [ ] 文档初稿经 PR 评审并合入；完整课程交付按 #13、#15、#16、#18 分别验收。
