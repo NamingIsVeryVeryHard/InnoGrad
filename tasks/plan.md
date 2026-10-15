@@ -135,17 +135,17 @@
 
 ### 任务与验收
 
-第三周由[总任务 #13](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13)统一跟踪，已加入 Project。下表 W3-01 至 W3-05 是该任务的工作项；负责人、故事点和 Sprint 在团队计划时补充。当前先提交用户故事与技术调研初稿供评审，原型及完整课程验收仍待完成。
+第三周按下表五项任务分别建立 Issue，统一加入 Project「迭代 2」（2026-10-15 至 2026-10-21），Priority 为 P1，关联[第三周里程碑](https://github.com/NamingIsVeryVeryHard/InnoGrad/milestone/2)。负责人和故事点由团队讨论后补充。当前先评审文档初稿，原型尚未开始，完整课程验收仍待完成。
 
 | 任务 | 依赖与交付 | 验收与验证方法 | 适用 skill |
 | --- | --- | --- | --- |
-| W3-01 编写用户故事与故事地图 | 第二周基线；[user_stories.md](../docs/requirements/user_stories.md) | 至少 5 条 INVEST 故事，每条有角色、价值和 Given / When / Then；主干按流程，按三个 Release 分层；核对 FR、权限及未覆盖范围 | spec-driven-development |
-| W3-02 制作并走查交互原型 | W3-01 核心场景；待交付路径 `docs/software/prototype` | 双端能完成提交、复核、整改、归档和查看依据；检查缺项、空输入、初审失败与确认权限制；桌面和窄屏实际点击，记录原型与正式功能的区别 | frontend-ui-engineering |
-| W3-03 调研核心技术与自学计划 | 需求、平台边界与用户故事；[architecture.md](../docs/software/architecture.md) | 八项 Agent 选型均有理由、候选、边界和待验证问题；优先核验 InnoSpark 账号与沙箱复用；两周计划有日期、责任职责、实验及里程碑证据 | documentation-and-adrs |
-| W3-04 开始筛选第四周论文 | AI4SE / SE for AI 理论；候选记录在本节 | 核对近三年 IEEE/ACM 正式发表信息，选题说明与阅读分工待团队确认；不将检索或初筛写成完成阅读报告 | academic-research-suite（深入阅读时使用） |
-| W3-05 评审三份交付并提交仓库 | W3-01 至 W3-03 | 链接与编号一致；按演示路线走查；教师评估原型可行性和选型科学性；反馈修订后，获授权提交、推送并创建关联 PR；远端任务记录真实状态 | code-review-and-quality、git-workflow-and-versioning、gh-cli |
+| [W3-01 编写用户故事与故事地图（#13）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13) | 第二周基线；[user_stories.md](../docs/requirements/user_stories.md) | 至少 5 条 INVEST 故事，每条有角色、价值和 Given / When / Then；主干按流程，按三个 Release 分层；核对 FR、权限及未覆盖范围 | spec-driven-development |
+| [W3-02 制作并走查交互原型（#15）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/15) | W3-01 核心场景；待交付路径 `docs/software/prototype` | 双端能完成提交、复核、整改、归档和查看依据；检查缺项、空输入、初审失败与确认权限制；桌面和窄屏实际点击，记录原型与正式功能的区别 | frontend-ui-engineering |
+| [W3-03 调研核心技术与自学计划（#16）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/16) | 需求、平台边界与用户故事；[architecture.md](../docs/software/architecture.md) | 八项 Agent 选型均有理由、候选、边界和待验证问题；优先核验 InnoSpark 账号与沙箱复用；两周计划有日期、责任职责、实验及里程碑证据 | documentation-and-adrs |
+| [W3-04 开始筛选第四周论文（#17）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/17) | AI4SE / SE for AI 理论；候选记录在本节 | 核对近三年 IEEE/ACM 正式发表信息，选题说明与阅读分工待团队确认；不将检索或初筛写成完成阅读报告 | academic-research-suite（深入阅读时使用） |
+| [W3-05 评审三份交付并提交仓库（#18）](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/18) | W3-01 至 W3-03 | 链接与编号一致；按演示路线走查；教师评估原型可行性和选型科学性；反馈修订后，获授权提交、推送并创建关联 PR；远端任务记录真实状态 | code-review-and-quality、git-workflow-and-versioning、gh-cli |
 
-总任务按既有 Project 状态“待规划 → 待开始 → 进行中 → 待评审 → 已完成”跟踪。文档初稿的 PR 仅关联 #13，不自动关闭任务；原型和完整验收完成后再关闭。
+各任务按既有 Project 状态“待规划 → 待开始 → 进行中 → 待评审 → 已完成”分别跟踪。[文档初稿 PR #14](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/14) 关联 #13、#16、#17、#18，原型 #15 另行交付；初稿合并不自动关闭任务，通过各自验收后再关闭。
 
 ### 建议的本周安排
 
@@ -177,5 +177,5 @@
 - [ ] 学生、导师与审核人员完成走查，反馈已处理。
 - [ ] 教师确认原型可行性与技术选型论证。
 - [ ] 技术接入、数据隔离、恢复与成本实验已记录；未完成项有后续安排。
-- [x] 已创建第三周总任务 #13 并加入 Project。
-- [ ] 文档初稿经 PR 评审并合入；完整课程交付按 #13 验收。
+- [x] 已按模板创建第三周五项任务并加入 Project「迭代 2」和第三周里程碑。
+- [ ] 文档初稿经 PR 评审并合入；完整课程交付按 #13、#15、#16、#18 分别验收。

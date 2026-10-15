@@ -1,6 +1,6 @@
 # 用户故事、验收标准与故事地图
 
-关联任务：[第三周总任务 #13](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13)。
+关联任务：[W3-01 用户故事与故事地图 #13](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13)。
 
 **状态：第三周设计草案，待业务评审。** 本文将[角色与权限](actors.md)、[功能需求](functional_requirements.md)和[领域模型](../software/domain_model.md)转为可演示、可验收的用户任务。Release 是建议的实现顺序，不对应课程周次，也不删减既有产品范围。
 

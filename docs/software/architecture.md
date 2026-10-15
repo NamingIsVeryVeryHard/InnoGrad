@@ -1,6 +1,6 @@
 # 技术方案调研
 
-关联任务：[第三周总任务 #13](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/13)。
+关联任务：[W3-03 技术调研与自学计划 #16](https://github.com/NamingIsVeryVeryHard/InnoGrad/issues/16)。
 
 **状态：第三周调研草案，2026-10-15。** 本周论证可行路线、列出验证问题；第六周结合实验和评审定稿。下文的“建议”均未成为已批准的技术选型，也不代表已经接通服务或达到质量指标。
 
