@@ -1,6 +1,6 @@
 # 研究生画像方法原型
 
-本原型接收已解析的年度报告、开题报告及证明材料，默认生成隐性评价草稿，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供本地 API 接入原型，尚未接入正式审核。材料解析由上游负责。
+本原型接收已解析的年度报告、开题报告及证明材料，默认生成隐性评价草稿，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供独立的本地 Swagger Demo，尚未接入正式审核。材料解析由上游负责。
 
 本轮主交付是 `skills/graduate-implicit-assessment/` 的能力评价 Skill 和 `skills/graduate-portrait/` 的画像整合 Skill，与 `.agents/skills/` 中的开发协作 Skill 分开维护：A、B 读取共享学生材料，B 的隐性判断引用原文，画像直接参考 A 的结果，不复查 A 的整理。A 可提供 JSON、Markdown、表格或其他可读内容，无需符合固定交接 Schema。当前采用七领域、23个观察项的项目试用量规。完整评价设计、共享内容约定及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
 
@@ -64,7 +64,7 @@ node skills/graduate-portrait/scripts/cli.mjs demo --out local-runs/synthetic
 
 合成示例生成 portrait.json 和 portrait.md，来源标为 synthetic/offline_replay。它验证流程与数据约定，不代表真实模型抽取效果。
 
-结构化调用由 [画像 API](../../apps/server/portrait/README.md)调用 InnoAgent，依次执行[能力评价 Skill](../../skills/graduate-implicit-assessment/SKILL.md)与[画像整合 Skill](../../skills/graduate-portrait/SKILL.md)，由本地程序校验来源并保留原结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见画像 API 说明。
+结构化演示由 [画像 Skill Demo](../../demos/graduate-portrait/README.md)调用 InnoAgent，依次执行[能力评价 Skill](../../skills/graduate-implicit-assessment/SKILL.md)与[画像整合 Skill](../../skills/graduate-portrait/SKILL.md)，由本地程序校验来源并保留原结果。InnoAgent 使用 Pi 原生 Skill 加载机制；仅把提示发送给模型不算平台接入。固定平台版本、隔离工作区、模型网关及 Skill 安装的完整启动步骤见 Demo 说明。
 
 API 提供异步生成、结果查询、只读规则配置，以及可调试的 Swagger UI 和 OpenAPI JSON。模型配置由服务端读取本项目的 .env，默认使用 ECNU Plus；明确额度耗尽时才切换配置好的 CLIProxy Grok 或 Gemini。普通限速、超时、无效 JSON 或缺失证据不触发换模型。备用推理档位为 low，响应来源记录区分请求别名与服务实际模型。密钥、真实材料和中间输出均不进入版本库。
 

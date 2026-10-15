@@ -76,7 +76,7 @@ test('CLI prepare retains full Swagger annual material and A extraction without 
     const { bundle, aResult } = portraitExamples.annualWithAResult.value;
     await writeFile(join(directory, 'bundle.json'), JSON.stringify(bundle));
     await writeFile(join(directory, 'a-result.json'), JSON.stringify(aResult));
-    const cli = fileURLToPath(new URL('../../../../skills/graduate-portrait/scripts/cli.mjs', import.meta.url));
+    const cli = fileURLToPath(new URL('../../../skills/graduate-portrait/scripts/cli.mjs', import.meta.url));
     execFileSync(process.execPath, [cli, 'prepare', '--bundle', join(directory, 'bundle.json'), '--a-result', join(directory, 'a-result.json'), '--out', join(directory, 'task')]);
     const task = JSON.parse(await readFile(join(directory, 'task', 'assessment-task.json'), 'utf8'));
     assert.deepEqual(task.bundle, bundle);

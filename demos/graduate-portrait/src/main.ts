@@ -8,4 +8,4 @@ for (const event of ['SIGINT', 'SIGTERM'] as const) {
   process.once(event, () => { void app.close().then(() => process.exit(0)); });
 }
 await app.listen({ host: '127.0.0.1', port });
-console.log(`画像 API: http://127.0.0.1:${port}/docs`);
+console.log(`画像 Skill Demo: http://127.0.0.1:${port}/docs/`);

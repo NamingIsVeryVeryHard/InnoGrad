@@ -67,7 +67,7 @@ flowchart LR
 
 ## 使用说明
 
-画像方法原型可使用合成材料运行，也可通过 InnoAgent 执行真实 Skill。安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)，本地服务和 Swagger 调试见[画像 API](apps/server/portrait/README.md)。完整业务应用的安装和部署说明将在实现后补充。
+画像方法原型可使用合成材料运行，也可通过 InnoAgent 执行真实 Skill。安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)，本地演示与 Swagger 调试见[画像 Skill Demo](demos/graduate-portrait/README.md)。完整业务应用的安装和部署说明将在实现后补充。
 
 ## 项目文档
 
@@ -91,6 +91,8 @@ InnoGrad/
 ├── apps/
 │   ├── web/              # 多角色 Web 应用
 │   └── server/           # 业务服务与智能体接入
+├── demos/
+│   └── graduate-portrait/ # 画像 Skill 演示与 Swagger 调试
 ├── docs/
 │   ├── requirements/     # 问题定义与产品范围
 │   ├── algorithm/        # 规则与评价方法
@@ -112,7 +114,7 @@ InnoGrad/
     └── plan.md           # 阶段交付与验收
 ```
 
-业务交付包括[科研能力与研究素养评价](skills/graduate-implicit-assessment/SKILL.md)和[综合画像整合](skills/graduate-portrait/SKILL.md)两个 Skill，须显式安装到 InnoAgent；团队开发流程 Skills 留在 .agents/skills/，方法说明位于 docs/algorithm/，相关测试位于 tests/。apps/server/portrait/ 提供本地画像 API；完整业务应用、复盘和持续集成仍待实现。
+业务交付包括[科研能力与研究素养评价](skills/graduate-implicit-assessment/SKILL.md)和[综合画像整合](skills/graduate-portrait/SKILL.md)两个 Skill，须显式安装到 InnoAgent；团队开发流程 Skills 留在 .agents/skills/，方法说明位于 docs/algorithm/，相关测试位于 tests/。demos/graduate-portrait/ 提供独立的 Swagger 演示入口，调用业务 Skills 验证画像流程；完整业务应用、复盘和持续集成仍待实现。
 
 ## 参与贡献
 

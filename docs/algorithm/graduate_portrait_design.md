@@ -155,13 +155,13 @@ bundle、extraction 保留1.0；assessment、portrait 为2.0；A 交接为 a-han
 
 | Swagger 示例 | 完整 JSON 来源 | 主要内容 |
 | --- | --- | --- |
-| annualReport：博士年报 | [年度报告请求示例](../../apps/server/portrait/examples/annual-report.synthetic.json) | 4 个模拟页，包含本期与累计成果、发表与录用及在审状态、个人角色和下一学年计划 |
-| annualWithAResult：完整年报与 A 交接 | [交接示例生成器](../../apps/server/portrait/src/a-example.ts) | 沿用完整年报，附带版本、指纹、抽取和规则结果；来源明确为 synthetic |
-| proposalReport：开题报告 | [开题报告请求示例](../../apps/server/portrait/examples/proposal-report.synthetic.json) | 6 个模拟页，包含研究问题、方法、风险和进度；period 为 null |
+| annualReport：博士年报 | [年度报告请求示例](../../demos/graduate-portrait/examples/annual-report.synthetic.json) | 4 个模拟页，包含本期与累计成果、发表与录用及在审状态、个人角色和下一学年计划 |
+| annualWithAResult：完整年报与 A 交接 | [交接示例生成器](../../demos/graduate-portrait/src/a-example.ts) | 沿用完整年报，附带版本、指纹、抽取和规则结果；来源明确为 synthetic |
+| proposalReport：开题报告 | [开题报告请求示例](../../demos/graduate-portrait/examples/proposal-report.synthetic.json) | 6 个模拟页，包含研究问题、方法、风险和进度；period 为 null |
 
 年度和开题两个 JSON 文件就是 Swagger 加载的请求体，已包含外层 `{ "bundle": ... }`，复制使用时不要再包一层 bundle。CLI 的 `--bundle` 读取内层 bundle 对象。切换示例只查看内容；点击 Execute 提交 POST 才会启动生成任务。
 
-这些是 API 现有的合成示例，不是真实学生报告。模拟页码和文本哈希的含义沿用 [API 示例说明](../../apps/server/portrait/README.md)，本文不重复维护一份 JSON。
+这些是 API 现有的合成示例，不是真实学生报告。模拟页码和文本哈希的含义沿用 [API 示例说明](../../demos/graduate-portrait/README.md)，本文不重复维护一份 JSON。
 
 | 字段 | 当前约定 |
 | --- | --- |
@@ -300,7 +300,7 @@ node skills/graduate-portrait/scripts/cli.mjs build --bundle local-runs/input/bu
 
 上述 build 示例记录为离线重放。实际按 Skill 完成的新语义工作可记录为 skill_execution；助手整理样例使用 assistant_curated。不能根据材料是否真实来决定执行来源。
 
-在线联调按 [API 启动说明](../../apps/server/portrait/README.md)依次启动网关、固定版本 InnoAgent 和画像 API。项目 .env.example 列出模型、密钥、地址和超时配置；其中的示例地址不是实现中的隐式默认入口。
+Swagger 演示独立放在 `demos/graduate-portrait/`，用于查看完整示例及联调两个业务 Skill。在线联调按 [Demo 启动说明](../../demos/graduate-portrait/README.md)依次启动网关、固定版本 InnoAgent 和演示接口。项目 .env.example 列出模型、密钥、地址和超时配置；其中的示例地址不是实现中的隐式默认入口。
 
 | 接口 | 行为 |
 | --- | --- |
@@ -315,9 +315,9 @@ CLI workflow 走 InnoAgent + Skill；remote 直接调用模型接口，仅用于
 
 ```sh
 node --test tests/unit/portrait*.test.mjs tests/integration/portrait*.test.mjs
-npm --prefix apps/server/portrait test
-npm --prefix apps/server/portrait run typecheck
-npm --prefix apps/server/portrait run build
+npm --prefix demos/graduate-portrait test
+npm --prefix demos/graduate-portrait run typecheck
+npm --prefix demos/graduate-portrait run build
 ```
 
 ## 5. 与 A 的交接和 B 的交付

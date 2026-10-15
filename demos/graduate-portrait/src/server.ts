@@ -85,8 +85,8 @@ export async function createPortraitServer(options: ServerOptions = {}) {
     openapi: {
       openapi: '3.0.3',
       info: {
-        title: 'InnoGrad 研究生画像原型 API', version: '0.2.0',
-        description: `画像与隐性评价采用 2.0 契约，材料 bundle 与事实抽取保持 1.0。默认 implicit_only 只执行 B 的隐性评价，显性部分为空且待补 A；可传 aResult 合并 A 结果，或选择 bundle_pipeline 在原型内抽取。七领域不定级，每项分开记录证据状态和三档表现。通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、默认同时1次本地执行，整体等待${timeoutMs / 1000}秒超时（默认300秒，启动配置范围1–900秒）。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。本地已有执行时POST返回503，不排队、不自动重试；平台返回已知session_busy时已接收的任务失败，error.code为INNOAGENT_BUSY。POST每次创建新任务，重复提交会再次生成。`,
+        title: 'InnoGrad 研究生画像 Skill Demo', version: '0.2.0',
+        description: `本入口仅用于本机演示与联调两个业务 Skill。画像与隐性评价采用 2.0 契约，材料 bundle 与事实抽取保持 1.0。默认 implicit_only 只执行 B 的隐性评价，显性部分为空且待补 A；可传 aResult 合并 A 结果，或选择 bundle_pipeline 在原型内抽取。七领域不定级，每项分开记录证据状态和三档表现。通过真实 InnoAgent graduate-portrait Skill 生成待人工复核的草稿。输入为已解析材料，不含 OCR。任务仅存于进程内，默认保留30分钟，重启丢失；最多20条、默认同时1次本地执行，整体等待${timeoutMs / 1000}秒超时（默认300秒，启动配置范围1–900秒）。超时只停止本地等待，InnoAgent后端可能继续执行，晚到结果不保存；确认上游执行结束前请勿重试。本地已有执行时POST返回503，不排队、不自动重试；平台返回已知session_busy时已接收的任务失败，error.code为INNOAGENT_BUSY。POST每次创建新任务，重复提交会再次生成。`,
       },
       tags: [{ name: '画像' }, { name: '规则' }],
     },

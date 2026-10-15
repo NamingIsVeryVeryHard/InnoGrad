@@ -1,4 +1,6 @@
-# 研究生画像原型 API
+# 研究生画像 Skill Demo
+
+本目录提供 Swagger UI、完整请求示例和本地 HTTP 调用入口，用于演示与联调两个画像 Skill。演示代码独立放在 `demos/`；正式业务服务与智能体接入由 `apps/server/` 承载。
 
 本地服务先调用 InnoAgent 的 `graduate-implicit-assessment` 评价已解析材料，再调用 `graduate-portrait` 整合显性结果与评价底稿。返回带来源概览和完整依据的待人工复核画像，默认不重新抽取显性事实，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
 
@@ -11,7 +13,7 @@
 ```sh
 cp .env.example .env
 npm --prefix skills/graduate-portrait/scripts ci
-npm --prefix apps/server/portrait ci
+npm --prefix demos/graduate-portrait ci
 ```
 
 按 `.env.example`填写 ECNU Plus 的 `PORTRAIT_API_KEY`，保留或按实际服务调整 `PORTRAIT_API_URL`、`PORTRAIT_API_MODEL`与超时值。备用服务使用模板中的 `PORTRAIT_FALLBACK_GROK_*`、`PORTRAIT_FALLBACK_GEMINI_*`；只有明确额度耗尽时才切换，普通429、结构或证据错误不换模型。以下本机端口须与后续命令一致：
@@ -127,7 +129,7 @@ node --import "$(pwd)/local-runs/innoagent/loopback.mjs" \
 先确认 [InnoAgent Skills](http://127.0.0.1:3147/api/skills)中的 `graduate-implicit-assessment` 与 `graduate-portrait` 均满足 `loaded: true`与 `enabled: true`。终端三启动画像 API：
 
 ```sh
-PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix apps/server/portrait start
+PORTRAIT_ENV_FILE="$(pwd)/.env" npm --prefix demos/graduate-portrait start
 ```
 
 `PORTRAIT_ENV_FILE`明确指定仓库根目录的环境文件，不搜索父目录。在 API 子目录启动时，也须把它设置为该文件的绝对路径。停止服务时在对应终端按 Ctrl+C；重启顺序同上。模型网关的调用记录仅存于进程内，重启后清空。
@@ -157,7 +159,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 示例中的姓名、学校、题目和数字均为虚构，没有复制真实材料正文。两份文本分别按4页和6页模拟分页；`page`只用于定位合成文本，不对应真实PDF。`sha256`是按 `segments`顺序将各段 `text`以换页符 `\f`连接后，计算 UTF-8 字节所得的哈希，不是PDF文件哈希。示例没有原始PDF，来源名称和各页均作了标注。`parse_status: complete`只说明这些合成文本完整提供，不证明真实材料完成解析。
 
-旧[合成材料构造器](../../../skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
+旧[合成材料构造器](../../skills/graduate-portrait/scripts/synthetic.mjs)继续用于边界测试，新演示文件不改变其测试语义。切换或编辑 Swagger 示例不会调用模型；点击 **Execute**提交 `POST`会启动真实生成任务。
 
 第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果，并通过`explicit_extraction`原样返回 A 的事实、成果条目及覆盖记录；没有 A 或本地抽取结果时该字段为`null`。
 
@@ -182,9 +184,9 @@ v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable
 在仓库根目录运行：
 
 ```sh
-npm --prefix apps/server/portrait test
-npm --prefix apps/server/portrait run typecheck
-npm --prefix apps/server/portrait run build
+npm --prefix demos/graduate-portrait test
+npm --prefix demos/graduate-portrait run typecheck
+npm --prefix demos/graduate-portrait run build
 ```
 
 接口测试覆盖执行模式、A 交接一致性与原样保留、v2 结果及出处序列化、异步任务、错误脱敏、超时取消、容量限制、过期、关闭取消、OpenAPI 和 Swagger 页面。真实 InnoAgent 与真实模型调用需要单独验证，测试中的合成执行函数不能证明在线效果。

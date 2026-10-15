@@ -1,6 +1,6 @@
 # Swagger 完整年度报告画像实测样例
 
-输入为 Swagger 的 `annualWithAResult` 完整合成请求，沿用[年度报告原文](../../../apps/server/portrait/examples/annual-report.synthetic.json)及[显性交接生成器](../../../apps/server/portrait/src/a-example.ts)，没有替换为新编小例子。姓名、题目、数据和分页均为虚构。
+输入为 Swagger 的 `annualWithAResult` 完整合成请求，沿用[年度报告原文](../../../demos/graduate-portrait/examples/annual-report.synthetic.json)及[显性交接生成器](../../../demos/graduate-portrait/src/a-example.ts)，没有替换为新编小例子。姓名、题目、数据和分页均为虚构。
 
 执行：固定版本 InnoAgent 原生调用科研能力评价 Skill 与画像整合 Skill；请求 ECNU Plus，服务返回实际模型 `qwen3.8-flash`。评价使用 `implicit-2026-10-14-trial.5`，共七领域23项、85条引文；逐条引用匹配、状态约束、显性结果原样保留及概览来源索引检查通过。概览在相同评价底稿上单独重生成，未手动改写模型结论，原始运行记录保留在本地。
 
