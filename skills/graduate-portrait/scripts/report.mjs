@@ -1,12 +1,27 @@
 import {portraitSources} from './synthesis.mjs';
 const text=value=>String(value??'材料未提供').replaceAll('|','\\|').replace(/\r?\n/g,' ');
 const labels={unobserved:'未观察',explicit_pending:'显性结果待接入',applicable:'标准适用',pending_confirmation:'评价标准待确认',evaluable:'可评价',insufficient:'证据不足',conflicting:'证据冲突',needs_improvement:'待改进',meets_requirements:'达到要求',well_demonstrated:'表现充分',self_report:'报告自述',mixed:'直接展示与自述并存',planned:'计划',in_progress:'进行中',under_review:'在审',accepted:'已录用',published:'已发表',completed:'已完成',unknown:'未确认',in_scope:'本期',out_of_scope:'非本期',uncertain:'期间待确认',supported:'有证据支持',contradicted:'有反证',not_observed:'未见足够证据',observed:'材料记载',conflict:'存在冲突',complete:'完整',partial:'部分覆盖',failed:'解析失败',met:'达到配置值',not_met:'未达到配置值',pending_rule:'规则待配置',needs_review:'待复核',insufficient_evidence:'证据不足',not_applicable:'不适用',consistent:'记录一致',period_unconfirmed:'期间待确认',draft:'待复核草稿',complete_listing:'完整清单',partial_listing:'部分清单',lower_bound:'至少',approximate:'约'};
+Object.assign(labels, {
+ input_context_unknown:'输入快照上下文未提供', source_authorization_unknown:'来源授权声明未知',
+ source_validity_unknown:'来源有效性声明未知', source_review_unknown:'文档复核声明未知',
+});
 const label=value=>labels[value]??value;
 function number(value,qualifier,unit){if(value===null)return '材料未提供';return (qualifier&&qualifier!=='exact'?label(qualifier)+' ':'')+text(value)+(unit?' '+text(unit):'');}
 export function renderPortrait(p) {
  const source=e=>{const d=p.sources.find(s=>s.document_id===e.document_id);const page=d?.pages.find(s=>s.segment_id===e.segment_id)?.page;return text(d?.source_name??e.document_id)+' / '+(page?'第'+page+'页；':'')+'段 '+text(e.segment_id)+'；“'+text(e.quote)+'”';};
  const lines=['# 研究生画像草稿','', '学生：'+text(p.student_id)+'；期间：'+(p.period===null?'期间待确认':text(p.period))+'；阶段：'+(p.stage==='annual'?'年度报告':'开题报告'),'', '状态：待人工复核。材料记载和自述未经独立验证。显性结果沿用上游口径；科研能力与研究素养初评使用项目试用标准，领域不定级。','', '生成方式：'+text(p.provenance.producer.mode)+'；运行标识：'+p.run_id];
  if(p.warnings.length)lines.push('','待确认：'+p.warnings.map(label).join('、'));
+ lines.push('', '## 本次输入快照', '',
+  '解释草稿：待教师确认；文档复核不代表其中每条事实已确认。以下来源状态为调用方声明，正式授权与确认范围由业务后端核对。');
+ if(p.input_context) {
+  const context=p.input_context;
+  const contextLabels={manual:'手动',archived:'材料归档',corrected:'材料更正',withdrawn:'材料撤销',training_changed:'培养背景变化',unknown:'未知',authorized:'声明可用',denied:'声明不可用',active:'当前有效',confirmed:'已复核',pending:'待复核'};
+  const state=value=>contextLabels[value]??value;
+  lines.push('', '快照标识：'+text(context.snapshot_id)+'；统计截止时间：'+text(context.statistics_cutoff_at)+'；触发原因：'+state(context.trigger),
+   '', '| 材料标识 | 来源版本 | 使用授权声明 | 有效性声明 | 文档复核声明 |', '| --- | --- | --- | --- | --- |');
+  for(const s of context.sources)lines.push('| '+text(s.document_id)+' | '+text(s.source_version)+' | '+state(s.authorization)+' | '+state(s.validity)+' | '+state(s.review_status)+' |');
+ }else lines.push('', '输入快照上下文未提供；来源版本、截止时间、授权、有效性与文档复核状态未知。');
+ lines.push('', '本次输入摘要：'+text(p.provenance.hashes.input)+'。材料或背景变化不直接表示能力变化；当前未执行历史比较。');
  if(p.synthesis){
   lines.push('','## 画像概览','');
   for(const [key,title]of [['current_work','当前研究与进展'],['demonstrated','材料中已呈现的表现'],['attention','需要关注的事项'],['next_steps','下一步行动']]){

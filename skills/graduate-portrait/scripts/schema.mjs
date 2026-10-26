@@ -18,6 +18,19 @@ export const taskContextSchema = object({
   training_year: { type: ['integer', 'null'], minimum: 1 }, support_conditions: nullableText,
 });
 
+// These are caller declarations about documents, not per-fact confirmations.
+export const inputContextSchema = object({
+  snapshot_id: nullableText,
+  statistics_cutoff_at: {type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$'},
+  trigger: choice(['manual', 'archived', 'corrected', 'withdrawn', 'training_changed', 'unknown']),
+  sources: array(object({
+    document_id: text, source_version: nullableText,
+    authorization: choice(['authorized', 'denied', 'unknown']),
+    validity: choice(['active', 'disputed', 'withdrawn', 'superseded', 'unknown']),
+    review_status: choice(['confirmed', 'pending', 'unknown']),
+  })),
+});
+
 export const bundleSchema = object({
   ...scope,
   task_context: taskContextSchema,
@@ -34,6 +47,7 @@ export const bundleSchema = object({
 });
 
 bundleSchema.required = bundleSchema.required.filter(key => key !== 'task_context');
+bundleSchema.properties.input_context = inputContextSchema;
 
 export function extractionSchema(rules) {
   return object({

@@ -1,5 +1,5 @@
 import {synthesisSchema} from './synthesis.mjs';
-import { evidenceSchema, itemStatuses, criterionSchema, taskContextSchema, extractionSchema } from './schema.mjs';
+import { evidenceSchema, itemStatuses, criterionSchema, taskContextSchema, inputContextSchema, extractionSchema } from './schema.mjs';
 import { readFileSync } from 'node:fs';
 const defaultRules=JSON.parse(readFileSync(new URL('../references/explicit-rules.json',import.meta.url),'utf8'));
 const portraitExtractionSchema=extractionSchema(defaultRules);
@@ -99,3 +99,4 @@ portraitSchema.properties.synthesis=synthesisSchema;
 portraitSchema.properties.synthesis_sources = array(object({
   id: text, kind: choice(['explicit', 'implicit']), label: text, pointer: text,
 }));
+portraitSchema.properties.input_context = {anyOf: [inputContextSchema, {type: 'null'}]};

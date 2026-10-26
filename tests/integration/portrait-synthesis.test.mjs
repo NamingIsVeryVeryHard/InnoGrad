@@ -28,6 +28,27 @@ test('整合阶段失败不返回假成功画像',async()=>{
  const f=fixture();await assert.rejects(runPortraitWorkflow({...f,runner:{async execute(task){return task.phase==='synthesis'?{...empty(),next_steps:[{text:'补充材料',source_refs:['R9999'],completion_evidence:'材料'}]}:{...f.assessment,dimensions:f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id)};}}}));
 });
 
+test('整条工作流使用入口时的快照，调用方中途改动不污染后续阶段',async()=>{
+ const f=fixture();
+ f.bundle.input_context={snapshot_id:'entry-snapshot',statistics_cutoff_at:null,trigger:'manual',
+  sources:f.bundle.documents.map(d=>({document_id:d.document_id,source_version:'v1',
+   authorization:'authorized',validity:'active',review_status:'pending'}))};
+ let calls=0;
+ const portrait=await runPortraitWorkflow({...f,runner:{async execute(task,validate){
+  if(calls++===0){
+   f.bundle.input_context.snapshot_id='changed-during-run';
+   f.bundle.input_context.sources[0].validity='withdrawn';
+  }
+  const context=task.phase==='synthesis'?task.context.input_context:task.bundle.input_context;
+  assert.equal(context.snapshot_id,'entry-snapshot');
+  assert.equal(context.sources[0].validity,'active');
+  const data=task.phase==='synthesis'?empty():{...f.assessment,dimensions:f.assessment.dimensions.filter(d=>d.dimension_id===task.dimension_id)};
+  validate(data);return data;
+ }}});
+ assert.equal(portrait.input_context.snapshot_id,'entry-snapshot');
+ assert.equal(portrait.review_status,'draft');
+});
+
 test('必要条件缺失、重复或无对应证据时不能保留达到要求',()=>{
  const f=fixture();const c=f.assessment.dimensions.flatMap(d=>d.criteria).find(c=>c.criterion_id==='problem-definition');
  const definition=f.rubric.dimensions.flatMap(d=>d.criteria).find(item=>item.id==='problem-definition');

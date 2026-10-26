@@ -21,6 +21,40 @@ test('POST creates an asynchronous draft and GET returns the completed result', 
   assert.equal(fetched.json().portrait.review_status, 'draft');
 });
 
+test('input context survives HTTP serialization and unavailable sources never reach generation', async t => {
+  const fixture = await syntheticFixture();
+  const inputContext = {
+    snapshot_id: 'SYNTHETIC-SNAPSHOT', statistics_cutoff_at: '2026-10-22T12:00:00Z',
+    trigger: 'corrected' as const,
+    sources: fixture.bundle.documents.map(d => ({
+      document_id: d.document_id, source_version: 'v2',
+      authorization: 'authorized' as const, validity: 'active' as const, review_status: 'confirmed' as const,
+    })),
+  };
+  const bundle = {...fixture.bundle, input_context: inputContext};
+  let calls = 0;
+  const app = await createPortraitServer({ workflow: async input => {
+    calls++;
+    assert.deepEqual(input.bundle.input_context, inputContext);
+    return syntheticPortrait({...fixture, bundle: input.bundle});
+  } });
+  t.after(() => app.close());
+  const created = await app.inject({method: 'POST', url: '/api/portraits', payload: {bundle}});
+  assert.equal(created.statusCode, 202);
+  await delay(0);
+  const job = (await app.inject(`/api/portraits/${created.json().id}`)).json();
+  assert.equal(job.status, 'completed');
+  assert.deepEqual(job.portrait.input_context, inputContext);
+  assert.equal(job.portrait.review_status, 'draft');
+  for (const validity of ['withdrawn', 'superseded', 'disputed']) {
+    const invalid = structuredClone(bundle);
+    Object.assign(invalid.input_context.sources[0]!, {validity});
+    const response = await app.inject({method: 'POST', url: '/api/portraits', payload: {bundle: invalid}});
+    assert.equal(response.statusCode, 422);
+  }
+  assert.equal(calls, 1);
+});
+
 test('invalid and mismatched input never reaches the workflow', async t => {
   let calls = 0;
   const app = await createPortraitServer({ workflow: async () => { calls++; throw new Error('unreachable'); } });
@@ -45,7 +79,7 @@ test('OpenAPI and Swagger UI describe shared input, task states and read-only co
   assert.equal(document.openapi, '3.0.3');
   assert.ok(document.paths['/api/portraits'].post);
   const examples = document.paths['/api/portraits'].post.requestBody.content['application/json'].examples;
-  assert.deepEqual(Object.keys(examples), ['annualReport', 'proposalReport', 'annualWithAResult']);
+  assert.deepEqual(Object.keys(examples), ['annualReport', 'proposalReport', 'annualWithAResult', 'annualWithContext']);
   assert.equal(examples.annualReport.value.bundle.stage, 'annual');
   assert.equal(examples.proposalReport.value.bundle.stage, 'proposal');
   for (const example of Object.values(examples) as { description: string; value: { bundle: { student_id: string } } }[]) {

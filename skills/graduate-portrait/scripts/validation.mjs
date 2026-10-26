@@ -41,6 +41,24 @@ function sameScope(bundle, input) {
 export function validateBundle(bundle) {
   validateShape(bundleSchema, bundle, 'bundle');
   unique(bundle.documents.map(d => d.document_id), 'document_id');
+  if (bundle.input_context) {
+    const context = bundle.input_context;
+    unique(context.sources.map(s => s.document_id), 'input context document_id');
+    const ids = new Set(bundle.documents.map(d => d.document_id));
+    if (context.sources.length !== ids.size || context.sources.some(s => !ids.has(s.document_id))) {
+      fail('input context must cover exactly the current documents');
+    }
+    if (context.statistics_cutoff_at !== null) {
+      const date = new Date(context.statistics_cutoff_at);
+      if (!Number.isFinite(date.getTime()) || date.toISOString().replace('.000Z', 'Z') !== context.statistics_cutoff_at) {
+        fail('input context cutoff date invalid');
+      }
+    }
+    if (context.sources.some(s => s.authorization === 'denied' ||
+      ['withdrawn', 'superseded', 'disputed'].includes(s.validity))) {
+      fail('input context contains unavailable sources; rebuild the snapshot with eligible documents');
+    }
+  }
   if (bundle.period === null && bundle.stage !== 'proposal') fail('annual period required');
   const years = bundle.period === null ? [] : bundle.period.split('-').map(Number);
   if (years.length === 2 && years[1] !== years[0] + 1) fail('period must be consecutive years');

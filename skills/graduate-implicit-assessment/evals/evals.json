@@ -1,6 +1,6 @@
 {
   "skill_name": "graduate-implicit-assessment",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "input_policy": "直接使用 Swagger 完整年报、开题和经授权真实材料；不为追求等级另造学生故事。",
   "scope_cases": [
     {
@@ -62,6 +62,21 @@
       ],
       "expect": {
         "boundary": "具体计划可支持方案评价；文献正式条目未给不能宣称已完成文献核验；独立贡献未知。"
+      }
+    },
+    {
+      "id": "source-validity-and-review-scope",
+      "execution": "使用完整Swagger年报，改变来源有效性和文档复核声明；实际Skill调用后审读",
+      "expect": {
+        "boundary": "明确撤销或被替代来源不支持新等级；文档复核不确认每条自述；争议项暂缓，其余可用部分继续。"
+      }
+    },
+    {
+      "id": "missing-opportunity-versus-missing-record",
+      "execution": "沿用完整年报；对比未提协作和调用方明确无展示机会的任务条件",
+      "criterion_id": "division-responsibility",
+      "expect": {
+        "boundary": "未提协作是证据不足；有明确任务条件才可不适用，均不定低等级。"
       }
     }
   ],

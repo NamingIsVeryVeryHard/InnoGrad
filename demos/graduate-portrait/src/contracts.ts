@@ -4,6 +4,7 @@ export interface ParsedMaterialBundle {
   period: string | null;
   stage: 'annual' | 'proposal';
   task_context?: TaskContext;
+  input_context?: InputContext;
   documents: {
     document_id: string;
     source_name: string;
@@ -22,6 +23,19 @@ export interface TaskContext {
   training_category: string | null;
   training_year: number | null;
   support_conditions: string | null;
+}
+
+export interface InputContext {
+  snapshot_id: string | null;
+  statistics_cutoff_at: string | null;
+  trigger: 'manual' | 'archived' | 'corrected' | 'withdrawn' | 'training_changed' | 'unknown';
+  sources: {
+    document_id: string;
+    source_version: string | null;
+    authorization: 'authorized' | 'denied' | 'unknown';
+    validity: 'active' | 'disputed' | 'withdrawn' | 'superseded' | 'unknown';
+    review_status: 'confirmed' | 'pending' | 'unknown';
+  }[];
 }
 
 export interface EvidenceRef {
@@ -95,6 +109,7 @@ export interface Portrait {
   review_status: 'draft';
   warnings: string[];
   task_context: TaskContext | null;
+  input_context?: InputContext | null;
   explicit_status: 'pending' | 'local_pipeline' | 'merged';
   a_handoff: AHandoffMetadata | null;
   synthesis?: PortraitSynthesis;

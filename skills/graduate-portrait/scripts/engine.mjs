@@ -165,6 +165,14 @@ export function buildPortrait({bundle,extraction,assessment,rules,rubric,aResult
   const versions={schema:'2.0',rules:rules.version,rubric:rubric.version,skill:skillVersion};
   const a_handoff=aResult?structuredClone(Object.fromEntries(['schema_version','output_version','generated_at','producer','material_fingerprints','rules_version'].map(k=>[k,aResult[k]]))):null;
   const portrait={schema_version:'2.0',student_id:bundle.student_id,period:bundle.period,stage:bundle.stage,task_context:structuredClone(bundle.task_context??null),run_id:hash({hashes,versions,producer}),review_status:'draft',warnings:[...(bundle.period===null?['period_unconfirmed']:[]),...(!explicit?['explicit_pending']:[])],provenance:{producer,hashes,versions},sources:bundle.documents.map(d=>({document_id:d.document_id,source_name:d.source_name,sha256:d.sha256,parse_status:d.parse_status,pages:d.segments.map(s=>({segment_id:s.segment_id,page:s.page}))})),explicit_extraction:structuredClone(aResult?.extraction??extraction??null),explicit,explicit_status:aResult?'merged':extraction?'local_pipeline':'pending',a_handoff,implicit:implicitFor(bundle,assessment,rubric)};
+  portrait.input_context = structuredClone(bundle.input_context ?? null);
+  if (!portrait.input_context) portrait.warnings.push('input_context_unknown');
+  else for (const [field, warning] of Object.entries({
+    authorization: 'source_authorization_unknown', validity: 'source_validity_unknown',
+    review_status: 'source_review_unknown',
+  })) {
+    if (portrait.input_context.sources.some(s => s[field] === 'unknown')) portrait.warnings.push(warning);
+  }
   if(synthesis){validateSynthesis(portrait,synthesis);portrait.synthesis=structuredClone(synthesis);portrait.synthesis_sources=synthesisSourceIndex(portrait);portrait.run_id=hash({base_run_id:portrait.run_id,synthesis});}
   return portrait;
 }

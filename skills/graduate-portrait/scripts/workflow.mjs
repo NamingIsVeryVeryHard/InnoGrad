@@ -75,6 +75,8 @@ export async function createInnoAgentRunner(config,{signal,fetchImpl=fetch}={}) 
   }};
 }
 export async function runPortraitWorkflow({bundle,rules,rubric,aResult,mode='implicit_only',config,runner,signal}={}) {
+  // Isolate all task inputs before the first await; caller changes belong to a new run.
+  ({bundle,rules,rubric,aResult}=structuredClone({bundle,rules,rubric,aResult}));
   try{validateBundle(bundle);}catch{throw failure('INVALID_INPUT','invalid portrait bundle');}
   const defaults=await loadConfiguration();rules??=defaults.rules;rubric??=defaults.rubric;
   if(!['implicit_only','bundle_pipeline'].includes(mode))throw failure('INVALID_INPUT','invalid workflow mode');

@@ -9,7 +9,7 @@ const object=properties=>({type:'object',properties,required:Object.keys(propert
 function canonical(value){if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';return JSON.stringify(value);}
 const digest=value=>createHash('sha256').update(canonical(value)).digest('hex');
 export function materialFingerprints(bundle){
- return bundle.documents.map(d=>({document_id:d.document_id,sha256:d.sha256,content_sha256:digest({source_name:d.source_name,kind:d.kind,student_id:d.student_id,period:d.period,parse_status:d.parse_status,segments:d.segments})})).sort((a,b)=>a.document_id.localeCompare(b.document_id));
+ return bundle.documents.map(d=>({document_id:d.document_id,sha256:d.sha256,content_sha256:digest({source_name:d.source_name,kind:d.kind,student_id:d.student_id,period:d.period,parse_status:d.parse_status,segments:d.segments,...(bundle.input_context?{input_context:bundle.input_context}:{})})})).sort((a,b)=>a.document_id.localeCompare(b.document_id));
 }
 export const producerSchema=object({mode:{enum:['skill_execution','remote_model','offline_replay','assistant_curated','synthetic']},name:nullableText,model:nullableText});
 export function aResultSchema(rules){return object({

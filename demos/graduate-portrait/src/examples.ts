@@ -10,6 +10,18 @@ function readExample(file: string): { bundle: ParsedMaterialBundle } {
 }
 
 const annual = readExample('annual-report.synthetic.json');
+const contextualAnnual: ParsedMaterialBundle = {
+  ...structuredClone(annual.bundle),
+  input_context: {
+    snapshot_id: 'SYNTHETIC-SNAPSHOT-2028-v2',
+    statistics_cutoff_at: '2028-08-31T16:00:00Z',
+    trigger: 'corrected',
+    sources: annual.bundle.documents.map(d => ({
+      document_id: d.document_id, source_version: 'synthetic-v2',
+      authorization: 'authorized', validity: 'active', review_status: 'pending',
+    })),
+  },
+};
 
 export const portraitExamples = {
   annualReport: {
@@ -26,5 +38,10 @@ export const portraitExamples = {
     summary: '全虚构年度报告与 A 显性结果交接',
     description: '沿用 annualReport 的完整全虚构报告，附上合成 A 结果；显性规则保持待配置或待复核。generated_at 为示例固定时间，producer.mode 为 synthetic，不是当前时间或真实 A 运行记录。传入 aResult 后只执行 B 的评价。',
     value: { bundle: annual.bundle, aResult: buildAnnualAExample(annual.bundle) },
+  },
+  annualWithContext: {
+    summary: '全虚构年报：输入快照、来源声明及同版显性交接',
+    description: '沿用完整全虚构年报，附固定的模拟快照、统计截止时间和文档级来源状态。声明不代表实际授权或逐事实确认；A 指纹绑定同一上下文。新增解释仍待教师确认。',
+    value: { bundle: contextualAnnual, aResult: buildAnnualAExample(contextualAnnual) },
   },
 };
