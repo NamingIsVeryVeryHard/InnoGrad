@@ -1,6 +1,6 @@
 {
   "skill_name": "graduate-portrait",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "input_policy": "使用同一 Swagger 完整输入的显性结果和能力 Skill 实际输出；真实学生产物只在忽略目录留存。",
   "cases": [
     {
@@ -76,6 +76,17 @@
         "原材料错误回原提交更正",
         "判断分歧列明所用版本与具体依据",
         "不声称已发起或完成处理"
+      ]
+    },
+    {
+      "id": "json-portrait-revisions",
+      "prompt": "先用年度底稿生成画像，再加入同一学生的开题底稿，之后重复输入相同材料；未指定输出格式。",
+      "expect": [
+        "默认返回 portrait-overview-1.0 JSON，不用字符串包裹全文",
+        "年报和开题分别保留 scopes 和原评价",
+        "六个 overview 栏目在各版本一致，计划与完成分开",
+        "只描述本次新增来源引起的变化，重复输入为 unchanged 且 changes 为空",
+        "身份冲突时不额外生成其他学生画像"
       ]
     }
   ],

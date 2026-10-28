@@ -10,7 +10,7 @@
 
 结构化调用可在 bundle 中增加 `input_context`：`snapshot_id`、`statistics_cutoff_at`（UTC 秒精度或 null）、`trigger` 和逐文档 `sources`。来源项包含 `document_id`、`source_version`、`authorization`、`validity`、`review_status`，允许值见共享 Schema；目录须完整对应输入文档。这些是调用方的文档级声明，不是逐事实核验。旧输入仍兼容，缺失状态明确为未知。明确未授权、撤销、被替代或争议来源会使结构化任务拒绝执行，须先由上游筛选后重建；状态未知可保留并提示。新上下文进入输入摘要及 A 的材料指纹，不能继续沿用旧显性结果。接口字段与范围详见[画像设计](graduate_portrait_design.md#1022-画像流程与本次交付)。
 
-一次任务只处理一名学生、一个报告期间和一个培养阶段。直接调用时，能力 Skill 从共享原文形成评价底稿，画像 Skill 根据显性结果与底稿生成带来源的概览和完整画像。以下为已有 API/CLI 结构化模式的实现：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样保留可选显性结果 → 画像 Skill 生成带源记录引用的概览 → 校验并渲染完整画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
+API/CLI 的一次评价任务只处理一名学生、一个报告期间和一个培养阶段。直接调用画像 Skill 时，可整合同一学生的多个任务，各自保留范围。直接调用时，能力 Skill 从共享原文形成评价底稿，画像 Skill 根据显性结果与底稿生成带来源的概览和完整画像。以下为已有 API/CLI 结构化模式的实现：接收解析文本 → InnoAgent 原生 Skill 按领域顺序逐项评价 → 程序核验出处与状态 → 原样保留可选显性结果 → 画像 Skill 生成带源记录引用的概览 → 校验并渲染完整画像。显式 bundle_pipeline 模式保留先抽取再评价的联调流程，结果标为 local_pipeline。原文、抽取结果和评价结果分开保存；相同输入、配置和执行来源可以离线重放。
 
 下面六组是本地联调原型的展示方式，不替代 A 的实际年度规则或语雀修订方案；画像保留 A 输入的名称、版本及结果。该本地原型不直接生成分数：
 
@@ -42,6 +42,12 @@
 Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时分别显式选择 graduate-implicit-assessment 和 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。早期四维样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；这些历史测试尚未完成语义准确性和教师一致性验证。
 
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
+
+## JSON 画像输出
+
+画像 Skill 0.6.0 默认返回 `portrait-overview-1.0` JSON，契约见 [portrait-overview.schema.json](../../skills/graduate-portrait/references/portrait-overview.schema.json)。`scopes` 保留年报、开题各自的范围；`overview` 固定为已有工作、研究计划、具体表现、关注事项、行动和变化六个栏目；`evaluations` 原样保留上游评价的等级与状态；`source_records` 供各栏目复用引用。没有显性结果时保留 null，不补算分数。`status` 区分生成、相同输入、身份冲突和输入缺失；相同输入的 `changes` 为空。
+
+调用方指定 Schema 时按指定格式返回。现有 API/CLI 继续输出完整 `portrait 2.0`，其单任务范围与字段不变。Markdown 是根据 JSON 生成的阅读视图。默认 JSON 契约可通过 [validateOverview](../../skills/graduate-portrait/scripts/overview.mjs) 检查结构、引用及任务范围。
 
 ## 可选的结构化接口约定
 
