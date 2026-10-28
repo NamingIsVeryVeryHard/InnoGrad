@@ -26,7 +26,30 @@ export function validateOverview(value) {
   for (const evaluation of value.evaluations) {
     if (!scopes.has(evaluation.scope_id)) throw Error('unknown evaluation scope');
     unique(evaluation.criteria.map(c => c.criterion_id), 'criterion_id');
-    for (const criterion of evaluation.criteria) checkRefs(criterion, evaluation.scope_id);
+    for (const criterion of evaluation.criteria) {
+      checkRefs(criterion, evaluation.scope_id);
+      if (criterion.performance_grade !== null && !criterion.source_refs.length) {
+        throw Error('graded criterion has no evidence');
+      }
+      if (criterion.performance_grade !== null &&
+          !['evaluable', '可评价'].includes(criterion.evidence_state)) {
+        throw Error('insufficient or conflicting evidence cannot receive a grade');
+      }
+      if (value.completion && (!criterion.rationale || !criterion.grading_standard ||
+          !criterion.dimension_id || !criterion.dimension_label)) {
+        throw Error('criterion is missing grading rationale or standard');
+      }
+    }
+  }
+  if (value.completion === 'complete' && (!scopes.size || value.scopes.some(scope => {
+    const evaluation = value.evaluations.find(e => e.scope_id === scope.scope_id);
+    return !evaluation?.explicit || !evaluation.criteria.length;
+  }))) {
+    throw Error('complete portrait requires explicit results and implicit evaluations');
+  }
+  if (value.completion && (value.completion === 'not_generated') !==
+      ['identity_conflict', 'missing_input'].includes(value.status)) {
+    throw Error('portrait completion does not match generation status');
   }
   if (value.status === 'unchanged' && value.overview.changes.length) throw Error('unchanged portrait has changes');
   if (['identity_conflict', 'missing_input'].includes(value.status) &&

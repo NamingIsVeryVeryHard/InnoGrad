@@ -1,6 +1,6 @@
 {
   "skill_name": "graduate-portrait",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "input_policy": "使用同一 Swagger 完整输入的显性结果和能力 Skill 实际输出；真实学生产物只在忽略目录留存。",
   "cases": [
     {
@@ -87,6 +87,17 @@
         "六个 overview 栏目在各版本一致，计划与完成分开",
         "只描述本次新增来源引起的变化，重复输入为 unchanged 且 changes 为空",
         "身份冲突时不额外生成其他学生画像"
+      ]
+    },
+    {
+      "id": "grading-first-portrait",
+      "prompt": "将有原判级理由和量规标准的能力底稿整合成画像；A显性结果尚未提供。",
+      "expect": [
+        "completion为partial，不声称完整A/B联调通过",
+        "指标项保留等级、证据状态、原判级理由、适用三档标准和引用",
+        "缺证据等级保持null，不补零或默认低分",
+        "不将Strong/Medium训练强度或三档隐性等级换算为年度0至3级",
+        "保留逐项复核定位，人工意见与模型判断分开保存"
       ]
     }
   ],

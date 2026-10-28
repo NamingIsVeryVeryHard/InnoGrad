@@ -11,7 +11,10 @@ const fixture = () => ({
     demonstrated: [], attention: [], next_steps: [], changes: []},
   evaluations: [{scope_id: 'annual', rubric_version: 'synthetic.1', explicit: null,
     criteria: [{criterion_id: 'c1', label: '合成观察项', observation: '原有观察',
-      evidence_state: '证据不足', performance_grade: null, source_refs: ['Y1'], suggestion: '原有建议'}]}],
+      evidence_state: '证据不足', performance_grade: null, source_refs: ['Y1'], suggestion: '原有建议',
+      dimension_id: 'synthetic-domain', dimension_label: '合成领域', rationale: '合成证据未展示关键条件。',
+      grading_standard: {needs_improvement: '存在明确错误', meets_requirements: '展示约定行为',
+        well_demonstrated: '展示约定行为并解释替代方案'}}]}],
   source_records: [
     {id: 'Y1', scope_id: 'annual', document_id: 'synthetic-annual', page: 1, quote: '合成原句', fields: null},
     {id: 'P1', scope_id: 'proposal', document_id: 'synthetic-proposal', page: 1, quote: '合成计划', fields: null},
@@ -53,4 +56,42 @@ test('输入问题使用同一 JSON 结构返回，不生成其他学生的评�
   value.source_records = [];
   value.issues = ['合成输入中的学生标识与目标学生不同'];
   assert.doesNotThrow(() => validateOverview(value));
+});
+
+test('画像不能把缺少显性结果的产物声明为完整联调结果', () => {
+  const value = fixture();
+  value.completion = 'partial';
+  assert.doesNotThrow(() => validateOverview(value));
+  value.completion = 'complete';
+  assert.throws(() => validateOverview(value), /explicit/);
+  value.scopes = [value.scopes[0]];
+  value.source_records = [value.source_records[0]];
+  value.overview.research_plan = [];
+  value.evaluations[0].explicit = {
+    rules_version: 'synthetic-explicit.1', dimensions: [{id: 'synthetic-d1', score: 70}],
+  };
+  const originalExplicit = structuredClone(value.evaluations[0].explicit);
+  assert.doesNotThrow(() => validateOverview(value));
+  assert.deepEqual(value.evaluations[0].explicit, originalExplicit);
+});
+
+test('有等级的评分须有原判级理由、适用标准和证据', () => {
+  const value = fixture();
+  Object.assign(value.evaluations[0].criteria[0], {
+    performance_grade: '达到要求', evidence_state: '可评价',
+    dimension_id: 'synthetic-domain', dimension_label: '合成领域',
+    rationale: '合成证据展示了本项约定的行为。',
+    grading_standard: {needs_improvement: '存在明确错误', meets_requirements: '展示约定行为',
+      well_demonstrated: '展示约定行为并解释替代方案'},
+  });
+  assert.doesNotThrow(() => validateOverview(value));
+  value.evaluations[0].criteria[0].source_refs = [];
+  assert.throws(() => validateOverview(value), /graded.*evidence/);
+  const missingReason = fixture();
+  missingReason.completion = 'partial';
+  delete missingReason.evaluations[0].criteria[0].rationale;
+  assert.throws(() => validateOverview(missingReason), /rationale/);
+  const unsupported = fixture();
+  unsupported.evaluations[0].criteria[0].performance_grade = '待改进';
+  assert.throws(() => validateOverview(unsupported), /cannot receive a grade/);
 });

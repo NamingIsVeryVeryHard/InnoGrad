@@ -291,6 +291,41 @@
                 "suggestion": {
                   "type": "string",
                   "minLength": 1
+                },
+                "dimension_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dimension_label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "grading_standard": {
+                  "type": "object",
+                  "properties": {
+                    "needs_improvement": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "meets_requirements": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "well_demonstrated": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "needs_improvement",
+                    "meets_requirements",
+                    "well_demonstrated"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -369,6 +404,13 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "completion": {
+      "enum": [
+        "complete",
+        "partial",
+        "not_generated"
+      ]
     }
   },
   "required": [
