@@ -88,7 +88,7 @@ export const portraitSchema = object({
     rubric_version: text, status: text, interpretation: text,
     dimensions: array(object({
       id: text, label: text, criteria: array(criterion),
-      summary: array(object({criterion_ids: array(text), text})), review_required: {const:true},
+      summary: array(object({criterion_ids: array(text), text})), review_required: {type:'boolean'},
     })),
   }),
 });

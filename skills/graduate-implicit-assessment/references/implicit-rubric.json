@@ -2,7 +2,7 @@
   "schema_version": "2.0",
   "version": "implicit-2026-10-14-trial.5",
   "status": "draft_uncalibrated",
-  "interpretation": "项目试用标准下的科研能力与研究素养初评，限定在本次任务和材料，待教师复核；七领域不定级，不生成隐性总分。",
+  "interpretation": "按项目试用标准评价本次任务中的具体表现；七领域组织观察项，各项分别评价。",
   "dimensions": [
     {
       "id": "knowledge-literature",

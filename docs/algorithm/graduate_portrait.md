@@ -1,12 +1,12 @@
 # 研究生画像方法原型
 
-本原型接收已解析的年度报告、开题报告及证明材料，默认生成隐性评价草稿，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供独立的本地 Swagger Demo，尚未接入正式审核。材料解析由上游负责。
+本原型接收已解析的年度报告、开题报告及证明材料，默认生成科研能力与研究素养评价，可合并 A 提供的显性事实与固定规则结果。它覆盖 PRO-01、PRO-02、BASE-03 的部分方法流程，已提供独立的本地 Swagger Demo，尚未接入正式审核。材料解析由上游负责。
 
 本轮主交付是 `skills/graduate-implicit-assessment/` 的能力评价 Skill 和 `skills/graduate-portrait/` 的画像整合 Skill，与 `.agents/skills/` 中的开发协作 Skill 分开维护：A、B 读取共享学生材料，B 的隐性判断引用原文，画像直接参考 A 的结果，不复查 A 的整理。A 可提供 JSON、Markdown、表格或其他可读内容，无需符合固定交接 Schema。当前采用七领域、23个观察项的项目试用量规。完整评价设计、共享内容约定及 Skill 原文见[隐性指标评价与画像整合设计](graduate_portrait_design.md)。
 
 ## 处理方法
 
-画像流程现包含来源状态和本次输入快照，分开呈现事实、材料初评、解释草稿及待核事项。两个 Skill 记录输入版本、截止时间和可核查的变化，补证建议区分提取错误、原材料错误和判断争议。新增解释仍待教师确认；正式发布、自动触发重算和历史画像保存由业务后端承担。
+两个 Skill 分别评价学生材料、整合学生画像，生成后直接交付。画像呈现研究进展、具体表现、下一步计划及对应依据；具体信息缺口写在对应事项。结构化路径记录来源状态与输入快照，用于匹配同一批材料的显性结果。
 
 结构化调用可在 bundle 中增加 `input_context`：`snapshot_id`、`statistics_cutoff_at`（UTC 秒精度或 null）、`trigger` 和逐文档 `sources`。来源项包含 `document_id`、`source_version`、`authorization`、`validity`、`review_status`，允许值见共享 Schema；目录须完整对应输入文档。这些是调用方的文档级声明，不是逐事实核验。旧输入仍兼容，缺失状态明确为未知。明确未授权、撤销、被替代或争议来源会使结构化任务拒绝执行，须先由上游筛选后重建；状态未知可保留并提示。新上下文进入输入摘要及 A 的材料指纹，不能继续沿用旧显性结果。接口字段与范围详见[画像设计](graduate_portrait_design.md#1022-画像流程与本次交付)。
 
@@ -23,11 +23,11 @@
 | 学术交流 | 参加、作报告或组织活动的记录 | 次数、学时、活动类别与统计期间 |
 | 实践落地 | 应用、实践、专利和软件记录 | 完成条件、认定范围及所需证明 |
 
-学分、课程状态和文献数量另保留在基础记录中。自报数量与逐项成果分别统计，投稿、录用、发表分别记录。材料没有列出成果不表示实际成果为零；累计人数不改写成本期人数；下一年度计划不计入已完成成果。同一成果的状态冲突交给人工复核。
+学分、课程状态和文献数量另保留在基础记录中。自报数量与逐项成果分别统计，投稿、录用、发表分别记录。材料没有列出成果不表示实际成果为零；累计人数不改写成本期人数；下一年度计划不计入已完成成果。同一成果的状态冲突列明原记录和差异。
 
 隐性部分按学科知识与文献、方案设计、实施与推理、表达与论证、反馈改进、规范与追溯、科研协作七领域组织。每个观察项分开输出证据状态、表现等级、理由、引用、限制和建议。领域只归纳已校验观察项，不平均、不评级，也不生成隐性总分。结构化工作流每次在线调用只评价一个领域，同时保留完整材料；各领域通过校验后再检查整体结果。任一领域修正后仍不合规，整项任务失败，不发布部分画像。
 
-证据可评价且标准适用时，使用“待改进、达到要求、表现充分”；证据不足、冲突或不适用时等级为 null。标准待确认也暂缓等级。缺材料不等于能力差，负实验结果不自动降级，开题方案不能替代已完成研究。材料直接展示和行动、效果自述分别标记，教师确认保持待复核。
+证据可评价且标准适用时，使用“待改进、达到要求、表现充分”；证据不足、冲突或不适用时等级为 null。标准待确认也暂缓等级。缺材料不等于能力差，负实验结果不自动降级，开题方案不能替代已完成研究。材料直接展示和行动、效果自述分别记录。
 
 ## 设计依据与取舍
 
@@ -39,7 +39,7 @@
 | [Google LangExtract：结构化输出与原文定位](https://developers.googleblog.com/introducing-langextract-a-gemini-powered-information-extraction-library/) | 每项记录绑定文件、分段和原句；本地核验引用 | 借鉴溯源方法，未引入该库，也未实现其字符偏移定位 |
 | [Agent Skills 规范](https://agentskills.io/specification)及[评价指南](https://agentskills.io/skill-creation/evaluating-skills) | 拆分指令、配置、脚本和回放样例，变更后复查同一组案例 | 格式检查和程序测试不能替代真实模型评价 |
 
-Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时分别显式选择 graduate-implicit-assessment 和 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。早期四维样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；因此隐性结果仅作为可修改的演示草稿，须由教师逐项核对，尚未通过语义准确性或教师一致性验证。
+Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md)、[Claude 编写指南](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)和 [Codex Skill 指南](https://learn.chatgpt.com/docs/build-skills)共同支持的目录形式：SKILL.md 声明用途与触发条件，详细量表按需读取，确定性校验由脚本完成。运行时分别显式选择 graduate-implicit-assessment 和 graduate-portrait，并检查实际加载记录；目录格式兼容不等于已在每个平台验证运行。测试覆盖代表性材料、缺失证据和错误输出。早期四维样例复审发现，模型仍可能用断行半句支持完整评价条件，或把资源可用扩大解释为风险应对；这些历史测试尚未完成语义准确性和教师一致性验证。
 
 固定规则不等于有效评价标准。没有学校依据的关键词计数、默认分数或任意权重，不用于达标判断。引用存在也只能证明文本可定位，不能证明引用足以支持模型的解释。
 
@@ -55,7 +55,7 @@ Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/pac
 
 HTTP 可选 aResult 使用 a-handoff-1.0，校验任务、材料指纹、规则版本及完整结果后，原样保留 explicit_extraction 和 explicit；没有 A 时两者为 null、explicit_status 为 pending。错误交接在模型调用前拒绝。bundle/extraction 保留1.0，assessment/portrait 升为2.0，旧隐性格式明确拒绝。
 
-输出默认是待人工复核草稿，事实保留材料来源，不将学生自述视为独立核验。身份权限、正式审核记录和多用户隔离仍由业务服务负责。
+输出为学生画像，不设置人工审批步骤。结构化输出保留兼容字段 review_status=draft 和逐项 review.status=pending，领域 review_required=false；这些字段不阻止画像生成与返回。身份权限和正式审核记录由业务服务负责。
 
 ## 运行与接入
 

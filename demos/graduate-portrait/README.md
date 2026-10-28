@@ -2,9 +2,9 @@
 
 本目录提供 Swagger UI、完整请求示例和本地 HTTP 调用入口，用于演示与联调两个画像 Skill。演示代码独立放在 `demos/`；正式业务服务与智能体接入由 `apps/server/` 承载。
 
-本地服务先调用 InnoAgent 的 `graduate-implicit-assessment` 评价已解析材料，再调用 `graduate-portrait` 整合显性结果与评价底稿。返回带来源概览和完整依据的待人工复核画像，默认不重新抽取显性事实，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
+本地服务先调用 InnoAgent 的 `graduate-implicit-assessment` 评价已解析材料，再调用 `graduate-portrait` 整合显性结果与评价底稿。返回带来源概览和完整依据的学生画像，默认不重新抽取显性事实，按七个领域中的观察项给出证据状态和表现档次。显性部分可接收 A 的交接结果，或显式选择原型内抽取流程计算。没有制度原文的阈值保持待配置，不得据此认定学生达标。
 
-Swagger 的 `annualWithContext` 沿用完整合成年报，增加 `bundle.input_context` 和绑定同一上下文的显性交接，演示快照、统计截止时间及来源声明。各来源必须与输入文档一一对应；旧请求可省略该对象，结果标为未知。明确未授权、撤销、被替代或争议来源会返回 422，须由上游筛选后重建快照；上下文改变后须重新生成 A 指纹。返回的文档复核声明不代表逐事实确认，画像仍为 draft；服务不保存正式发布记录，也不自动触发重算。
+Swagger 的 `annualWithContext` 沿用完整合成年报，增加 `bundle.input_context` 和绑定同一上下文的显性交接，演示快照、统计截止时间及来源声明。各来源必须与输入文档一一对应；旧请求可省略该对象，结果标为未知。明确未授权、撤销、被替代或争议来源会返回 422，须由上游筛选后重建快照；上下文改变后须重新生成 A 指纹。画像生成后直接返回，各领域 review_required=false；兼容字段 review_status=draft 和逐项 review.status=pending 不构成人工审批步骤。
 
 ## 准备本地运行环境
 
@@ -165,7 +165,7 @@ Swagger 的请求示例下拉框保留两份独立编写的全虚构报告，原
 
 第三个`annualWithAResult`示例沿用完整年度报告正文，附上有引用、材料指纹和来源记录的 A 交接结果。该示例的生成来源明确为`synthetic`，生成时间是固定的示例值，不代表真实 A 系统运行记录。B 保留 A 的固定规则、冲突及待复核结果，并通过`explicit_extraction`原样返回 A 的事实、成果条目及覆盖记录；没有 A 或本地抽取结果时该字段为`null`。
 
-v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，并附待教师复核状态。
+v2 隐性评价将证据状态`evaluable/insufficient/conflicting/not_applicable`与表现档次`needs_improvement/meets_requirements/well_demonstrated`分开。缺证据、冲突或不适用时表现档次为`null`；七个领域只组织观察项，不生成数值等级或隐性总分。每条引文保留原句、支持内容、文件名、上游哈希、段落标识和页码，具体缺口写在对应观察项。
 
 在线 B 评价按量规中的领域顺序执行。每次提供完整 `bundle` 原文、当前领域的量规和严格单领域 Schema，每个领域及整合阶段使用新的独立工作区与 session，避免完整原文和此前模型评价反复累积；同一步的修正留在原 session。当前判断只依据完整任务包。在线结果逐项返回 `condition_checks`，记录每个必要条件的状态、证据下标和理由。程序拒绝必要条件缺失却给出达到要求或表现充分的结果；旧离线评价可不含该字段，仍按原约束读取。固定结构化调用在模型网关启用 JSON 对象模式。准备齐全的任务使用开头的 `portrait_run_id:<UUID> portrait_output:json ` 标记；自由文本验证使用 `portrait_output:markdown `。两者将工具选择设为 `none`，只约束本次生成请求，不更改 InnoAgent 的权限配置。Markdown 不启用 JSON 模式；没有这些调用方标记的普通 Skill 请求保持原有工具能力，材料正文中的同名文字不触发该约束。引用校验返回具体证据下标，并一次报告当前领域的引用和状态问题；字段类型错误附预期类型，不把材料正文回传到错误日志。每域无效输出最多修正一次，仍未通过即停止；全部领域通过后还需整体验证，再由画像 Skill 生成概览；概览 source_refs 须能定位到源记录，未评价能力项不能作为正面表现依据。最终渲染保留所有原评价和证据。任一领域失败均不返回部分画像。
 

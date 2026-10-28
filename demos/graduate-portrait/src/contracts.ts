@@ -133,7 +133,7 @@ export interface Portrait {
     dimensions: {
       id: string; label: string; criteria: PortraitCriterion[];
       summary: { criterion_ids: string[]; text: string }[];
-      review_required: true;
+      review_required: boolean;
     }[];
   };
 }

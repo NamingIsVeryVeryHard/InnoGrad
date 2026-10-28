@@ -116,7 +116,7 @@ InnoGrad/
 
 业务交付包括[科研能力与研究素养评价](skills/graduate-implicit-assessment/SKILL.md)和[综合画像整合](skills/graduate-portrait/SKILL.md)两个 Skill，须显式安装到 InnoAgent；团队开发流程 Skills 留在 .agents/skills/，方法说明位于 docs/algorithm/，相关测试位于 tests/。demos/graduate-portrait/ 提供独立的 Swagger 演示入口，调用业务 Skills 验证画像流程；完整业务应用、复盘和持续集成仍待实现。
 
-画像模块记录本次输入快照及调用方提供的来源状态，区分事实、初评与解释草稿；来源上下文变化后须重新校验显性结果交接。新增解释仍待教师确认，自动重算、正式发布和学生纠错入口尚需业务后端接入。
+画像模块由两个 Skill 完成：评价学生材料，再整合已有结果生成画像。画像直接呈现研究进展、具体表现和下一步计划，不设置教师复核步骤。结构化路径记录输入快照，来源上下文变化后重新校验显性结果交接。
 
 ## 参与贡献
 

@@ -138,7 +138,7 @@ function implicitFor(bundle, assessment, rubric) {
         review: { status: 'pending', reviewer: null, reviewed_at: null, modification_reason: null, independent_corroboration: 'unverified' },
       }));
       return { id: d.id, label: d.label, criteria,
-        summary: criteria.map(c => ({ criterion_ids: [c.criterion_id], text: c.observed + ' ' + c.rationale })), review_required: true };
+        summary: criteria.map(c => ({ criterion_ids: [c.criterion_id], text: c.observed + ' ' + c.rationale })), review_required: false };
     }) };
 }
 export function buildExplicit({bundle,extraction,rules}) {

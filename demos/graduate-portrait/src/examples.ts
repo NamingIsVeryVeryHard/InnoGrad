@@ -41,7 +41,7 @@ export const portraitExamples = {
   },
   annualWithContext: {
     summary: '全虚构年报：输入快照、来源声明及同版显性交接',
-    description: '沿用完整全虚构年报，附固定的模拟快照、统计截止时间和文档级来源状态。声明不代表实际授权或逐事实确认；A 指纹绑定同一上下文。新增解释仍待教师确认。',
+    description: '沿用完整全虚构年报，附固定的模拟快照、统计截止时间和文档级来源状态。A 指纹绑定同一上下文，直接生成画像。',
     value: { bundle: contextualAnnual, aResult: buildAnnualAExample(contextualAnnual) },
   },
 };

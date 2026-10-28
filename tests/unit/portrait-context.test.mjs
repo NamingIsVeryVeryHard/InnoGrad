@@ -24,7 +24,9 @@ test('旧输入保留未知来源状态，不默认为事实已确认', () => {
   const p = buildPortrait(fixture());
   assert.equal(p.input_context, null);
   assert.ok(p.warnings.includes('input_context_unknown'));
-  assert.match(renderPortrait(p), /输入快照上下文未提供/);
+  assert.doesNotMatch(renderPortrait(p), /## 本次输入快照/);
+  assert.ok(p.implicit.dimensions.every(d => d.review_required === false));
+  validateShape(portraitSchema, p, 'portrait');
   assert.equal(p.review_status, 'draft');
 });
 
@@ -42,8 +44,10 @@ test('同一次输入上下文原样传给整合和报告，文档复核不升�
   const report = renderPortrait(p);
   assert.match(report, /snapshot-synthetic-1/);
   assert.match(report, /2026-10-22T12:00:00Z/);
-  assert.match(report, /文档复核不代表其中每条事实已确认/);
-  assert.match(report, /解释草稿.*待教师确认/);
+  assert.match(report, /^# 研究生画像\n/);
+  assert.match(report, /文档复核声明/);
+  assert.match(report, /已复核/);
+  assert.doesNotMatch(report, /待教师确认|教师复核待完成|待人工复核/);
   p.input_context.sources[0].source_version = 'changed';
   assert.deepEqual(f, before);
 });

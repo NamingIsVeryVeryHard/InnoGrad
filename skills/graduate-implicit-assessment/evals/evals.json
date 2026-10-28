@@ -1,6 +1,6 @@
 {
   "skill_name": "graduate-implicit-assessment",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "input_policy": "直接使用 Swagger 完整年报、开题和经授权真实材料；不为追求等级另造学生故事。",
   "scope_cases": [
     {
