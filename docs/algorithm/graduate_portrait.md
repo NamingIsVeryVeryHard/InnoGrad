@@ -45,9 +45,11 @@ Skill 采用 [Pi 官方说明](https://github.com/badlogic/pi-mono/blob/main/pac
 
 ## JSON 画像输出
 
-画像 Skill 0.7.0 默认返回 `portrait-overview-1.0` JSON，契约见 [portrait-overview.schema.json](../../skills/graduate-portrait/references/portrait-overview.schema.json)。`scopes` 保留年报、开题各自的范围；`overview` 固定为已有工作、研究计划、具体表现、关注事项、行动和变化六个栏目；`evaluations` 是画像的指标评价主体，保留上游的领域、等级、状态、逐条件判级理由、三档行为标准和引用；`source_records` 供各栏目复用引用。没有显性结果时保留 null，不补算分数。`status` 区分生成、相同输入、身份冲突和输入缺失；相同输入的 `changes` 为空。
+画像 Skill 0.8.1 默认返回 `portrait-overview-1.0` JSON，契约见 [portrait-overview.schema.json](../../skills/graduate-portrait/references/portrait-overview.schema.json)。`scopes` 保留年报、开题各自的范围；`overview` 固定为已有工作、研究计划、具体表现、关注事项、行动和变化六个栏目，并支持研究特色及其归纳或推断理由；`evaluations` 是画像的指标评价主体，保留上游的领域、等级、状态、逐条件判级理由、三档行为标准和引用；`source_records` 供各栏目复用引用。没有显性结果时保留 null，不补算分数。`status` 区分生成、相同输入、身份冲突和输入缺失；相同输入的 `changes` 为空。
 
 调用方指定 Schema 时按指定格式返回。现有 API/CLI 继续输出完整 `portrait 2.0`，其单任务范围与字段不变。`completion` 区分完整联调结果、部分画像和未生成。A 的显性结果为空时只能标为 partial，不能将 B 单独运行当作完整 A/B 验收。界面先展示逐项评价及依据，再提供 JSON 和概览；复核意见通过观察项编号和来源定位，单独记录。Markdown 是根据 JSON 生成的阅读视图。默认 JSON 契约可通过 [validateOverview](../../skills/graduate-portrait/scripts/overview.mjs) 检查结构、引用及任务范围。
+
+累计画像按各自任务范围保存能力评价。开题中的问题界定、方案设计或论证表现，可以在开题范围内定级；后续年报未重述这些内容，不撤销原有记录，也不将历史等级改写为当期等级。`criterionEvidenceHistory` 从 `evaluations` 整理每项的当期记录和各任务有等级的记录，不重新评分、不取最高档，也不由缺项推导退步。历史材料只有文本对照、没有能力评价时，应先调用能力评价 Skill 补评相关任务，再纳入这类记录。尚未覆盖的过程项单列所缺材料。
 
 ## 可选的结构化接口约定
 
