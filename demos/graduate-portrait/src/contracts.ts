@@ -95,6 +95,7 @@ export interface PortraitCriterion extends Omit<CriterionAssessment, 'evidence'>
 export interface PortraitClaim { text: string; source_refs: string[]; }
 export interface PortraitSynthesis {
   current_work: PortraitClaim[];
+  research_features?: (PortraitClaim & { basis: 'observed' | 'inferred'; rationale: string })[];
   demonstrated: PortraitClaim[];
   attention: PortraitClaim[];
   next_steps: (PortraitClaim & { completion_evidence: string })[];

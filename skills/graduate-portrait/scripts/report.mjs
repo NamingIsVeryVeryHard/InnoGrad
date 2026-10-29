@@ -8,10 +8,14 @@ export function renderPortrait(p) {
  const lines=['# 研究生画像','', '学生：'+text(p.student_id)+'；期间：'+(p.period===null?'期间待确认':text(p.period))+'；阶段：'+(p.stage==='annual'?'年度报告':'开题报告'),'', '生成方式：'+text(p.provenance.producer.mode)+'；运行标识：'+p.run_id];
  if(p.synthesis){
   lines.push('','## 画像概览','');
-  for(const [key,title]of [['current_work','当前研究与进展'],['demonstrated','研究特色与具体表现'],['attention','需要关注的事项'],['next_steps','下一步行动']]){
+  for(const [key,title]of [['current_work','当前研究与进展'],['research_features','研究特色'],['demonstrated','已有能力评价'],['attention','需要关注的事项'],['next_steps','下一步行动']]){
+   if(!p.synthesis[key])continue;
    lines.push('### '+title,'');
    if(!p.synthesis[key].length)lines.push('当前结果没有提供足够依据。');
-   for(const item of p.synthesis[key])lines.push('- '+text(item.text)+' '+item.source_refs.map(id=>'['+id+'](#source-'+id.toLowerCase()+')').join('、')+(item.completion_evidence?'；建议形成的核查材料：'+text(item.completion_evidence):''));
+   for(const item of p.synthesis[key]){
+    lines.push('- '+text(item.text)+' '+item.source_refs.map(id=>'['+id+'](#source-'+id.toLowerCase()+')').join('、')+(item.completion_evidence?'；建议形成的核查材料：'+text(item.completion_evidence):''));
+    if(item.basis)lines.push('  '+(item.basis==='inferred'?'材料推断':'材料归纳')+'：'+text(item.rationale));
+   }
    lines.push('');
   }
  }

@@ -58,3 +58,34 @@ export function validateOverview(value) {
   }
   return value;
 }
+
+export function criterionEvidenceHistory(value, {currentScopeId}) {
+  validateOverview(value);
+  if (!value.scopes.some(scope => scope.scope_id === currentScopeId)) {
+    throw Error('unknown current scope');
+  }
+  const items = new Map();
+  for (const evaluation of value.evaluations) {
+    for (const criterion of evaluation.criteria) {
+      if (!items.has(criterion.criterion_id)) {
+        items.set(criterion.criterion_id, {
+          criterion_id: criterion.criterion_id, label: criterion.label,
+          dimension_id: criterion.dimension_id, dimension_label: criterion.dimension_label,
+          current: null, records: [], graded: [], status: 'ungraded',
+        });
+      }
+      const item = items.get(criterion.criterion_id);
+      const record = {scope_id: evaluation.scope_id,
+        rubric_version: evaluation.rubric_version, criterion};
+      item.records.push(record);
+      if (evaluation.scope_id === currentScopeId) item.current = criterion;
+      if (criterion.performance_grade !== null) item.graded.push(record);
+    }
+  }
+  // Preserve task-specific judgments; a missing annual observation does not revoke a proposal judgment.
+  for (const item of items.values()) {
+    item.status = item.current?.performance_grade != null ? 'current_graded'
+      : item.graded.length ? 'historical_graded' : 'ungraded';
+  }
+  return [...items.values()];
+}
