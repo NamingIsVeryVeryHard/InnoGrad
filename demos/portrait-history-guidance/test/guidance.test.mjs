@@ -197,6 +197,14 @@ test('修正重试收到明确路径和类别，修正后才生成结果', async
   assert.equal(result.provenance.attempts, 2);
 });
 
+test('工作状态修正反馈明确限制reported_completed的适用类别', () => {
+  const message = guidanceRepairFeedback({
+    validation_issues: [{path: '/facts/1', category: 'WORK_STATUS'}],
+  });
+  assert.match(message, /kind为plan时work_status必须是planned/);
+  assert.match(message, /reported_completed只允许用于kind=progress/);
+});
+
 test('无历史时不生成历史比较，最终文件篡改仍被校验器拒绝', async () => {
   const ctx = prepareContext({current: bundle()});
   const result = await generateTestGuidance(ctx, {config, fetchImpl: async () => completion(response(ctx))});

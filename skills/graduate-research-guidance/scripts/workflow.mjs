@@ -3,7 +3,8 @@ import {validateGuidance, referencedIds} from './validate.mjs';
 
 export const guidanceRepairFeedback = error => '校验失败，请按原Schema重新输出完整JSON。保留真实状态，不补造引用。错误路径及类别：' +
   JSON.stringify(error.validation_issues ?? [{path: '', category: error instanceof SyntaxError ? 'JSON_PARSE' : 'VALIDATION'}]) +
-  '\n只选择sources中存在的C编号，不生成source_index或抄写引文。同一来源可在多条结论中重复引用。';
+  '\n只选择sources中存在的C编号，不生成source_index或抄写引文。同一来源可在多条结论中重复引用。' +
+  '\nWORK_STATUS规则：facts.kind为plan时work_status必须是planned；reported_completed只允许用于kind=progress；background或condition不要标reported_completed，如需表达已完成工作请改为kind=progress。';
 
 export async function generateGuidance(context, {runner}) {
   if (!runner) throw new Error('InnoAgent runner is required');
