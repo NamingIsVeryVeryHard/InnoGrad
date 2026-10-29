@@ -37,7 +37,7 @@ export async function requestCompletion(payload,{config,fetchImpl=fetch,signal,t
     // These configured CLIProxy models support low effort. Unknown aliases omit it.
     if(p.effort==='low'&&/^(?:grok-4\.6|gemini-3-flash)$/.test(p.model))body.reasoning_effort='low';
     try{response=await fetchImpl(p.url,{method:'POST',redirect:'error',headers:{'content-type':'application/json',authorization:'Bearer '+p.key},body:JSON.stringify(body),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs)});}catch(e){throw requestFailure(e,signal);}
-    let envelope;try{envelope=await response.json();}catch{throw failure('INNOAGENT_PROTOCOL','invalid remote response envelope');}
+    let envelope;try{envelope=await response.json();}catch{throw failure('INNOAGENT_PROTOCOL',`invalid remote response envelope (status ${response.status}, content-type ${response.headers.get('content-type')??'unknown'})`);}
     const record=safeRecord(p,i+1,response.ok?'completed':exhaustedQuota(response.status,envelope)?'quota_exhausted':'http_error',envelope.model);records.push(record);onAttempt(record);
     if(!response.ok) {
       if(exhaustedQuota(response.status,envelope)){if(i+1<providers.length)continue;throw failure('QUOTA_EXHAUSTED','configured provider quota exhausted',{attempts:records});}
@@ -46,16 +46,16 @@ export async function requestCompletion(payload,{config,fetchImpl=fetch,signal,t
     return {envelope,attempts:records};
   }
 }
-export async function requestStructured(task,{config,validate,fetchImpl=fetch,repairLimit=1,timeoutMs=config.timeoutMs??240000,signal}) {
+export async function requestStructured(task,{config,validate,fetchImpl=fetch,repairLimit=1,timeoutMs=config.timeoutMs??240000,signal,onAttempt=()=>{},formatRepairFeedback=repairFeedback}) {
   if(![0,1].includes(repairLimit))throw failure('CONFIGURATION','repair limit must be zero or one');
   const messages=[{role:'system',content:task.instructions.join('\n')},{role:'user',content:JSON.stringify(task)}];const records=[];
   for(let attempt=0;attempt<=repairLimit;attempt++) {
-    const {envelope,attempts}=await requestCompletion({messages,response_format:{type:'json_object'}},{config,fetchImpl,timeoutMs,signal});records.push(...attempts);
+    const {envelope,attempts}=await requestCompletion({messages,response_format:{type:'json_object'}},{config,fetchImpl,timeoutMs,signal,onAttempt});records.push(...attempts);
     const choice=envelope.choices?.[0];
     if(envelope.choices?.length!==1||choice?.finish_reason!=='stop'||choice?.message?.refusal||choice?.message?.tool_calls?.length||typeof choice?.message?.content!=='string')throw failure('STRUCTURED_OUTPUT','remote completion incomplete or refused');
     try{const data=parseStructuredResponse(choice.message.content);validate(data);return {data,attempts:attempt+1,model:envelope.model??config.model,requested_model:config.model,records};}catch(error){
-      if(attempt===repairLimit)throw failure('STRUCTURED_OUTPUT','remote structured output failed validation');
-      messages.push({role:'user',content:repairFeedback(error)});
+      if(attempt===repairLimit)throw failure('STRUCTURED_OUTPUT','remote structured output failed validation',{validation_issues:error.validation_issues??[{path:'',category:error instanceof SyntaxError?'JSON_PARSE':'VALIDATION'}]});
+      messages.push({role:'user',content:formatRepairFeedback(error)});
     }
   }
 }
