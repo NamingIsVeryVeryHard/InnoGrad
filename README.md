@@ -6,7 +6,7 @@ InnoGrad 面向研究生培养全过程，计划依托 [Inno-Agent](https://hhyq
 
 让学生知道“该做什么”，让教师知道“怎么审”，让学院知道“哪里需要管”。
 
-**项目状态：需求分析阶段。** 当前仓库提供需求文档、目录结构和协作模板，尚无可运行版本。下文介绍的是规划中的功能。
+**项目状态：需求设计与方法原型验证。** 当前仓库提供已合并的需求与领域模型，以及可本地运行的研究生画像、历史画像和研究指导方法原型。完整业务应用尚未实现，下文核心审核和双端功能仍属于规划内容。
 
 ## 项目背景
 
@@ -67,7 +67,9 @@ flowchart LR
 
 ## 使用说明
 
-当前可阅读下方文档了解需求与功能规划。安装、运行和部署说明将随首个可运行版本提供。
+画像方法原型可使用合成材料运行，也可通过 InnoAgent 执行真实 Skill。安装与运行命令见[研究生画像方法说明](docs/algorithm/graduate_portrait.md)和[画像 Skill Demo](demos/graduate-portrait/README.md)。
+
+[历史画像与成长指导 Demo](demos/portrait-history-guidance/README.md)通过命令行读取本地材料和已有画像，对照不同任务的证据，保留可定位的研究目标，并据当前材料整理建议。该 Demo 不实现正式审核、业务权限或指导效果评估；真实材料和结果只保存在 Git 忽略目录。
 
 ## 项目文档
 
@@ -82,13 +84,14 @@ flowchart LR
 | [功能规格说明书](docs/requirements/functional_spec.md) | 按课程模板汇总角色、功能树、审核闭环和核心领域类图 |
 | [非功能需求规范](docs/requirements/nonfunctional_spec.md) | 课程要求提交的基本质量要求；具体指标仍待确认 |
 | [UML 领域模型](docs/software/domain_model.md) | 核心业务对象、属性、关系与多重性 |
+| [研究生画像方法原型](docs/algorithm/graduate_portrait.md) | 显性规则、隐性评价、输入约定与本地运行 |
 | [平台基础与建设边界](docs/software/platform_reuse.md) | Inno-Agent 的可复用能力与需要建设的业务能力 |
 | [协作流程](docs/mgmt/project_workflow.md) | 任务管理、需求反馈、缺陷记录和评审约定 |
 | [阶段交付与验收](tasks/plan.md) | 第一周交付与第二周任务、评审和完成标准 |
 | [团队 Skills 与 GitHub Projects](.agents/README.md) | 共享 skills、成员授权与项目操作约定 |
 | [贡献指南](CONTRIBUTING.md) | 从认领任务到提交 PR 的参与步骤 |
 
-第二周的角色、需求与领域模型为待业务评审的草案，尚无运行测试结果。非功能需求先说明基本要求，具体指标、权限细则、评价量表和部署要求仍需确认。
+第二周的角色、需求与领域模型已形成并保留待确认业务规则。画像方法原型已完成本地结构和引用校验，但不等于业务后端、正式审核、权限审计或教师评价校准已经完成。
 
 ## 仓库结构
 
@@ -100,6 +103,9 @@ InnoGrad/
 ├── apps/
 │   ├── web/              # 多角色 Web 应用
 │   └── server/           # 业务服务与智能体接入
+├── demos/
+│   ├── graduate-portrait/ # 画像 Skill 演示与 Swagger 调试
+│   └── portrait-history-guidance/ # 历史画像与研究指导命令行演示
 ├── docs/
 │   ├── requirements/     # 问题定义、范围、角色与详细需求
 │   ├── algorithm/        # 规则与评价方法
@@ -109,6 +115,10 @@ InnoGrad/
 ├── tests/
 │   ├── unit/             # 单元测试
 │   └── integration/      # 集成测试
+├── skills/
+│   ├── graduate-implicit-assessment/ # 科研能力与研究素养评价
+│   ├── graduate-portrait/            # 综合画像整合与结构化调用脚本
+│   └── graduate-research-guidance/  # 基于材料的研究指导
 ├── .github/
 │   ├── ISSUE_TEMPLATE/   # 任务、缺陷和需求反馈模板
 │   ├── PULL_REQUEST_TEMPLATE.md
