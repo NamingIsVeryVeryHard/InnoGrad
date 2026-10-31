@@ -1,0 +1,170 @@
+{
+  "version": "explicit-2026-10-13-draft.1",
+  "status": "draft",
+  "fields": [
+    {
+      "id": "grade_label",
+      "label": "年级（材料记载）",
+      "type": "string",
+      "unit": null
+    },
+    {
+      "id": "research_topic",
+      "label": "研究主题",
+      "type": "string",
+      "unit": null
+    },
+    {
+      "id": "course_status",
+      "label": "课程完成情况（自报）",
+      "type": "string",
+      "unit": null
+    },
+    {
+      "id": "credits_earned",
+      "label": "已修学分",
+      "type": "number",
+      "unit": "学分"
+    },
+    {
+      "id": "credits_required",
+      "label": "要求学分（材料记载）",
+      "type": "number",
+      "unit": "学分"
+    },
+    {
+      "id": "papers_reported",
+      "label": "本期发表论文数量（自报）",
+      "type": "number",
+      "unit": "篇"
+    },
+    {
+      "id": "literature_read_reported",
+      "label": "文献阅读数量（自报）",
+      "type": "number",
+      "unit": "篇"
+    },
+    {
+      "id": "academic_events_reported",
+      "label": "学术活动次数（自报）",
+      "type": "number",
+      "unit": "次"
+    },
+    {
+      "id": "practice_participants_reported",
+      "label": "实践服务人数（自报）",
+      "type": "number",
+      "unit": "人"
+    }
+  ],
+  "item_kinds": [
+    "paper",
+    "project",
+    "patent",
+    "software",
+    "award",
+    "exchange",
+    "practice",
+    "goal",
+    "contribution",
+    "education_application",
+    "training"
+  ],
+  "groups": [
+    {
+      "id": "annual-goals",
+      "label": "年级与年度目标",
+      "fields": [
+        "grade_label"
+      ],
+      "item_kinds": [
+        "goal"
+      ]
+    },
+    {
+      "id": "research-training",
+      "label": "科研训练",
+      "fields": [
+        "research_topic",
+        "papers_reported"
+      ],
+      "item_kinds": [
+        "paper",
+        "training",
+        "award"
+      ]
+    },
+    {
+      "id": "progress-contribution",
+      "label": "课题进展与个人贡献",
+      "fields": [],
+      "item_kinds": [
+        "project",
+        "contribution"
+      ]
+    },
+    {
+      "id": "education-alignment",
+      "label": "智能教育契合度",
+      "fields": [],
+      "item_kinds": [
+        "education_application"
+      ]
+    },
+    {
+      "id": "academic-exchange",
+      "label": "学术交流",
+      "fields": [
+        "academic_events_reported"
+      ],
+      "item_kinds": [
+        "exchange"
+      ]
+    },
+    {
+      "id": "practice",
+      "label": "实践落地",
+      "fields": [
+        "practice_participants_reported"
+      ],
+      "item_kinds": [
+        "practice",
+        "patent",
+        "software"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "id": "papers-consistency",
+      "label": "自报发表数与逐项发表记录一致性",
+      "kind": "consistency",
+      "reported_field": "papers_reported",
+      "metric": "paper.published",
+      "applicable_stages": [
+        "annual"
+      ]
+    },
+    {
+      "id": "credit-requirement",
+      "label": "培养学分要求",
+      "kind": "minimum",
+      "metric": "credits_earned",
+      "threshold": null,
+      "source": null,
+      "applicable_stages": [
+        "annual"
+      ]
+    },
+    {
+      "id": "credit-material-comparison",
+      "label": "已修与要求学分的材料记录核对",
+      "kind": "material_comparison",
+      "metric": "credits_earned",
+      "required_field": "credits_required",
+      "applicable_stages": [
+        "annual"
+      ]
+    }
+  ]
+}
