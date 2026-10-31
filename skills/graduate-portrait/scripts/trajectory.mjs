@@ -144,8 +144,10 @@ export function prepareTrajectoryUpdate({bundle: raw, previous = null, recordedA
   // Allocate after prior records so existing citations remain stable across updates.
   sourceIndex.push(...currentSources);
   const used = new Set(referenced(previous ? {
+    current_focus: previous.current_focus,
     features: previous.features, goals: previous.goals, conditions: previous.conditions,
-    explanation: previous.explanation, plan_reviews: previous.plan_reviews,
+    plan_reviews: previous.plan_reviews, explanation: previous.explanation,
+    guidance: previous.guidance,
   } : null));
   const sources = sourceIndex.filter(s => s.material_id === materialId || used.has(s.id));
   const chronology = recordedAt && (!previous || previous.chronology === 'dated') ? 'dated' : 'unknown';

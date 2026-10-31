@@ -204,3 +204,14 @@ test('已完成目标不能作为当前目标复用', async () => {
   const reused = response(preparedEarlier);
   assert.throws(() => validateTrajectoryResponse(preparedEarlier, reused), /completed goal/i);
 });
+
+test('转发的当前焦点和指导引用会保留对应来源', async () => {
+  const {profile: previous} = await initial();
+  const original = previous.source_index[0];
+  previous.source_index.push({...original, id: 'C2'});
+  previous.current_focus.source_refs = ['C2'];
+  previous.guidance[0].source_refs = ['C2'];
+  const prepared = prepareTrajectoryUpdate({bundle: bundle('2025-2026', 'synthetic-two'),
+    previous, recordedAt: '2026-06-01', dateBasis: '合成日期'});
+  assert.ok(prepared.task.sources.some(source => source.id === 'C2'));
+});
