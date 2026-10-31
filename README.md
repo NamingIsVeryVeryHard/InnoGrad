@@ -69,6 +69,10 @@ flowchart LR
 
 画像方法原型可使用合成材料运行，也可通过 InnoAgent 执行真实 Skill。安装与命令见[方法说明](docs/algorithm/graduate_portrait.md#运行与接入)，本地演示与 Swagger 调试见[画像 Skill Demo](demos/graduate-portrait/README.md)。完整业务应用的安装和部署说明将在实现后补充。
 
+[历史画像与成长指导 Demo](demos/portrait-history-guidance/README.md)通过命令行读取本地真实材料和已有画像，对照不同任务的证据，保留可定位的研究目标，并据当前材料整理建议。缺少的行为记录、学生自述和反馈保持未知。真实案例仅在本地保存，仓库使用虚构数据做测试；该演示不重新调用模型，不代表已验证指导效果。
+
+需要模型根据当前报告和可选历史材料生成指导时，使用独立的[研究指导 Skill](skills/graduate-research-guidance/SKILL.md)。InnoAgent 加载并执行该 Skill，通过模型网关调用 ECNU Qwen；入口生成 JSON 和中文 Markdown，检查各栏目引用，并保存会话、Skill 哈希与实际模型信息。位置校验通过不代表已验证建议效果。配置与复验命令见[运行配置](demos/portrait-history-guidance/README.md#研究指导-skill-的原生运行)。
+
 ## 项目文档
 
 | 文档 | 内容 |
@@ -92,7 +96,8 @@ InnoGrad/
 │   ├── web/              # 多角色 Web 应用
 │   └── server/           # 业务服务与智能体接入
 ├── demos/
-│   └── graduate-portrait/ # 画像 Skill 演示与 Swagger 调试
+│   ├── graduate-portrait/ # 画像 Skill 演示与 Swagger 调试
+│   └── portrait-history-guidance/ # 历史画像与成长指导命令行演示
 ├── docs/
 │   ├── requirements/     # 问题定义与产品范围
 │   ├── algorithm/        # 规则与评价方法
@@ -101,7 +106,8 @@ InnoGrad/
 │   └── retrospection/    # 反馈与复盘
 ├── skills/               # 显式安装到 InnoAgent 的业务 Skills
 │   ├── graduate-implicit-assessment/ # 科研能力与研究素养评价
-│   └── graduate-portrait/ # 综合画像整合与结构化调用脚本
+│   ├── graduate-portrait/ # 综合画像整合与结构化调用脚本
+│   └── graduate-research-guidance/ # 基于历史材料的研究指导
 ├── .agents/              # 团队开发流程 Skills
 ├── tests/
 │   ├── unit/             # 单元测试

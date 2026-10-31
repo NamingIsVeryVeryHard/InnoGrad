@@ -4,6 +4,7 @@ import {fixture} from '../fixtures/portrait.mjs';
 import {buildPortrait,buildAResult,validateAssessment} from '../../skills/graduate-portrait/scripts/engine.mjs';
 import {prepareSynthesisTask,validateSynthesis} from '../../skills/graduate-portrait/scripts/synthesis.mjs';
 import {runPortraitWorkflow} from '../../skills/graduate-portrait/scripts/workflow.mjs';
+import {renderPortrait} from '../../skills/graduate-portrait/scripts/report.mjs';
 const empty=()=>({current_work:[],demonstrated:[],attention:[],next_steps:[]});
 
 test('整合概览引用已有评价，显性与全部隐性结果保持不变',async()=>{
@@ -22,6 +23,39 @@ test('拒绝不存在的画像引用和将未评价项用作正面能力结论',
  assert.throws(()=>validateSynthesis(p,{...empty(),current_work:[{text:'无来源的内容',source_refs:['R9999']}]}));
  assert.throws(()=>validateSynthesis(p,{...empty(),demonstrated:[{text:'证据不足却声称表现充分',source_refs:[missing.id]}]}));
  assert.doesNotThrow(()=>validateSynthesis(p,{...empty(),attention:[{text:'该项材料需要补充。',source_refs:[missing.id]}]}));
+});
+
+test('有原文但暂缓等级的观察可支持研究特色，解释与原评价分开保留',()=>{
+ const p=buildPortrait(fixture());
+ const criteria=p.implicit.dimensions.flatMap(d=>d.criteria);
+ const observed=criteria.find(c=>c.evidence.length);
+ const partial=criteria.find(c=>c.evidence_state==='insufficient');
+ partial.evidence=structuredClone(observed.evidence);
+ partial.observed='报告列出了研究对象和比较方案，具体实施记录尚未提供。';
+ const original=structuredClone(p.implicit);
+ const source=prepareSynthesisTask(p).source_records.find(r=>r.content===partial);
+ const feature={text:'材料呈现了围绕具体对象组织比较方案的研究思路。',basis:'inferred',
+  rationale:'已有观察包含研究对象和比较方案，可据此归纳方案组织思路；不据此判断实施能力。',
+  source_refs:[source.id]};
+ const synthesis={...empty(),research_features:[feature]};
+ assert.doesNotThrow(()=>validateSynthesis(p,synthesis));
+ assert.deepEqual(p.implicit,original);
+ assert.equal(partial.performance_grade,null);
+ const md=renderPortrait({...p,synthesis});
+ assert.ok(md.includes(feature.text));
+ assert.ok(md.includes(feature.rationale));
+ assert.ok(md.includes('材料推断'));
+ const noReason=structuredClone(synthesis);delete noReason.research_features[0].rationale;
+ assert.throws(()=>validateSynthesis(p,noReason));
+});
+
+test('没有原文的缺项不能被当作研究特色依据',()=>{
+ const p=buildPortrait(fixture());
+ const source=prepareSynthesisTask(p).source_records.find(r=>r.kind==='implicit'&&!r.content.evidence.length);
+ assert.throws(()=>validateSynthesis(p,{...empty(),research_features:[{
+  text:'没有交接记录说明学生偏好独立工作。',basis:'inferred',
+  rationale:'只按缺失材料猜测。',source_refs:[source.id],
+ }]}));
 });
 
 test('整合阶段失败不返回假成功画像',async()=>{

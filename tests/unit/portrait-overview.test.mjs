@@ -27,6 +27,20 @@ test('统一 JSON 保留年报与开题范围、原等级以及逐项引用', ()
   assert.deepEqual(value, original);
 });
 
+test('研究特色保留材料归纳或推断及理由，不要求上游先给能力等级', () => {
+  const value = fixture();
+  const before = structuredClone(value.evaluations);
+  value.overview.research_features = [{
+    text: '研究方案将教育问题和方法比较联系起来。',
+    basis: 'inferred', rationale: '材料同时呈现任务对象与比较方案；这里只解释研究思路。',
+    source_refs: ['Y1'],
+  }];
+  assert.doesNotThrow(() => validateOverview(value));
+  assert.deepEqual(value.evaluations, before);
+  delete value.overview.research_features[0].rationale;
+  assert.throws(() => validateOverview(value));
+});
+
 test('拒绝全文字符串、无效引用及评价串用其他任务来源', () => {
   assert.throws(() => validateOverview({portrait: 'Markdown 全文'}));
   const value = fixture();

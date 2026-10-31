@@ -54,6 +54,45 @@
     "overview": {
       "type": "object",
       "properties": {
+        "research_features": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs",
+              "basis",
+              "rationale"
+            ],
+            "additionalProperties": false
+          }
+        },
         "current_work": {
           "type": "array",
           "maxItems": 3,
