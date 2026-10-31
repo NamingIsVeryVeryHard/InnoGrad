@@ -1,0 +1,47 @@
+import { buildAnnualAExample } from './a-example.js';
+import { readFileSync } from 'node:fs';
+import { validateBundle } from '../skill-bridge.mjs';
+import type { ParsedMaterialBundle } from './contracts.js';
+
+function readExample(file: string): { bundle: ParsedMaterialBundle } {
+  const request = JSON.parse(readFileSync(new URL(`../examples/${file}`, import.meta.url), 'utf8'));
+  validateBundle(request.bundle);
+  return request;
+}
+
+const annual = readExample('annual-report.synthetic.json');
+const contextualAnnual: ParsedMaterialBundle = {
+  ...structuredClone(annual.bundle),
+  input_context: {
+    snapshot_id: 'SYNTHETIC-SNAPSHOT-2028-v2',
+    statistics_cutoff_at: '2028-08-31T16:00:00Z',
+    trigger: 'corrected',
+    sources: annual.bundle.documents.map(d => ({
+      document_id: d.document_id, source_version: 'synthetic-v2',
+      authorization: 'authorized', validity: 'active', review_status: 'pending',
+    })),
+  },
+};
+
+export const portraitExamples = {
+  annualReport: {
+    summary: '全虚构博士年报：总结、成果状态与下一学年计划',
+    description: '全虚构合成文本，无原始 PDF；4 个模拟页。sha256 为各页原文以换页符连接后的 UTF-8 字节哈希，不是 PDF 哈希。含本期与累计数量、发表/录用未见刊/审稿/写作状态、作者角色、交流记录及未勾选评定意见。',
+    value: annual,
+  },
+  proposalReport: {
+    summary: '全虚构开题报告：研究问题、方法、风险与进度',
+    description: '全虚构合成文本，无原始 PDF；6 个模拟页。sha256 为各页原文以换页符连接后的 UTF-8 字节哈希。period 为 null，表示未确认统计学年；计划不代表完成，评审与签章均留空。',
+    value: readExample('proposal-report.synthetic.json'),
+  },
+  annualWithAResult: {
+    summary: '全虚构年度报告与 A 显性结果交接',
+    description: '沿用 annualReport 的完整全虚构报告，附上合成 A 结果；显性规则保持待配置或待复核。generated_at 为示例固定时间，producer.mode 为 synthetic，不是当前时间或真实 A 运行记录。传入 aResult 后只执行 B 的评价。',
+    value: { bundle: annual.bundle, aResult: buildAnnualAExample(annual.bundle) },
+  },
+  annualWithContext: {
+    summary: '全虚构年报：输入快照、来源声明及同版显性交接',
+    description: '沿用完整全虚构年报，附固定的模拟快照、统计截止时间和文档级来源状态。A 指纹绑定同一上下文，直接生成画像。',
+    value: { bundle: contextualAnnual, aResult: buildAnnualAExample(contextualAnnual) },
+  },
+};

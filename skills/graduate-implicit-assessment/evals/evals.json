@@ -1,0 +1,91 @@
+{
+  "skill_name": "graduate-implicit-assessment",
+  "version": "0.5.1",
+  "input_policy": "直接使用 Swagger 完整年报、开题和经授权真实材料；不为追求等级另造学生故事。",
+  "scope_cases": [
+    {
+      "prompt": "根据年度报告评价科研能力并给出原文依据",
+      "expected": "invoke"
+    },
+    {
+      "prompt": "已有能力评价，请整理综合画像",
+      "expected": "use graduate-portrait"
+    },
+    {
+      "prompt": "计算论文数并按年度权重评分",
+      "expected": "out_of_scope"
+    }
+  ],
+  "semantic_cases": [
+    {
+      "id": "negative-result-is-not-low-performance",
+      "execution": "按完整任务包人工或授权模型逐项复核；自动结构检查不证明语义质量",
+      "criterion_ids": [
+        "claim-evidence",
+        "effect-check"
+      ],
+      "expect": {
+        "boundary": "负结果、目标未达本身不降级，评价证据推理与检查方法。"
+      }
+    },
+    {
+      "id": "available-resources-without-risk-response",
+      "execution": "按完整任务包人工或授权模型逐项复核；未自动调用模型",
+      "criterion_id": "feasibility-risk",
+      "expect": {
+        "evidence_state": "insufficient",
+        "performance_grade": null,
+        "boundary": "资源可用不能替代明确约束与风险应对。"
+      }
+    },
+    {
+      "id": "feedback-stages-separated",
+      "execution": "现有年度完整示例annual-page-2、annual-page-3人工或授权模型复核",
+      "criterion_ids": [
+        "feedback-understanding",
+        "adjustment-action",
+        "effect-check"
+      ],
+      "expect": {
+        "boundary": "反思可初评，所述行动仍自述，独立验证未完成不能宣称效果已核验。"
+      }
+    },
+    {
+      "id": "public-proposal-limits",
+      "execution": "现有开题完整示例proposal-page-2、3、4人工或授权模型复核",
+      "criterion_ids": [
+        "literature-comparison",
+        "problem-definition",
+        "method-fit",
+        "validation-design",
+        "feasibility-risk"
+      ],
+      "expect": {
+        "boundary": "具体计划可支持方案评价；文献正式条目未给不能宣称已完成文献核验；独立贡献未知。"
+      }
+    },
+    {
+      "id": "source-validity-and-review-scope",
+      "execution": "使用完整Swagger年报，改变来源有效性和文档复核声明；实际Skill调用后审读",
+      "expect": {
+        "boundary": "明确撤销或被替代来源不支持新等级；文档复核不确认每条自述；争议项暂缓，其余可用部分继续。"
+      }
+    },
+    {
+      "id": "missing-opportunity-versus-missing-record",
+      "execution": "沿用完整年报；对比未提协作和调用方明确无展示机会的任务条件",
+      "criterion_id": "division-responsibility",
+      "expect": {
+        "boundary": "未提协作是证据不足；有明确任务条件才可不适用，均不定低等级。"
+      }
+    }
+  ],
+  "review_requirements": [
+    "按每个 required_conditions 审读证据与理由",
+    "引文原样且物理页段准确",
+    "原计划与未来计划分清；成果目录不当论证来源",
+    "可评价状态、必要条件、贡献及等级相容",
+    "缺证据不定低分；计划与完成、自述与核验分清",
+    "未观察条件须查完整材料；个人职责、产物对应、团队分工及指导支持分别判断"
+  ]
+}

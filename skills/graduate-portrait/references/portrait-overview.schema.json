@@ -1,0 +1,466 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Graduate portrait overview",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "portrait-overview-1.0"
+    },
+    "student_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "generated",
+        "unchanged",
+        "identity_conflict",
+        "missing_input"
+      ]
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stage": {
+            "enum": [
+              "annual",
+              "proposal",
+              "other"
+            ]
+          },
+          "period": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "scope_id",
+          "stage",
+          "period"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "overview": {
+      "type": "object",
+      "properties": {
+        "research_features": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs",
+              "basis",
+              "rationale"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "current_work": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "research_plan": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "demonstrated": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "attention": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "next_steps": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "completion_evidence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs",
+              "completion_evidence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "changes": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "text",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "current_work",
+        "research_plan",
+        "demonstrated",
+        "attention",
+        "next_steps",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rubric_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "explicit": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "criterion_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "observation": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidence_state": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "performance_grade": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_refs": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "suggestion": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dimension_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dimension_label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "grading_standard": {
+                  "type": "object",
+                  "properties": {
+                    "needs_improvement": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "meets_requirements": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "well_demonstrated": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "needs_improvement",
+                    "meets_requirements",
+                    "well_demonstrated"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "criterion_id",
+                "label",
+                "observation",
+                "evidence_state",
+                "performance_grade",
+                "source_refs",
+                "suggestion"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "scope_id",
+          "rubric_version",
+          "explicit",
+          "criteria"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "source_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "document_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "quote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "scope_id",
+          "document_id",
+          "page",
+          "quote",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "completion": {
+      "enum": [
+        "complete",
+        "partial",
+        "not_generated"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "student_id",
+    "status",
+    "scopes",
+    "overview",
+    "evaluations",
+    "source_records",
+    "issues"
+  ],
+  "additionalProperties": false
+}
