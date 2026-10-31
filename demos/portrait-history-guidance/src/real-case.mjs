@@ -48,6 +48,9 @@ export function analyzeRealCase({ manifest, materials }) {
     for (const doc of bundle.documents) {
       if (doc.student_id !== manifest.student_id) fail('文档学生身份不一致');
       if (!doc.document_id || docs.has(doc.document_id) || !/^[a-f0-9]{64}$/i.test(doc.sha256)) fail('文档 ID 或 hash 无效');
+      const state = bundle.input_context?.sources?.find(s => s.document_id === doc.document_id);
+      if (state?.authorization === 'denied' ||
+          ['withdrawn', 'superseded', 'disputed'].includes(state?.validity)) fail('unavailable source');
       if (new Set(doc.segments.map(s => s.segment_id)).size !== doc.segments.length) fail('重复页段');
       docs.set(doc.document_id, doc);
     }
@@ -100,10 +103,15 @@ export function analyzeRealCase({ manifest, materials }) {
       return unique(refs.flatMap(id => records.get(id).source_refs));
     };
     const sections = {};
-    for (const [section, claims] of Object.entries(portrait.synthesis ?? {})) sections[section] = claims.map(item => ({
-      text: item.text, source_refs: resolveRefs(item.source_refs), upstream_ref_ids: [...item.source_refs],
-      ...(item.completion_evidence !== undefined ? { completion_evidence: item.completion_evidence } : {}),
-    }));
+    for (const [section, claims] of Object.entries(portrait.synthesis ?? {})) sections[section] = claims.map(item => {
+      const adapted = {text: item.text, source_refs: resolveRefs(item.source_refs), upstream_ref_ids: [...item.source_refs]};
+      if (item.completion_evidence !== undefined) adapted.completion_evidence = item.completion_evidence;
+      if (section === 'research_features') {
+        if (item.basis !== undefined) adapted.basis = item.basis;
+        if (item.rationale !== undefined) adapted.rationale = item.rationale;
+      }
+      return adapted;
+    });
     models.set(material.id, { material, criteria, records, resolveRefs, sections, locate });
   }
   const current = [...models.values()].find(m => m.material.role === 'current');
@@ -187,7 +195,7 @@ export function formatMarkdown(result) {
   write('\n## 当前已有画像（保留原文）');
   for (const [section, items] of Object.entries(result.current_portrait.sections)) {
     write(`\n### ${section}`);
-    for (const item of items) write(`\n- ${item.text} ${refs(item)}${item.completion_evidence ? `\n  完成依据：${item.completion_evidence}` : ''}`);
+    for (const item of items) write(`\n- ${item.text} ${refs(item)}${item.basis ? `\n  依据性质：${item.basis}` : ''}${item.rationale ? `\n  推断解释：${item.rationale}` : ''}${item.completion_evidence ? `\n  完成依据：${item.completion_evidence}` : ''}`);
   }
   write('\n## 意图与实际情境');
   for (const [key, label] of Object.entries({ goal: '材料明确写出的研究目标', attitude: '态度', perceived_expectations: '感知他人期望', perceived_control: '主观控制感', difficulty: '个人困难' })) {

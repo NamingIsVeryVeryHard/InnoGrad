@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, readFile, writeFile, rm, access} from 'node:fs/promises';
+import {mkdtemp, mkdir, chmod, readFile, writeFile, rm, access, stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -247,7 +247,16 @@ test('CLI模型失败写失败记录，退出非零，不生成成功结果；�
   assert.equal(failed.code, 1);
   assert.doesNotMatch(failed.stderr, /synthetic-secret/);
   assert.equal(JSON.parse(await readFile(join(out, 'run.json'))).status, 'failed');
+  assert.equal((await stat(out)).mode & 0o777, 0o700);
+  assert.equal((await stat(join(out, 'run.json'))).mode & 0o777, 0o600);
   await assert.rejects(access(join(out, 'result.json')));
+  const existing = join(dir, 'existing');
+  await mkdir(existing);
+  await chmod(existing, 0o755);
+  const failedExisting = await run(['run', '--current', current, '--out', existing]);
+  assert.equal(failedExisting.code, 1);
+  assert.equal((await stat(existing)).mode & 0o777, 0o700);
+  assert.equal((await stat(join(existing, 'run.json'))).mode & 0o777, 0o600);
   const before = calls;
   assert.equal((await run(['run', '--current', current, '--out'])).code, 1);
   assert.equal((await run(['run', '--current', current, '--out', out])).code, 1);

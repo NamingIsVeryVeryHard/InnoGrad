@@ -202,6 +202,8 @@ export function validateTrajectoryResponse(prepared, value) {
   const reused = value.current_goals.map(g => g.previous_id).filter(id => id !== null);
   unique(reused, 'reused goal id');
   check(reused.every(id => oldGoals.some(g => g.id === id)), 'unknown previous goal');
+  check(reused.every(id => oldGoals.find(g => g.id === id)?.status !== 'reported_complete'),
+    'completed goal cannot be current');
   const unresolved = oldGoals.filter(g => g.status !== 'reported_complete');
   unique(value.plan_reviews.map(r => r.goal_id), 'goal review id');
   check(value.plan_reviews.length === unresolved.length &&
@@ -213,6 +215,9 @@ export function validateTrajectoryResponse(prepared, value) {
       check(prepared.task.chronology === 'dated', 'progress comparison requires confirmed material chronology');
     }
   }
+  const completedThisUpdate = new Set(value.plan_reviews
+    .filter(item => item.status === 'reported_completed').map(item => item.goal_id));
+  check(reused.every(id => !completedThisUpdate.has(id)), 'completed goal cannot be current');
   return value;
 }
 

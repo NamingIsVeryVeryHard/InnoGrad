@@ -187,3 +187,20 @@ test('新证据可修订旧解释并记录报告自述完成，保留前后文�
   assert.equal(profile.goals[0].status, 'reported_complete');
   assert.deepEqual(profile.plan_reviews[0].prior_goal.source_refs, previous.goals[0].source_refs);
 });
+
+test('已完成目标不能作为当前目标复用', async () => {
+  const {profile: previous} = await initial();
+  const prepared = prepareTrajectoryUpdate({bundle: bundle('2025-2026', 'synthetic-two'),
+    previous, recordedAt: '2026-06-01', dateBasis: '合成日期'});
+  const completed = response(prepared);
+  completed.plan_reviews[0].status = 'reported_completed';
+  assert.throws(() => validateTrajectoryResponse(prepared, completed), /completed goal/i);
+
+  const completedEarlier = structuredClone(previous);
+  completedEarlier.goals[0].status = 'reported_complete';
+  completedEarlier.current_goal_ids = [];
+  const preparedEarlier = prepareTrajectoryUpdate({bundle: bundle('2025-2026', 'synthetic-two'),
+    previous: completedEarlier, recordedAt: '2026-06-01', dateBasis: '合成日期'});
+  const reused = response(preparedEarlier);
+  assert.throws(() => validateTrajectoryResponse(preparedEarlier, reused), /completed goal/i);
+});

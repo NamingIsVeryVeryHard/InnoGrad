@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {mkdir, readdir, writeFile} from 'node:fs/promises';
+import {chmod, mkdir, readdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {loadEnvFile} from 'node:process';
 import {parseArgs} from 'node:util';
@@ -23,23 +23,25 @@ async function main() {
   const context = await loadContext(values);
   const config = await innoAgentConfig(process.env);
   const out = resolve(values.out);
-  await mkdir(out, {recursive: true});
+  await mkdir(out, {recursive: true, mode: 0o700});
+  await chmod(out, 0o700);
   if ((await readdir(out)).length) throw new Error('output directory must be empty; choose a new --out');
+  const save = (path, content) => writeFile(path, content, {mode: 0o600});
   let runner;
   try {
     runner = await createInnoAgentRunner(config, {skillNames: ['graduate-research-guidance'],
       formatRepairFeedback: guidanceRepairFeedback});
     const result = await generateGuidance(context, {runner});
-    await writeFile(`${out}/result.json`, JSON.stringify(result, null, 2) + '\n');
-    await writeFile(`${out}/result.md`, formatGuidance(result));
-    await writeFile(`${out}/run.json`, JSON.stringify({
+    await save(`${out}/result.json`, JSON.stringify(result, null, 2) + '\n');
+    await save(`${out}/result.md`, formatGuidance(result));
+    await save(`${out}/run.json`, JSON.stringify({
       status: 'generated', history_count: context.scope.history.length, provenance: result.provenance,
     }, null, 2) + '\n');
     console.log(JSON.stringify({out, provenance: result.provenance, recommendations: result.guidance.length}, null, 2));
   } catch (error) {
     let origin = null;
     if (runner) try { origin = await runner.provenance(); } catch {}
-    await writeFile(`${out}/run.json`, JSON.stringify({
+    await save(`${out}/run.json`, JSON.stringify({
       status: 'failed', error_code: error.code ?? 'OUTPUT_FAILURE',
       ...(error.validation_issues ? {validation_issues: error.validation_issues} : {}),
       provenance: {platform: 'InnoAgent', model_called: origin ? origin.model_attempts.length > 0 : null,

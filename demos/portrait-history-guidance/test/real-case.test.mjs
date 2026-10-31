@@ -97,3 +97,39 @@ test('旧引用未提供原文时显式留空，不伪造页段；Markdown区分
   assert.match(md, /原文证据未提供/);
   assert.match(md, /来源索引/);
 });
+
+test('研究特色保留推断依据和解释，并在Markdown中标明', () => {
+  const input = fixture();
+  const feature = {
+    text: '材料可归纳出围绕验证设计组织研究的特点。',
+    basis: 'inferred',
+    rationale: '当前材料同时呈现研究目标和验证方案，因此只在该材料范围内作有限归纳。',
+    source_refs: ['R1'],
+  };
+  input.materials[1].portrait.synthesis.research_features = [feature];
+  const result = analyzeRealCase(input);
+  const adapted = result.current_portrait.sections.research_features[0];
+  assert.equal(adapted.text, feature.text);
+  assert.equal(adapted.basis, feature.basis);
+  assert.equal(adapted.rationale, feature.rationale);
+  assert.deepEqual(adapted.upstream_ref_ids, feature.source_refs);
+  assert.equal(adapted.source_refs.length, 1);
+  const md = formatMarkdown(result);
+  assert.match(md, /依据性质：inferred/);
+  assert.match(md, new RegExp(feature.rationale));
+});
+
+test('明确撤销或不可用的材料来源不会进入本地适配', () => {
+  for (const state of [
+    {authorization: 'denied', validity: 'active'},
+    {authorization: 'authorized', validity: 'withdrawn'},
+    {authorization: 'authorized', validity: 'superseded'},
+    {authorization: 'authorized', validity: 'disputed'},
+  ]) {
+    const input = fixture();
+    input.materials[1].bundle.input_context = {
+      sources: [{document_id: 'current', ...state}],
+    };
+    assert.throws(() => analyzeRealCase(input), /unavailable source/);
+  }
+});
