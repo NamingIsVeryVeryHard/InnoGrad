@@ -125,4 +125,8 @@ class InnoAgentAdapter:
                 "response_model": response.headers.get("x-model") or response.headers.get("x-response-model"),
             }
         finally:
-            self._request("DELETE", f"/api/sessions/{session_id}")
+            try:
+                self._request("DELETE", f"/api/sessions/{session_id}")
+            except Exception:
+                # The review result remains usable; the runtime owns its own expiry policy.
+                pass

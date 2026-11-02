@@ -450,7 +450,7 @@ def create_app(database_url=None, storage=None):
         correction = session.scalar(select(Correction).where(Correction.submission_id==sub.id, Correction.status=='opened'))
         number = (session.scalar(select(func.max(Version.number)).where(Version.submission_id == sub.id)) or 0) + 1
         version = Version(id=uid(), submission_id=sub.id, number=number,
-            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "correction_id": correction.id if correction else None, "form": form, "file_ids": ids,
+            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "kind": sub.kind, "correction_id": correction.id if correction else None, "form": form, "file_ids": ids,
                       "file_roles": {fid: roles.get(fid, "other") for fid in ids}, "references": refs, "requirements": requirements,
                       "period": task.period if task else None, "late": bool(task and now() > task.deadline)})
         session.add(version)
