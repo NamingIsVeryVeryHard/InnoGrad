@@ -37,7 +37,7 @@ main{max-width:1120px;margin:0 auto;padding:42px 22px 70px}h1{font-size:34px;lin
 <div class="flow"><div class="step">提交材料</div><div class="arrow">→</div><div class="step">冻结审核包</div><div class="arrow">→</div><div class="step">Skill / 规则校验</div><div class="arrow">→</div><div class="step">真实 InnoAgent 会话</div><div class="arrow">→</div><div class="step">证据与结果校验</div><div class="arrow">→</div><div class="step">归档 / 退回 / 人工复核</div></div>
 
 <h2>真实 InnoAgent 验收</h2>
-<p>使用隔离工作区启动本地 InnoAgent，关闭三层记忆，加载仓库中的 <code>material-review-2</code>，通过真实网关配置完成一次模型调用。四类结果如下：</p>
+<p>使用隔离工作区启动本地 InnoAgent，关闭三层记忆，加载仓库中的 <code>material-review-2</code>，通过真实网关配置完成一次模型调用。脱敏现场记录见 <code>school-agent-material-review-live-acceptance-20261102.json</code>；仓库自动 verifier 仍保持离线规则模式，二者分别验证现场接通与可重复回归。四类结果如下：</p>
 <table><thead><tr><th>场景</th><th>预期</th><th>实际</th><th>触发路径</th></tr></thead><tbody>
 <tr><td>材料合规</td><td>自动归档</td><td><span class="tag">archived</span></td><td>真实 Agent 返回全量通过，证据完整，归档与画像 outbox 均完成。</td></tr>
 <tr><td>材料缺失/不合规</td><td>退回整改</td><td><span class="tag">returned</span></td><td>缺少 acceptance notice，确定性规则先行拦截并生成 correction。</td></tr>
@@ -51,7 +51,7 @@ backend/.venv/bin/python verify_local.py   # pytest / migration / syntax / proto
 node --test frontend/prototype/tests/model.test.cjs  # 8 passed
 node --check frontend/prototype/app.js              # PASS
 git diff --check                                      # PASS</pre>
-<p>已逐功能提交，并完成 Astra low review：<code>a013d1b</code>、<code>29084ee</code>、<code>2bc251f</code>、<code>a533fd1</code> 均未留下 P0/P1/P2 问题。按要求忽略 P2 以下问题。</p>
+<p>可重复回归与现场验收的证据已分开保存：现场 JSON 记录真实 Agent 调用、隔离工作区、会话清理与路由结果；自动 verifier 负责迁移、协议合同、规则与前端回归。已逐功能提交，并完成 Astra low review：<code>a013d1b</code>、<code>29084ee</code>、<code>2bc251f</code>、<code>a533fd1</code> 均未留下 P0/P1/P2 问题。按要求忽略 P2 以下问题。</p>
 
 <h2>主要提交</h2>
 <table><thead><tr><th>提交</th><th>内容</th></tr></thead><tbody>

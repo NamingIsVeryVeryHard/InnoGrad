@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "verification": {
+    "type": "live_innoagent_acceptance",
+    "protocol": "InnoAgent 0.7",
+    "endpoint": "http://127.0.0.1:3107",
+    "isolated_workspace": true,
+    "memory_layers": {"L1": false, "L2": false, "L3": false},
+    "actual_model_call": true,
+    "session_cleanup": "deleted",
+    "credentials": "not included"
+  },
+  "outcomes": {
+    "compliant": "archived",
+    "correction": "returned",
+    "uncertain": "pending_review",
+    "uncertain_route": "exception",
+    "service_retry": "retrying",
+    "service_business": "pending_review"
+  },
+  "observations": [
+    "The compliant case called the real InnoAgent endpoint and drained archive and portrait outboxes.",
+    "The correction case was stopped deterministically because acceptance_notice was missing.",
+    "The uncertain case retained a limitation and was routed to exception instead of being auto-approved.",
+    "The transient timeout entered retrying; a business failure remained pending_review without blocking other outbox work."
+  ],
+  "scope": "This artifact verifies routing, protocol execution, cleanup, and queue behavior. It is not a statistical accuracy or learning-outcome evaluation."
+}
