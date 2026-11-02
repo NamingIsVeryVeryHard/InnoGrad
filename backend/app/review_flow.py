@@ -9,10 +9,10 @@ from .auto_review import assess
 def material_outcome(job):
     if not job:
         return {'state':'not_started','label':'尚未启动','issues':0}
-    if job.config.get('mode') not in ('agent','chat'):
+    if job.config.get('mode') not in ('agent','chat','innoagent'):
         return {'state':'not_agent','label':'未执行 Agent 审核','issues':0}
     if job.status != 'succeeded':
-        labels={'queued':'等待 Agent','running':'Agent 审核中','failed':'Agent 执行失败','cancelled':'已取消'}
+        labels={'queued':'等待 Agent','running':'Agent 审核中','retrying':'等待重试','failed':'Agent 执行失败','cancelled':'已取消'}
         return {'state':job.status,'label':labels.get(job.status,job.status),'issues':0}
     from .auto_review import assess
     outcome,reason=assess(job)

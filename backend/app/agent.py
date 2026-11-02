@@ -52,10 +52,16 @@ def job_config():
         raise ValueError('Invalid model endpoint')
     if mode != 'rules' and not base.startswith(('https://','http://127.0.0.1:','http://localhost:')) and os.getenv('AI_ALLOW_INTERNAL_HTTP') != '1':
         raise ValueError('Use HTTPS/local endpoint, or explicitly enable internal HTTP')
+    timeout = int(os.getenv('INNOAGENT_TIMEOUT_SECONDS', '240'))
+    max_attempts = int(os.getenv('AI_MAX_ATTEMPTS', '3'))
+    retry_seconds = int(os.getenv('AI_RETRY_SECONDS', '10'))
+    if timeout <= 0 or not 1 <= max_attempts <= 10 or not 0 <= retry_seconds <= 3600:
+        raise ValueError('Invalid retry or timeout configuration')
     return {'workflow':os.getenv('REVIEW_WORKFLOW','manual'),'mode': mode, 'base_url': base, 'model': model, 'prompt_version':PROMPT_VERSION,
             'parser_version':PARSER_VERSION, 'rule_version':'manual-assist-1',
             'skill': os.getenv('INNOAGENT_SKILL', 'material-review') if mode == 'innoagent' else None,
-            'timeout_seconds': int(os.getenv('INNOAGENT_TIMEOUT_SECONDS', '240')) if mode == 'innoagent' else None}
+            'timeout_seconds': timeout if mode == 'innoagent' else None,
+            'max_attempts': max_attempts, 'retry_seconds': retry_seconds}
 
 
 def parse_file(meta, root):

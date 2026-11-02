@@ -2,6 +2,7 @@
 import argparse
 import time
 from sqlalchemy import select, update
+from datetime import datetime, timedelta, timezone
 from .db import Outbox, Submission, Decision, Archive, Correction, Version, uid, connect
 
 
@@ -12,30 +13,44 @@ def drain(factory, limit=100):
             event = session.scalar(select(Outbox).where(Outbox.status == "pending").order_by(Outbox.created_at).limit(1))
             if not event:
                 break
-            claimed = session.execute(update(Outbox).where(Outbox.id == event.id, Outbox.status == "pending").values(status="processing"))
+            if event.next_attempt_at and event.next_attempt_at > datetime.now(timezone.utc).isoformat():
+                continue
+            claimed = session.execute(update(Outbox).where(Outbox.id == event.id, Outbox.status == "pending")
+                                      .values(status="processing", attempts=Outbox.attempts + 1))
             if claimed.rowcount != 1:
                 continue
-            if event.kind == "review.approved":
-                sub = session.get(Submission, event.aggregate_id)
-                decision = session.get(Decision, event.payload["decision_id"])
-                if not decision or decision.outcome != "approved" or decision.version_id != event.payload["version_id"]:
-                    raise ValueError("Invalid archive event")
-                archive = session.scalar(select(Archive).where(Archive.version_id == decision.version_id))
-                if not archive:
-                    archive = Archive(id=uid(), version_id=decision.version_id, decision_id=decision.id)
-                    session.add(archive)
-                    session.flush()
-                changed = session.execute(update(Submission).where(Submission.id == sub.id,
-                    Submission.current_version_id == decision.version_id, Submission.status == "approved"
-                ).values(status="archived", effective_archive_id=archive.id, lock_version=Submission.lock_version + 1))
-                version = session.get(Version, decision.version_id)
-                cid = version.snapshot.get('correction_id')
-                if cid and changed.rowcount == 1:
-                    session.execute(update(Correction).where(Correction.id==cid, Correction.status=='opened').values(status='completed'))
-                from .portraits import ensure_snapshot
-                ensure_snapshot(session, archive, sub)
-            elif event.kind != "submission.version_created":
-                raise ValueError("Unknown event kind")
+            nested = session.begin_nested()
+            try:
+                if event.kind == "review.approved":
+                    sub = session.get(Submission, event.aggregate_id)
+                    decision = session.get(Decision, event.payload["decision_id"])
+                    if not decision or decision.outcome != "approved" or decision.version_id != event.payload["version_id"]:
+                        raise ValueError("Invalid archive event")
+                    archive = session.scalar(select(Archive).where(Archive.version_id == decision.version_id))
+                    if not archive:
+                        archive = Archive(id=uid(), version_id=decision.version_id, decision_id=decision.id)
+                        session.add(archive)
+                        session.flush()
+                    changed = session.execute(update(Submission).where(Submission.id == sub.id,
+                        Submission.current_version_id == decision.version_id, Submission.status == "approved"
+                    ).values(status="archived", effective_archive_id=archive.id, lock_version=Submission.lock_version + 1))
+                    version = session.get(Version, decision.version_id)
+                    cid = version.snapshot.get('correction_id')
+                    if cid and changed.rowcount == 1:
+                        session.execute(update(Correction).where(Correction.id==cid, Correction.status=='opened').values(status='completed'))
+                    from .portraits import ensure_snapshot
+                    ensure_snapshot(session, archive, sub)
+                elif event.kind != "submission.version_created":
+                    raise ValueError("Unknown event kind")
+            except Exception:
+                nested.rollback()
+                if event.attempts >= 3:
+                    event.status, event.error_code = "failed", "ARCHIVE_FAILED"
+                else:
+                    event.status, event.next_attempt_at = "pending", (datetime.now(timezone.utc) + timedelta(seconds=2 ** event.attempts)).isoformat()
+                    event.error_code = "ARCHIVE_RETRY"
+                continue
+            nested.commit()
             # Submitted events acknowledge manual routing; no fictitious AI success.
             event.status = "done"
             count += 1

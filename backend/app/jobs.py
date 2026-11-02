@@ -29,7 +29,9 @@ def enqueue_ai(session, sub, version, actor_id, automatic=False):
         config={'mode':'disabled','workflow':os.getenv('REVIEW_WORKFLOW','manual')};error='Agent 服务待配置或配置无效；材料已保存，配置完成后可重新启动审核'
     job=AIJob(id=uid(),submission_id=sub.id,version_id=version.id,requested_by=actor_id,input_pack=pack,
         input_hash=pack['input_hash'],
-        config=config,status='failed' if error else 'queued',error=error)
+        config=config,status='failed' if error else 'queued',error=error,
+        error_code='CONFIG_ERROR' if error else None, max_attempts=config.get('max_attempts', 3),
+        finished_at=now() if error else None)
     session.add(job)
     return job
 
@@ -64,51 +66,70 @@ def process_exports(factory, limit=20):
 
 
 def run_ai(factory, root=None, processor=None):
-    """One attempt outside DB transaction. Expired leases recover, fenced writes reject late workers."""
-    root=root or os.getenv('FILE_ROOT','runtime/files')
-    processor=processor or analyze
+    """Execute one due attempt outside a transaction, then apply fenced business routing."""
+    from .auto_review import apply_auto_decision
+    from .review_errors import ReviewFailure
+    root = root or os.getenv('FILE_ROOT', 'runtime/files')
+    processor = processor or analyze
     with factory.begin() as session:
-        candidate=or_(AIJob.status.in_(['queued','retrying']),and_(AIJob.status=='running',AIJob.lease_until<now()))
-        job=session.scalar(select(AIJob).where(candidate,AIJob.attempts<3).order_by(AIJob.created_at).limit(1))
+        exhausted = session.scalars(select(AIJob).where(
+            AIJob.status == 'running', AIJob.lease_until < now(), AIJob.attempts >= AIJob.max_attempts)).all()
+        for expired in exhausted:
+            expired.status, expired.error_code = 'failed', 'TRANSIENT_SERVICE'
+            expired.error, expired.finished_at = '执行中断达到恢复上限', now()
+            expired.execution_token, expired.lease_until = None, None
+            apply_auto_decision(session, expired)
+        due_retry = and_(AIJob.status == 'retrying', or_(AIJob.next_attempt_at.is_(None), AIJob.next_attempt_at <= now()))
+        candidate = or_(AIJob.status == 'queued', due_retry,
+                        and_(AIJob.status == 'running', AIJob.lease_until < now()))
+        job = session.scalar(select(AIJob).where(candidate, AIJob.attempts < AIJob.max_attempts)
+                             .order_by(AIJob.created_at, AIJob.id).limit(1))
         if not job:
-            session.execute(update(AIJob).where(AIJob.status=='running',AIJob.lease_until<now(),AIJob.attempts>=3)
-                .values(status='failed',error='执行中断超过恢复上限，需人工处理',execution_token=None,finished_at=now()))
             return False
-        token=secrets.token_hex(24)
-        result=session.execute(update(AIJob).where(AIJob.id==job.id,candidate,AIJob.attempts<3).values(
-            status='running',execution_token=token,attempts=AIJob.attempts+1,
-            lease_until=(datetime.now(timezone.utc)+timedelta(minutes=10)).isoformat()))
-        if result.rowcount!=1: return False
-        ident,pack,config=job.id,job.input_pack,job.config
+        sub = session.get(Submission, job.submission_id)
+        if not can_read(session, session.get(User, job.requested_by), sub):
+            job.status, job.error_code, job.error = 'failed', 'AUTH_CHANGED', '任务授权已变化'
+            job.finished_at = now()
+            apply_auto_decision(session, job)
+            return True
+        token = secrets.token_hex(24)
+        attempt = job.attempts + 1
+        lease_seconds = max(600, (job.config.get('timeout_seconds') or 60) * 5 + 30)
+        changed = session.execute(update(AIJob).where(AIJob.id == job.id, candidate,
+            AIJob.attempts < AIJob.max_attempts).values(status='running', execution_token=token,
+            attempts=attempt, next_attempt_at=None,
+            lease_until=(datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat()))
+        if changed.rowcount != 1:
+            return False
+        ident, pack, config, maximum = job.id, job.input_pack, job.config, job.max_attempts
+    metadata = {}
     try:
-        result=processor(pack,config,root)
-        # Validate processor result even if adapter implementations are replaced later.
+        result = processor(pack, config, root)
         from .agent import Check
-        if result.get('automatic_approval') is not False: raise ValueError('Invalid approval field')
-        for check in result['checks']: Check.model_validate(check)
-        values={'status':'succeeded','result':result,'error':None}
-    except Exception as exc:
-        # No raw provider exceptions: they can include credentials, endpoints or submitted content.
-        transient = isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)) or (
-            isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
-        )
-        retry = transient and (job.attempts + 1) < 3
-        values={'status':'retrying' if retry else 'failed','result':None,
-                'error_code':'TRANSIENT_TIMEOUT' if isinstance(exc, httpx.TimeoutException) else 'TRANSIENT_SERVICE' if transient else 'OUTPUT_INVALID',
-                'error':'初审服务暂时不可用，任务将自动重试' if retry else '初审执行或输出校验失败，请由机构复核'}
-    else:
+        if result.get('automatic_approval') is not False:
+            raise ReviewFailure('OUTPUT_INVALID')
+        for check in result['checks']:
+            Check.model_validate(check)
         metadata = result.get('agent') or {}
-        values={'status':'succeeded','result':result,'error':None,'error_code':None,
-                'agent_session_id':metadata.get('agent_session_id'),
-                'skill_version':metadata.get('skill') or metadata.get('rule_version'),
-                'response_model':metadata.get('response_model')}
+        values = dict(status='succeeded', result=result, error=None, error_code=None, next_attempt_at=None)
+    except Exception as exc:
+        metadata = getattr(exc, 'metadata', {})
+        transient = getattr(exc, 'transient', False) or isinstance(exc, httpx.TransportError) or (
+            isinstance(exc, httpx.HTTPStatusError) and (exc.response.status_code in (408, 409, 429) or exc.response.status_code >= 500))
+        code = exc.code if isinstance(exc, ReviewFailure) else 'TRANSIENT_TIMEOUT' if isinstance(exc, httpx.TimeoutException) else 'TRANSIENT_SERVICE' if transient else 'OUTPUT_INVALID'
+        retry = transient and attempt < maximum and metadata.get('cleanup_status') != 'failed'
+        delay = config.get('retry_seconds', 10) * 2 ** (attempt - 1)
+        values = dict(status='retrying' if retry else 'failed', result=None, error_code=code,
+            error='审核服务暂时不可用，将自动重试' if retry else '审核执行失败，详情见原因码',
+            next_attempt_at=(datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat() if retry else None)
+    values.update(agent_metadata=metadata, agent_session_id=metadata.get('agent_session_id'),
+        skill_version=metadata.get('skill_version'), response_model=metadata.get('response_model'))
     with factory.begin() as session:
-        completed=session.execute(update(AIJob).where(AIJob.id==ident,AIJob.status=='running',AIJob.execution_token==token)
-            .values(**values,finished_at=now(),execution_token=None,lease_until=None))
+        completed = session.execute(update(AIJob).where(AIJob.id == ident, AIJob.status == 'running',
+            AIJob.execution_token == token).values(**values, finished_at=None if values['status'] == 'retrying' else now(),
+            execution_token=None, lease_until=None))
         if completed.rowcount == 1:
-            from .auto_review import apply_auto_decision
-            completed_job=session.get(AIJob,ident)
+            completed_job = session.get(AIJob, ident)
             session.refresh(completed_job)
-            apply_auto_decision(session,completed_job)
-    # Job completion, automatic decision, and outbox are committed together.
+            apply_auto_decision(session, completed_job)
     return True

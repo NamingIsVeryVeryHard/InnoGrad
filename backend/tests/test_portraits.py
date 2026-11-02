@@ -88,15 +88,19 @@ def test_correction_preserves_old_snapshot_and_duplicate_event(env):
 def test_portrait_failure_rolls_back_archive(env, monkeypatch):
     from test_workflow import submitted
     from app import portraits
-    import pytest
     app,c,ids=env
     ident,_,_,result=submitted(env)
     post(c['teacher'],f'/api/v1/submissions/{ident}/decision',{'expected_lock_version':2,'version_id':result['version_id'],'outcome':'approved','opinion':'合成测试通过'})
     original=portraits.ensure_snapshot
     def broken(*args): raise RuntimeError('synthetic failure')
     monkeypatch.setattr('app.portraits.ensure_snapshot',broken)
-    with pytest.raises(RuntimeError): drain(app.state.sessions)
+    assert drain(app.state.sessions) == 1
     assert c['student1'].get(f'/api/v1/submissions/{ident}').json()['status']=='approved'
+    with app.state.sessions() as s:
+        event=s.scalar(select(Outbox).where(Outbox.aggregate_id==ident, Outbox.kind=='review.approved'))
+        assert event.status=='pending' and event.error_code=='ARCHIVE_RETRY'
+    with app.state.sessions.begin() as s:
+        s.scalar(select(Outbox).where(Outbox.aggregate_id==ident, Outbox.kind=='review.approved')).next_attempt_at=None
     monkeypatch.setattr('app.portraits.ensure_snapshot',original)
     drain(app.state.sessions)
     assert c['student1'].get(f'/api/v1/submissions/{ident}').json()['status']=='archived'

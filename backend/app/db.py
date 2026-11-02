@@ -102,6 +102,7 @@ class File(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     size: Mapped[int] = mapped_column(Integer)
     role: Mapped[str] = mapped_column(String(40), default="other", server_default="other")
+    created_at: Mapped[str] = mapped_column(String(40), default=now)
     status: Mapped[str] = mapped_column(String(30), default="ready")
 
 
@@ -143,6 +144,9 @@ class Outbox(Base):
     aggregate_id: Mapped[str] = mapped_column(ForeignKey("submissions.id"))
     payload: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(30), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
@@ -203,6 +207,9 @@ class AIJob(Base):
     config: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(30), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    next_attempt_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    agent_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     execution_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lease_until: Mapped[str | None] = mapped_column(String(40), nullable=True)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)

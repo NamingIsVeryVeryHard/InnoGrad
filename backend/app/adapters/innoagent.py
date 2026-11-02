@@ -33,7 +33,7 @@ class InnoAgentAdapter:
         skills = data if isinstance(data, list) else data.get("skills", [])
         if not any(isinstance(s, dict) and s.get("name") == self.skill and s.get("enabled") is not False for s in skills):
             raise ReviewFailure("CONFIG_ERROR")
-        content = self._request("GET", f"/api/skills/{quote(self.skill, safe='')}/content").json()["content"]
+        content = self._request("GET", f"/api/skills/{quote(self.skill, safe='')}/file?path=SKILL.md").json()["content"]
         expected = (SKILL_ROOT / "SKILL.md").read_text()
         if content != expected:
             raise ReviewFailure("CONFIG_ERROR")

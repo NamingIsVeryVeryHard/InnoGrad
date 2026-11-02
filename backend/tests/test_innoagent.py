@@ -121,7 +121,7 @@ def test_adapter_uses_actual_protocol_and_cleans_workspace(monkeypatch):
         path = request.url.path
         if path == "/api/health": data = {"status":"ok"}
         elif path == "/api/skills": data = [{"name":"material-review"}]
-        elif path.endswith("/content"): data = {"content":content}
+        elif path.endswith("/file"): data = {"content":content}
         elif path == "/api/sessions":
             captured["new"] = json.loads(request.content); data = {"id":"session","workspaceId":"workspace"}
         elif path == "/api/chat/stream":

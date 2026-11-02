@@ -188,7 +188,9 @@ def register(app, ctx):
         from .review_flow import material_outcome
         from .auto_review import assess
         return {'institution_required':assess(row)[0]=='exception','material_review':material_outcome(row),'id':row.id, 'version_id':row.version_id, 'status':row.status, 'attempts':row.attempts,
-                'mode':row.config['mode'], 'result':row.result, 'error':row.error,
+                'mode':row.config['mode'], 'result':row.result, 'error':row.error, 'error_code':row.error_code,
+                'agent_session_id':row.agent_session_id, 'skill_version':row.skill_version,
+                'response_model':row.response_model, 'next_attempt_at':row.next_attempt_at,
                 'historical_only':not current, 'input_hash':row.input_hash}
 
     @app.get('/api/v1/ai-jobs/{ident}/report')
@@ -210,12 +212,12 @@ def register(app, ctx):
             'status': row.status, 'input_hash': row.input_hash,
             'rule_version': snapshot.get('requirements', {}).get('version'),
             'skill_version': (result.get('agent') or {}).get('skill'),
-            'agent_session_id': (result.get('agent') or {}).get('agent_session_id'),
-            'response_model': (result.get('agent') or {}).get('response_model'),
+            'agent_session_id': row.agent_session_id or (result.get('agent') or {}).get('agent_session_id'),
+            'response_model': row.response_model or (result.get('agent') or {}).get('response_model'),
             'files': files, 'checks': result.get('checks', []),
             'blocks': result.get('blocks', []), 'limitations': result.get('limitations', []),
             'routing': result.get('routing'),
-            'error': row.error,
+            'error': row.error, 'error_code': row.error_code,
         }
 
     @app.post('/api/v1/ai-jobs/{ident}/cancel')
