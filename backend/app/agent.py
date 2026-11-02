@@ -136,7 +136,7 @@ def invoke_model(config, payload):
         result = json.loads(result['choices'][0]['message']['content'])
     parsed = AgentResult.model_validate(result)
     validate_evidence(parsed.checks,payload['blocks'])
-    return [c.model_dump() for c in parsed.checks], {}
+    return [c.model_dump() for c in parsed.checks]
 
 
 def analyze(pack, config, root):

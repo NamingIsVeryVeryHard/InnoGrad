@@ -54,7 +54,7 @@ node = shutil.which('node')
 if node:
     for name in ('app.js','workflow.js','prototype/app.js'):
         run('syntax_'+name.replace('/','_'), [node,'--check',str(root.parent/'frontend'/name)])
-    run('offline_portrait_regression', [node,str(root.parent/'skills/graduate-portrait/scripts/test.mjs')])
+    run('prototype_regression', [node,'--test',str(root.parent/'frontend/prototype/tests/model.test.cjs')])
 else:
     checks.append({"check":"node_checks_unavailable", "exit_code":1})
 run('python_compile', [sys.executable,'-m','compileall','-q','app','migrations'])
