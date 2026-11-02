@@ -207,6 +207,10 @@ class AIJob(Base):
     lease_until: Mapped[str | None] = mapped_column(String(40), nullable=True)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    agent_session_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    skill_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    response_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
     finished_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
 

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import secrets
+import httpx
 from sqlalchemy import select, update, or_, and_
 from .db import AIJob, File, ExportJob, User, Submission, Archive, Version, Audit, now, uid
 from .policy import can_read
@@ -65,7 +66,7 @@ def run_ai(factory, root=None, processor=None):
     root=root or os.getenv('FILE_ROOT','runtime/files')
     processor=processor or analyze
     with factory.begin() as session:
-        candidate=or_(AIJob.status=='queued',and_(AIJob.status=='running',AIJob.lease_until<now()))
+        candidate=or_(AIJob.status.in_(['queued','retrying']),and_(AIJob.status=='running',AIJob.lease_until<now()))
         job=session.scalar(select(AIJob).where(candidate,AIJob.attempts<3).order_by(AIJob.created_at).limit(1))
         if not job:
             session.execute(update(AIJob).where(AIJob.status=='running',AIJob.lease_until<now(),AIJob.attempts>=3)
@@ -84,9 +85,21 @@ def run_ai(factory, root=None, processor=None):
         if result.get('automatic_approval') is not False: raise ValueError('Invalid approval field')
         for check in result['checks']: Check.model_validate(check)
         values={'status':'succeeded','result':result,'error':None}
-    except Exception:
+    except Exception as exc:
         # No raw provider exceptions: they can include credentials, endpoints or submitted content.
-        values={'status':'failed','result':None,'error':'初审执行或输出校验失败，请重试或由教师人工复核'}
+        transient = isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)) or (
+            isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
+        )
+        retry = transient and job.attempts < 3
+        values={'status':'retrying' if retry else 'failed','result':None,
+                'error_code':'TRANSIENT_TIMEOUT' if isinstance(exc, httpx.TimeoutException) else 'TRANSIENT_SERVICE' if transient else 'OUTPUT_INVALID',
+                'error':'初审服务暂时不可用，任务将自动重试' if retry else '初审执行或输出校验失败，请由机构复核'}
+    else:
+        metadata = result.get('agent') or {}
+        values={'status':'succeeded','result':result,'error':None,'error_code':None,
+                'agent_session_id':metadata.get('agent_session_id'),
+                'skill_version':metadata.get('skill') or metadata.get('rule_version'),
+                'response_model':metadata.get('response_model')}
     with factory.begin() as session:
         completed=session.execute(update(AIJob).where(AIJob.id==ident,AIJob.status=='running',AIJob.execution_token==token)
             .values(**values,finished_at=now(),execution_token=None,lease_until=None))

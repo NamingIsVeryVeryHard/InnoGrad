@@ -11,7 +11,7 @@ def required_rules(job):
         return set()
     kind = job.input_pack.get('snapshot', {}).get('kind')
     filename = 'paper-v1.json' if kind == 'paper' else 'annual-v1.json'
-    path = Path(__file__).resolve().parents[3] / 'agent-skills' / 'material-review' / 'references' / 'rules' / filename
+    path = Path(__file__).resolve().parents[2] / 'agent-skills' / 'material-review' / 'references' / 'rules' / filename
     try:
         return {item['id'] for item in json.loads(path.read_text(encoding='utf-8'))['rules']}
     except (OSError, ValueError, KeyError, TypeError):
