@@ -201,6 +201,33 @@ def register(app, ctx):
                 'mode':row.config['mode'], 'result':row.result, 'error':row.error,
                 'historical_only':not current, 'input_hash':row.input_hash}
 
+    @app.get('/api/v1/ai-jobs/{ident}/report')
+    def ai_report(ident: str, user=Depends(auth), session=Depends(db)):
+        row = session.get(AIJob, ident)
+        if not row:
+            error(404, '审核任务不存在')
+        sub = get_sub(session, user, row.submission_id)
+        snapshot = row.input_pack.get('snapshot', {})
+        files = [
+            {'file_id': item.get('id'), 'name': item.get('name'), 'media_type': item.get('media_type'),
+             'role': item.get('role'), 'sha256': item.get('sha256')}
+            for item in row.input_pack.get('files', [])
+        ]
+        result = row.result or {}
+        return {
+            'schema_version': result.get('schema_version', '1.0'),
+            'job_id': row.id, 'submission_id': sub.id, 'version_id': row.version_id,
+            'status': row.status, 'input_hash': row.input_hash,
+            'rule_version': snapshot.get('requirements', {}).get('version'),
+            'skill_version': (result.get('agent') or {}).get('skill'),
+            'agent_session_id': (result.get('agent') or {}).get('agent_session_id'),
+            'response_model': (result.get('agent') or {}).get('response_model'),
+            'files': files, 'checks': result.get('checks', []),
+            'blocks': result.get('blocks', []), 'limitations': result.get('limitations', []),
+            'routing': result.get('routing'),
+            'error': row.error,
+        }
+
     @app.post('/api/v1/ai-jobs/{ident}/cancel')
     def cancel_ai(ident: str, request: Request, user=Depends(auth), session=Depends(db)):
         row = session.get(AIJob, ident)
