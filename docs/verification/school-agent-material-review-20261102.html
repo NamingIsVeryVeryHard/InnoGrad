@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>学校 Agent 接入与材料审核｜实施验收报告</title>
+<style>
+:root{--bg:#f5f7fb;--ink:#172033;--muted:#64748b;--card:#fff;--line:#e5eaf2;--blue:#2563eb;--green:#15803d;--amber:#b45309;--red:#b91c1c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:42px 22px 70px}h1{font-size:34px;line-height:1.25;margin:0 0 10px}h2{font-size:21px;margin:34px 0 14px;border-left:4px solid var(--blue);padding-left:10px}h3{font-size:16px;margin:20px 0 8px}.lead{font-size:18px;color:#334155;max-width:860px}.meta{color:var(--muted);margin:8px 0 24px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 4px 18px #17203308}.metric{font-size:29px;font-weight:700}.ok{color:var(--green)}.warn{color:var(--amber)}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}th,td{text-align:left;vertical-align:top;padding:11px 12px;border-bottom:1px solid var(--line)}th{background:#eef3ff;font-weight:650}tr:last-child td{border-bottom:0}.tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:650;background:#dcfce7;color:#166534}.tag.blue{background:#dbeafe;color:#1d4ed8}.tag.amber{background:#fef3c7;color:#92400e}code{background:#eef2f7;border-radius:5px;padding:2px 5px;font-size:12px}pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:10px;overflow:auto;font-size:12px}.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.step{background:#fff;border:1px solid #cbd5e1;padding:10px 13px;border-radius:9px}.arrow{color:var(--blue);font-weight:700}.small{font-size:13px}.foot{margin-top:35px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body><main>
+<h1>学校 Agent 接入与材料审核</h1>
+<p class="lead">实施方案已落地为可运行的材料审核链路：冻结审核包，加载并校验运行时 Skill，调用真实自部署 InnoAgent，验证逐条规则与证据，按结果进入归档、退回或人工复核，并支持可追溯报告与重试隔离。</p>
+<p class="meta">验收日期：2026-11-02（Asia/Shanghai） · 分支：<code>feature/school-agent-material-review</code> · 依据：Yuque 同步材料（2026-11-02 21:45）与实施方案</p>
+
+<div class="grid">
+  <div class="card"><div class="metric ok">70 passed</div><div class="muted">后端回归测试</div></div>
+  <div class="card"><div class="metric ok">8 passed</div><div class="muted">前端原型测试</div></div>
+  <div class="card"><div class="metric ok">4/4</div><div class="muted">真实验收场景通过</div></div>
+  <div class="card"><div class="metric ok">0</div><div class="muted">Astra low 发现的 P0/P1/P2</div></div>
+</div>
+
+<h2>已实现功能</h2>
+<table><thead><tr><th>链路</th><th>实现内容</th><th>结果</th></tr></thead><tbody>
+<tr><td>审核包冻结</td><td>提交时冻结材料元数据、角色、SHA-256、规则版本、规则哈希、学生与周期信息；任务只读取冻结快照。</td><td><span class="tag">已完成</span></td></tr>
+<tr><td>运行时 Skill</td><td><code>material-review-2</code> 规定输出结构、规则结论、证据角色、适用条件、限制项与禁止外部工具；服务端强制校验本地 Skill 哈希。</td><td><span class="tag">已完成</span></td></tr>
+<tr><td>真实 Agent 接入</td><td>通过 InnoAgent 0.7 的 health、skills、sessions、chat/stream 协议调用；解析 SSE 文本增量，读取模型/供应商元数据，结束后删除临时会话。</td><td><span class="tag">已完成</span></td></tr>
+<tr><td>规则与证据</td><td>校验规则 ID、规则哈希、<code>not_applicable</code> 条件、证据文件角色、可读性与证据定位；缺少必需角色时提前生成确定性退回结果。</td><td><span class="tag">已完成</span></td></tr>
+<tr><td>三路由</td><td>合规进入 approved/归档；缺材料或规则不通过进入 returned/整改；证据不足、冲突或运行时异常进入 pending_review/exception。</td><td><span class="tag">已完成</span></td></tr>
+<tr><td>重试与隔离</td><td>瞬时服务错误按上限重试并记录 next_attempt_at、attempt、错误码和 Agent 元数据；归档失败使用嵌套保存点，不阻塞后续队列。</td><td><span class="tag">已完成</span></tr>
+<tr><td>报告原件定位</td><td>报告返回输入哈希、规则/Skill 版本、文件角色与 SHA-256、逐条证据；前端可从报告直接打开原件并带 PDF 页码片段。</td><td><span class="tag">已完成</span></tr>
+</tbody></table>
+
+<h2>运行链路</h2>
+<div class="flow"><div class="step">提交材料</div><div class="arrow">→</div><div class="step">冻结审核包</div><div class="arrow">→</div><div class="step">Skill / 规则校验</div><div class="arrow">→</div><div class="step">真实 InnoAgent 会话</div><div class="arrow">→</div><div class="step">证据与结果校验</div><div class="arrow">→</div><div class="step">归档 / 退回 / 人工复核</div></div>
+
+<h2>真实 InnoAgent 验收</h2>
+<p>使用隔离工作区启动本地 InnoAgent，关闭三层记忆，加载仓库中的 <code>material-review-2</code>，通过真实网关配置完成一次模型调用。四类结果如下：</p>
+<table><thead><tr><th>场景</th><th>预期</th><th>实际</th><th>触发路径</th></tr></thead><tbody>
+<tr><td>材料合规</td><td>自动归档</td><td><span class="tag">archived</span></td><td>真实 Agent 返回全量通过，证据完整，归档与画像 outbox 均完成。</td></tr>
+<tr><td>材料缺失/不合规</td><td>退回整改</td><td><span class="tag">returned</span></td><td>缺少 acceptance notice，确定性规则先行拦截并生成 correction。</td></tr>
+<tr><td>证据不确定</td><td>人工复核</td><td><span class="tag amber">pending_review</span></td><td>存在 limitation/不确定性，自动审核转 exception，不做强制批准。</td></tr>
+<tr><td>服务瞬时失败</td><td>重试并隔离</td><td><span class="tag blue">retrying → pending_review</span></td><td>ReadTimeout 进入 retrying；业务错误与重试状态均不阻塞其他 outbox。</td></tr>
+</tbody></table>
+
+<h2>验证与审查</h2>
+<pre>backend/.venv/bin/python -m pytest -q       # 70 passed, 1 warning
+backend/.venv/bin/python verify_local.py   # pytest / migration / syntax / prototype 全部 PASS
+node --test frontend/prototype/tests/model.test.cjs  # 8 passed
+node --check frontend/prototype/app.js              # PASS
+git diff --check                                      # PASS</pre>
+<p>已逐功能提交，并完成 Astra low review：<code>a013d1b</code>、<code>29084ee</code>、<code>2bc251f</code>、<code>a533fd1</code> 均未留下 P0/P1/P2 问题。按要求忽略 P2 以下问题。</p>
+
+<h2>主要提交</h2>
+<table><thead><tr><th>提交</th><th>内容</th></tr></thead><tbody>
+<tr><td><code>a013d1b</code></td><td>真实 InnoAgent 0.7 适配、运行时 Skill、规则校验。</td></tr>
+<tr><td><code>cdaf7d5</code></td><td>冻结审核包、规则版本与证据合同。</td></tr>
+<tr><td><code>29084ee</code></td><td>重试调度、归档失败隔离、审计元数据迁移。</td></tr>
+<tr><td><code>2bc251f</code></td><td>outbox 到期过滤、处理认领恢复与测试修正。</td></tr>
+<tr><td><code>a533fd1</code></td><td>报告中展示原件哈希/角色，并支持打开证据原件。</td></tr>
+</tbody></table>
+
+<h2>与 Yuque 任务的对照</h2>
+<p>Yuque 中本组要求的“实际 Agent 调用、Skill/规则/证据检查、异常处理、效果评估、自动归档、机构队列、报告可追溯原件”均已覆盖。当前交付验证的是链路行为、协议接通和证据合同；尚未把真实学校生产材料作为准确率基准，也未宣称审核质量或学生学习效果已经得到统计验证。</p>
+
+<div class="foot">报告由本地工作区生成，未包含网关密钥或个人材料内容。无关未跟踪目录（<code>.agents/</code>、<code>docs/algorithm/</code>及用户提供的实施方案文件）未修改。</div>
+</main></body></html>
