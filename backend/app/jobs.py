@@ -90,7 +90,7 @@ def run_ai(factory, root=None, processor=None):
         transient = isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)) or (
             isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
         )
-        retry = transient and job.attempts < 3
+        retry = transient and (job.attempts + 1) < 3
         values={'status':'retrying' if retry else 'failed','result':None,
                 'error_code':'TRANSIENT_TIMEOUT' if isinstance(exc, httpx.TimeoutException) else 'TRANSIENT_SERVICE' if transient else 'OUTPUT_INVALID',
                 'error':'初审服务暂时不可用，任务将自动重试' if retry else '初审执行或输出校验失败，请由机构复核'}
