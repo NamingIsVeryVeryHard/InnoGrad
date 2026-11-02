@@ -251,6 +251,8 @@ def create_app(database_url=None, storage=None):
             if not rule or rule.created_by != user.id:
                 error(404, '规则版本不存在或无权使用')
             requirements = rule.requirements
+        from .material_rules import freeze_requirements
+        requirements = freeze_requirements("annual", requirements)
         task = Task(id=uid(), title=body.title, period=body.period,
             deadline=body.deadline.astimezone(timezone.utc).isoformat(), reviewer_id=body.reviewer_id,
             requirements=requirements, created_by=user.id)
@@ -431,7 +433,6 @@ def create_app(database_url=None, storage=None):
             row = session.get(File, fid)
             if not row or row.submission_id != sub.id or row.owner_id != user.id or row.status != "ready" or not (root / row.storage_key).exists():
                 error(422, "附件不可用或无权引用")
-            row.role = roles.get(fid, "other")
         refs = []
         for ref_id in dict.fromkeys(draft.get("reference_ids", [])):
             ref = get_sub(session, user, ref_id, owner=True)
@@ -446,11 +447,17 @@ def create_app(database_url=None, storage=None):
                          "form": version.snapshot["form"]})
         task = session.get(Task, sub.task_id) if sub.task_id else None
         requirements = task.requirements if task else {"version": "paper-1", "review_policy": "manual_all"}
+        from .material_rules import freeze_requirements
+        requirements = freeze_requirements(sub.kind, requirements)
         from .db import Correction
         correction = session.scalar(select(Correction).where(Correction.submission_id==sub.id, Correction.status=='opened'))
         number = (session.scalar(select(func.max(Version.number)).where(Version.submission_id == sub.id)) or 0) + 1
         version = Version(id=uid(), submission_id=sub.id, number=number,
-            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "kind": sub.kind, "correction_id": correction.id if correction else None, "form": form, "file_ids": ids,
+            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "kind": sub.kind,
+                      "student": {"name": user.name},
+                      "files": [dict(id=f.id, name=f.name, media_type=f.media_type, size=f.size, sha256=f.sha256,
+                                     role=roles.get(f.id, "other")) for f in (session.get(File, fid) for fid in ids)],
+                      "correction_id": correction.id if correction else None, "form": form, "file_ids": ids,
                       "file_roles": {fid: roles.get(fid, "other") for fid in ids}, "references": refs, "requirements": requirements,
                       "period": task.period if task else None, "late": bool(task and now() > task.deadline)})
         session.add(version)

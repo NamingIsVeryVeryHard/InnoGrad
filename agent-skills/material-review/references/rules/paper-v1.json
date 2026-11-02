@@ -2,11 +2,54 @@
   "version": "paper-v1",
   "kind": "paper",
   "rules": [
-    {"id": "PAPER_TITLE_MATCH", "evidence_roles": ["paper_fulltext", "acceptance_notice"]},
-    {"id": "PAPER_AUTHOR_IDENTITY", "evidence_roles": ["paper_fulltext"]},
-    {"id": "PAPER_STATUS_CONSISTENCY", "evidence_roles": ["acceptance_notice", "publication_page"]},
-    {"id": "PAPER_VENUE_MATCH", "evidence_roles": ["paper_fulltext", "acceptance_notice"]},
-    {"id": "PAPER_DATE_CONSISTENCY", "evidence_roles": ["acceptance_notice", "publication_page"]},
-    {"id": "PAPER_CONTRIBUTION_CONSISTENCY", "evidence_roles": ["paper_fulltext", "contribution_statement"]}
+    {
+      "id": "PAPER_TITLE_MATCH",
+      "evidence_roles": [
+        "paper_fulltext",
+        "acceptance_notice"
+      ],
+      "instruction": "对照表单标题与论文首页或录用通知；忽略空白与常规标点差异，解释实质差异。"
+    },
+    {
+      "id": "PAPER_AUTHOR_IDENTITY",
+      "evidence_roles": [
+        "paper_fulltext"
+      ],
+      "instruction": "用审核包 student.name 对照作者列表，核对表单署名顺序；缺少身份信息时无法判断。"
+    },
+    {
+      "id": "PAPER_STATUS_CONSISTENCY",
+      "evidence_roles": [
+        "acceptance_notice",
+        "publication_page"
+      ],
+      "instruction": "已录用需录用通知，已发表需见刊页；不得把投稿回执当成录用。",
+      "not_applicable_when": "submitted"
+    },
+    {
+      "id": "PAPER_VENUE_MATCH",
+      "evidence_roles": [
+        "paper_fulltext",
+        "acceptance_notice"
+      ],
+      "instruction": "对照表单 journal 与首页或录用通知的期刊或会议名称；未填名称时无法判断。"
+    },
+    {
+      "id": "PAPER_DATE_CONSISTENCY",
+      "evidence_roles": [
+        "acceptance_notice",
+        "publication_page"
+      ],
+      "instruction": "逐一核对表单录用或发表日期与原件日期；说明矛盾。",
+      "not_applicable_when": "submitted"
+    },
+    {
+      "id": "PAPER_CONTRIBUTION_CONSISTENCY",
+      "evidence_roles": [
+        "paper_fulltext",
+        "contribution_statement"
+      ],
+      "instruction": "检查个人贡献陈述是否与论文内容或贡献声明相符；署名本身不能证明贡献。"
+    }
   ]
 }

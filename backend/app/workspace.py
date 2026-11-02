@@ -177,8 +177,9 @@ def register(app, ctx):
         if old is not None: return old
         ident = uid()
         required = list(dict.fromkeys(['summary'] + body.required_fields))
+        from .material_rules import freeze_requirements
         row = RuleTemplate(id=ident, title=body.title, content=body.content, created_by=user.id,
-            requirements={'version':ident, 'required_fields':required, 'attachment_required':True, 'review_policy':'manual_all', 'instructions':body.content})
+            requirements=freeze_requirements("annual", {'version':ident, 'required_fields':required, 'attachment_required':True, 'review_policy':'manual_all', 'instructions':body.content}))
         session.add(row)
         audit(session, user, 'rule.published', ident)
         return finish(session, idem, {'id': ident})

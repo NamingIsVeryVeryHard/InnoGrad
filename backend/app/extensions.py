@@ -167,23 +167,13 @@ def register(app, ctx):
         if old is not None: return old
         version = session.get(Version, body.version_id)
         if not version or version.submission_id != sub.id: error(404, '提交版本不存在')
-        # Internal storage keys never leave the processing adapter.
-        from .db import File
-        files = []
-        for fid in version.snapshot['file_ids']:
-            f = session.get(File, fid)
-            files.append({'id': f.id, 'name': f.name, 'storage_key': f.storage_key, 'sha256': f.sha256,
-                          'media_type': f.media_type, 'role': version.snapshot.get('file_roles', {}).get(f.id, f.role)})
-        pack = {'version_id': version.id, 'snapshot': version.snapshot, 'files': files}
-        digest = hashlib.sha256(json.dumps(pack, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         try:
             config = job_config()
         except ValueError:
             error(422, 'AI 服务配置不完整，请联系管理员')
         cas(session, sub, sub.lock_version)
-        row = AIJob(id=uid(), submission_id=sub.id, version_id=version.id, requested_by=user.id,
-                    input_pack=pack, input_hash=digest, config=config)
-        session.add(row)
+        from .jobs import enqueue_ai
+        row = enqueue_ai(session, sub, version, user.id)
         audit(session, user, 'ai.requested', row.id)
         return finish(session, idem, {'id': row.id, 'status': 'queued'})
 
