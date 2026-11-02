@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -35,6 +36,17 @@ class InnoAgentAdapter:
         names = {item.get("name") if isinstance(item, dict) else item for item in skills.get("skills", skills if isinstance(skills, list) else [])}
         if self.skill not in names:
             raise ValueError(f"InnoAgent skill is unavailable: {self.skill}")
+
+    @staticmethod
+    def _rules(payload: dict):
+        kind = payload.get("snapshot", {}).get("kind") or payload.get("kind")
+        version = payload.get("requirements", {}).get("version", "")
+        filename = "paper-v1.json" if kind == "paper" or version.startswith("paper") else "annual-v1.json"
+        path = Path(__file__).resolve().parents[3] / "agent-skills" / "material-review" / "references" / "rules" / filename
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError("material-review rule manifest is unavailable") from exc
 
     @staticmethod
     def _last_json(response: httpx.Response):
@@ -72,6 +84,8 @@ class InnoAgentAdapter:
         self._ensure_runtime()
         version_id = payload["version_id"]
         input_hash = payload.get("input_hash")
+        rules = self._rules(payload)
+        required_rule_ids = {rule["id"] for rule in rules["rules"]}
         session_response = self._request(
             "POST",
             "/api/sessions",
@@ -94,18 +108,21 @@ class InnoAgentAdapter:
                     "instruction": instruction,
                     "skill": self.skill,
                     "input": payload,
+                    "rules": rules,
                     "output_schema": output_schema,
                 },
             )
             result = self._last_json(response)
+            returned_rule_ids = {item.get("rule_id") for item in result.get("checks", [])}
+            if returned_rule_ids - required_rule_ids:
+                raise ValueError("InnoAgent returned a rule outside the frozen manifest")
+            if required_rule_ids - returned_rule_ids:
+                raise ValueError("InnoAgent omitted a required frozen rule")
             return result, {
                 "agent_session_id": session_id,
                 "skill": self.skill,
+                "rule_version": rules["version"],
                 "response_model": response.headers.get("x-model") or response.headers.get("x-response-model"),
             }
         finally:
-            try:
-                self._request("DELETE", f"/api/sessions/{session_id}")
-            except Exception:
-                # Session cleanup is best effort; the review result remains authoritative.
-                pass
+            self._request("DELETE", f"/api/sessions/{session_id}")

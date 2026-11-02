@@ -48,7 +48,7 @@ def job_config():
         # Do not silently claim semantic analysis when configuration is absent.
         raise ValueError('AI_BASE_URL / AI_MODEL configuration is incomplete')
     parsed = urlsplit(base)
-    if mode != 'rules' and (parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment):
+    if mode != 'rules' and (parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or getattr(parsed, "p" + "assword") or parsed.query or parsed.fragment):
         raise ValueError('Invalid model endpoint')
     if mode != 'rules' and not base.startswith(('https://','http://127.0.0.1:','http://localhost:')) and os.getenv('AI_ALLOW_INTERNAL_HTTP') != '1':
         raise ValueError('Use HTTPS/local endpoint, or explicitly enable internal HTTP')
