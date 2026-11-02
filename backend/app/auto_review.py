@@ -2,23 +2,66 @@
 from sqlalchemy import select, update
 from .db import User, AIJob, Submission, Decision, Outbox, Audit, uid
 from .agent import Check, validate_evidence
-import json
-from pathlib import Path
+from .material_rules import validate_rule_checks
 
 
 def required_rules(job):
-    if job.config.get('mode') != 'innoagent':
-        return set()
-    kind = job.input_pack.get('snapshot', {}).get('kind')
-    filename = 'paper-v1.json' if kind == 'paper' else 'annual-v1.json'
-    path = Path(__file__).resolve().parents[2] / 'agent-skills' / 'material-review' / 'references' / 'rules' / filename
+    return {r["id"] for r in job.input_pack["snapshot"].get("requirements", {}).get("review_rules", [])}
+
+
+def assess_material(job):
+    if job.status in ("failed", "cancelled"):
+        return "exception", (job.error_code or "OUTPUT_INVALID") + ":审核未成功执行"
+    if job.status != "succeeded":
+        return "waiting", "等待审核执行"
+    result = job.result or {}
+    if not required_rules(job):
+        return "exception", "RULE_INCOMPLETE:提交版本没有冻结规则"
+    if result.get("routing", {}).get("reason", "").startswith("AUTH_CHANGED"):
+        return "exception", result["routing"]["reason"]
+    checks = result.get("checks", [])
+    local_ids = {"ATTACHMENT_READABILITY", "FORM_COMPLETENESS", "ATTACHMENT_ROLES"}
     try:
-        return {item['id'] for item in json.loads(path.read_text(encoding='utf-8'))['rules']}
-    except (OSError, ValueError, KeyError, TypeError):
-        return set()
+        parsed = [Check.model_validate(c) for c in checks]
+    except ValueError:
+        return "exception", "OUTPUT_INVALID:审核格式无效"
+    if len({c.rule_id for c in parsed}) != len(parsed):
+        return "exception", "RULE_INCOMPLETE:重复检查"
+    local = {c.rule_id: c for c in parsed if c.rule_id in local_ids}
+    if set(local) != local_ids:
+        return "exception", "RULE_INCOMPLETE:缺少确定性检查"
+    if result.get("limitations") or local["ATTACHMENT_READABILITY"].conclusion != "compliant":
+        return "exception", "PARSE_LIMIT:原件无法完整解析"
+    if any(local[key].conclusion == "non_compliant" for key in ("FORM_COMPLETENESS", "ATTACHMENT_ROLES")):
+        return "correction", "FINDING_BLOCKING:请补齐表单或必需附件"
+    semantic = [c for c in parsed if c.rule_id not in local_ids]
+    try:
+        validate_rule_checks(semantic, job.input_pack["snapshot"], job.input_pack["files"])
+        validate_evidence(semantic, result.get("blocks", []))
+    except (ValueError, KeyError, TypeError) as exc:
+        code = str(exc) if str(exc) in ("RULE_INCOMPLETE", "EVIDENCE_INVALID") else "EVIDENCE_INVALID"
+        return "exception", code + ":规则或证据无法核验"
+    agent = result.get("agent") or {}
+    if not agent.get("agent_session_id") or agent.get("cleanup_status") != "deleted":
+        return "exception", "CONFIG_ERROR:Agent 会话或清理状态无法确认"
+    if any(c.conclusion == "unable_to_determine" or c.limitations for c in semantic):
+        return "exception", "FINDING_UNCERTAIN:存在无法安全判断的规则"
+    failures = [c for c in semantic if c.conclusion == "non_compliant"]
+    if failures:
+        if all(c.severity == "blocking" and c.suggestion.strip() for c in failures):
+            return "correction", "FINDING_BLOCKING:存在明确补正要求"
+        return "exception", "FINDING_UNCERTAIN:需进一步确认"
+    snapshot = job.input_pack["snapshot"]
+    if any(ref.get("recognition") != "archived" for ref in snapshot.get("references", [])):
+        return "exception", "REF_UNRECOGNIZED:引用成果尚未认定"
+    if snapshot.get("late"):
+        return "exception", "LATE:逾期提交"
+    return "passed", "全部规则与证据检查通过"
 
 
 def assess(job):
+    if job.config.get('mode') == 'innoagent':
+        return assess_material(job)
     if job.config.get('mode') not in ('agent','chat','innoagent'):
         return 'unconfigured', '未执行 Agent 审核'
     if job.status in ('failed','cancelled'):
@@ -39,7 +82,7 @@ def assess(job):
     if not all(any(c.get('rule_id')==key and c.get('conclusion')=='compliant' for c in checks) for key in local):
         return 'exception','RULE_INCOMPLETE:缺少完整的解析与必填检查'
     semantic=[c for c in checks if c.get('rule_id') not in local]
-    expected = required_rules(job)
+    expected = required_rules(job) if job.config.get('mode') == 'innoagent' else set()
     actual = {c.get('rule_id') for c in semantic}
     if expected and actual != expected:
         return 'exception','RULE_INCOMPLETE:规则覆盖不完整'
@@ -79,32 +122,29 @@ def apply_auto_decision(session,job):
     if latest!=job.id: return
     outcome,reason=assess(job)
     job.result={**(job.result or {}),'routing':{'state':outcome,'reason':reason}}
-    if outcome == 'correction':
-        changed = session.execute(update(Submission).where(
-            Submission.id == sub.id, Submission.lock_version == sub.lock_version,
-            Submission.current_version_id == job.version_id, Submission.status == 'pending_review'
-        ).values(status='returned', lock_version=Submission.lock_version + 1))
-        if changed.rowcount == 1:
-            job.result = {**job.result, 'routing': {'state': outcome, 'reason': reason}}
-        return
-    if outcome!='passed': return
+    if outcome not in ('passed', 'correction'): return
     from .policy import relation
     student=session.get(User,sub.student_id)
     reviewer=session.get(User,sub.reviewer_id)
     if not student or not student.enabled or not reviewer or not reviewer.enabled or not relation(session,sub.reviewer_id,sub.student_id):
-        job.result={**job.result,'routing':{'state':'exception','reason':'账号或指导授权已变化，需机构核验'}}
+        job.result={**job.result,'routing':{'state':'exception','reason':'AUTH_CHANGED:账号或指导授权已变化'}}
         return
+    target = 'approved' if outcome == 'passed' else 'returned'
     changed=session.execute(update(Submission).where(Submission.id==sub.id,Submission.lock_version==sub.lock_version,
         Submission.current_version_id==job.version_id,Submission.status=='pending_review')
-        .values(status='approved',lock_version=Submission.lock_version+1))
-    if changed.rowcount!=1: return
+        .values(status=target,lock_version=Submission.lock_version+1))
+    if changed.rowcount!=1:
+        job.result={**job.result,'routing':{'state':'exception','reason':'AUTH_CHANGED:版本或提交状态已变化'}}
+        return
     agent=session.scalar(select(User).where(User.username=='__innograd_agent__'))
     if not agent:
         agent=User(id=uid(),username='__innograd_agent__',name='InnoGrad 审核 Agent',role='service',enabled=0,password_hash='disabled$disabled')
         session.add(agent);session.flush()
     if agent.role!='service' or agent.enabled: raise ValueError('Invalid Agent service identity')
-    decision=Decision(id=uid(),version_id=job.version_id,reviewer_id=agent.id,outcome='approved',
-        opinion='Agent 审核通过：材料检查完整，证据可追溯。报告 '+job.id,actor_type='agent',ai_job_id=job.id)
+    suggestions = "；".join(c.get("suggestion", "") for c in job.result.get("checks", []) if c.get("suggestion"))
+    decision=Decision(id=uid(),version_id=job.version_id,reviewer_id=agent.id,outcome=target,
+        opinion=(reason + "；" + suggestions + "。报告 " + job.id)[:5000],actor_type='agent',ai_job_id=job.id)
     session.add(decision);session.flush()
-    session.add(Outbox(kind='review.approved',aggregate_id=sub.id,payload={'version_id':job.version_id,'decision_id':decision.id,'ai_job_id':job.id}))
-    session.add(Audit(actor_id=agent.id,action='agent.review_approved',object_id=job.version_id))
+    if target == 'approved':
+        session.add(Outbox(kind='review.approved',aggregate_id=sub.id,payload={'version_id':job.version_id,'decision_id':decision.id,'ai_job_id':job.id}))
+    session.add(Audit(actor_id=agent.id,action='agent.review_' + target,object_id=job.version_id))

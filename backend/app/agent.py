@@ -114,9 +114,16 @@ def invoke_model(config, payload):
     headers = {'Authorization':f'Bearer {key}'} if key else {}
     if config['mode']=='innoagent':
         from .adapters.innoagent import InnoAgentAdapter
+        from .material_rules import validate_rule_checks
+        from .review_errors import ReviewFailure
         result, metadata = InnoAgentAdapter(config).review(payload, AgentResult.model_json_schema())
-        parsed = AgentResult.model_validate(result)
-        validate_evidence(parsed.checks,payload['blocks'])
+        try:
+            parsed = AgentResult.model_validate(result)
+            validate_evidence(parsed.checks,payload['blocks'])
+            validate_rule_checks(parsed.checks, payload, payload['files'])
+        except ValueError as exc:
+            code = str(exc) if str(exc) in ("RULE_INCOMPLETE", "EVIDENCE_INVALID") else "EVIDENCE_INVALID"
+            raise ReviewFailure(code, metadata)
         return [c.model_dump() for c in parsed.checks], metadata
     if config['mode']=='chat':
         url = config['base_url'] + '/chat/completions'
@@ -161,9 +168,25 @@ def analyze(pack, config, root):
     checks = [Check(rule_id='ATTACHMENT_READABILITY', conclusion='unable_to_determine' if limitations else 'compliant',
         severity='info', explanation='附件需进一步人工核对' if limitations else '原生文本解析完成，尚不代表事实核验通过',
         limitations=limitations[:20]).model_dump()]
-    if config['mode'] != 'rules':
-        payload = {'version_id':pack['version_id'],'input_hash':pack.get('input_hash'),'form':form,'requirements':pack['snapshot']['requirements'],
-                   'blocks':sent,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()}
+    metadata = {}
+    if config['mode'] == 'innoagent':
+        from .material_rules import required_roles
+        present = {item.get('role') for item in pack['files']}
+        missing_roles = sorted(required_roles(pack['snapshot']) - present)
+        checks.append(Check(rule_id='ATTACHMENT_ROLES',
+            conclusion='non_compliant' if missing_roles else 'compliant',
+            severity='blocking' if missing_roles else 'info',
+            explanation='缺少附件用途：' + ', '.join(missing_roles) if missing_roles else '必需附件用途齐全',
+            suggestion='请上传并标注用途：' + ', '.join(missing_roles) if missing_roles else '').model_dump())
+    else:
+        missing_roles = []
+    if config['mode'] != 'rules' and not (config['mode'] == 'innoagent' and (missing_roles or limitations)):
+        payload = {key:pack['snapshot'].get(key) for key in
+                   ('kind','student','references','period','late')}
+        payload.update({'version_id':pack['version_id'],'input_hash':pack.get('input_hash'),
+                   'files':[{k:v for k,v in item.items() if k != 'storage_key'} for item in pack['files']],
+                   'form':form,'requirements':pack['snapshot']['requirements'],
+                   'blocks':sent,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()})
         model_checks = invoke_model(config,payload)
         if isinstance(model_checks, tuple):
             semantic_checks, metadata = model_checks
@@ -171,7 +194,7 @@ def analyze(pack, config, root):
         else:
             metadata = {}
             checks.extend(model_checks)
-    else:
+    elif config['mode'] == 'rules':
         checks.append(Check(rule_id='SEMANTIC_REVIEW', conclusion='unable_to_determine', severity='info',
             explanation='当前为规则初审，未调用语言模型',suggestion='由复核教师对照原件核验事实').model_dump())
     required = pack['snapshot']['requirements'].get('required_fields') or (['title','contribution','publication_status'] if 'title' in form else ['summary'])
