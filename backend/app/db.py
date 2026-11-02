@@ -101,6 +101,7 @@ class File(Base):
     storage_key: Mapped[str] = mapped_column(String(36), unique=True)
     sha256: Mapped[str] = mapped_column(String(64))
     size: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(40), default="other", server_default="other")
     status: Mapped[str] = mapped_column(String(30), default="ready")
 
 

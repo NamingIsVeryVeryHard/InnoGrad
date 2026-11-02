@@ -9,7 +9,7 @@ import secrets
 import zipfile
 import io
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Response, UploadFile, File as Upload
+from fastapi import FastAPI, Depends, HTTPException, Request, Response, UploadFile, File as Upload, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +51,7 @@ class Draft(Input):
     expected_lock_version: int = Field(ge=0)
     form: dict
     file_ids: list[str] = Field(default_factory=list, max_length=30)
+    file_roles: dict[str, Literal["paper_fulltext","acceptance_notice","publication_page","annual_report","contribution_statement","other"]] = Field(default_factory=dict)
     reference_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -156,7 +157,7 @@ def create_app(database_url=None, storage=None):
         archive = session.get(Archive, sub.effective_archive_id) if sub.effective_archive_id else None
         archived_version = session.get(Version, archive.version_id) if archive else None
         return dict(created_at=sub.created_at,
-            files=[dict(id=f.id, name=f.name, size=f.size, media_type=f.media_type, sha256=f.sha256) for f in files],
+            files=[dict(id=f.id, name=f.name, size=f.size, media_type=f.media_type, sha256=f.sha256, role=f.role) for f in files],
             effective_archive=dict(id=archive.id, version_id=archive.version_id, number=archived_version.number,
                 snapshot=archived_version.snapshot, created_at=archive.created_at) if archive else None,
             corrections=[dict(id=c.id, reason=c.reason, status=c.status, opinion=c.opinion, archive_id=c.archive_id) for c in corrections],
@@ -365,6 +366,7 @@ def create_app(database_url=None, storage=None):
         path = root / key
         path.write_bytes(data)
         row = File(id=uid(), owner_id=user.id, submission_id=sub.id, name=name, media_type=media,
+                   role="other",
                    storage_key=key, sha256=hashlib.sha256(data).hexdigest(), size=len(data))
         session.add(row)
         audit(session, user, "file.uploaded", row.id)
@@ -376,7 +378,7 @@ def create_app(database_url=None, storage=None):
         return {"id": row.id, "name": row.name, "status": row.status, "size": row.size}
 
     @app.get("/api/v1/files/{ident}/download")
-    def download(ident: str, user=Depends(authenticated), session=Depends(db)):
+    def download(ident: str, inline: int = Query(default=0, ge=0, le=1), user=Depends(authenticated), session=Depends(db)):
         row = session.get(File, ident)
         if not row:
             error(404, "文件不存在")
@@ -390,7 +392,9 @@ def create_app(database_url=None, storage=None):
             error(404, "文件暂不可用，请联系维护人员")
         audit(session, user, "file.downloaded", row.id)
         session.commit()
+        disposition = "inline" if inline else "attachment"
         return FileResponse(path, filename=row.name, media_type=row.media_type,
+                            content_disposition_type=disposition,
                             headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     @app.post("/api/v1/submissions/{ident}/submit", status_code=202)
@@ -417,12 +421,17 @@ def create_app(database_url=None, storage=None):
             except (ValueError, TypeError):
                 error(422, f"请填写有效的 {key}")
         ids = list(dict.fromkeys(draft.get("file_ids", [])))
+        roles = draft.get("file_roles", {})
+        allowed_roles = {"paper_fulltext","acceptance_notice","publication_page","annual_report","contribution_statement","other"}
+        if set(roles) - set(ids) or any(role not in allowed_roles for role in roles.values()):
+            error(422, "附件用途无效或未关联到当前提交")
         if not ids:
             error(422, "至少提供一份证明或报告附件")
         for fid in ids:
             row = session.get(File, fid)
             if not row or row.submission_id != sub.id or row.owner_id != user.id or row.status != "ready" or not (root / row.storage_key).exists():
                 error(422, "附件不可用或无权引用")
+            row.role = roles.get(fid, "other")
         refs = []
         for ref_id in dict.fromkeys(draft.get("reference_ids", [])):
             ref = get_sub(session, user, ref_id, owner=True)
@@ -441,7 +450,8 @@ def create_app(database_url=None, storage=None):
         correction = session.scalar(select(Correction).where(Correction.submission_id==sub.id, Correction.status=='opened'))
         number = (session.scalar(select(func.max(Version.number)).where(Version.submission_id == sub.id)) or 0) + 1
         version = Version(id=uid(), submission_id=sub.id, number=number,
-            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "correction_id": correction.id if correction else None, "form": form, "file_ids": ids, "references": refs, "requirements": requirements,
+            snapshot={"review_workflow": os.getenv("REVIEW_WORKFLOW","manual"), "correction_id": correction.id if correction else None, "form": form, "file_ids": ids,
+                      "file_roles": {fid: roles.get(fid, "other") for fid in ids}, "references": refs, "requirements": requirements,
                       "period": task.period if task else None, "late": bool(task and now() > task.deadline)})
         session.add(version)
         cas(session, sub, body.expected_lock_version, current_version_id=version.id, status="pending_review")

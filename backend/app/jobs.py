@@ -14,7 +14,8 @@ def enqueue_ai(session, sub, version, actor_id, automatic=False):
     files=[]
     for fid in version.snapshot['file_ids']:
         f=session.get(File,fid)
-        files.append({'id':f.id,'name':f.name,'storage_key':f.storage_key,'sha256':f.sha256,'media_type':f.media_type})
+        files.append({'id':f.id,'name':f.name,'storage_key':f.storage_key,'sha256':f.sha256,'media_type':f.media_type,
+                      'role': version.snapshot.get('file_roles', {}).get(f.id, f.role)})
     pack={'version_id':version.id,'snapshot':version.snapshot,'files':files}
     pack['input_hash']=hashlib.sha256(json.dumps(pack,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     error=None
