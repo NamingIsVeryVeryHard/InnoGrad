@@ -5,7 +5,7 @@ from .agent import Check, validate_evidence
 
 
 def assess(job):
-    if job.config.get('mode') not in ('agent','chat'):
+    if job.config.get('mode') not in ('agent','chat','innoagent'):
         return 'unconfigured', '未执行 Agent 审核'
     if job.status in ('failed','cancelled'):
         return 'exception', 'Agent 执行失败或取消，需机构处理'

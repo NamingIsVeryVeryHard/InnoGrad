@@ -157,7 +157,7 @@ def register(app, ctx):
             config = job_config()
         except ValueError:
             return {'workflow':os.getenv('REVIEW_WORKFLOW','manual'),'mode':'configuration_error', 'model_configured':False, 'automatic_approval':os.getenv('REVIEW_WORKFLOW')=='agent', 'ocr_configured':False}
-        return {'workflow':os.getenv('REVIEW_WORKFLOW','manual'),'mode': config['mode'], 'model_configured': config['mode'] in ('agent','chat') and bool(config.get('base_url')),
+        return {'workflow':os.getenv('REVIEW_WORKFLOW','manual'),'mode': config['mode'], 'model_configured': config['mode'] in ('agent','chat','innoagent') and bool(config.get('base_url')),
                 'automatic_approval': os.getenv('REVIEW_WORKFLOW')=='agent', 'ocr_configured': False}
 
     @app.post('/api/v1/submissions/{ident}/ai-jobs', status_code=202)

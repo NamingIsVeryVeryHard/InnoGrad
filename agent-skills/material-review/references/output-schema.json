@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checks"],
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule_id", "conclusion", "severity", "explanation", "evidence", "suggestion", "limitations"],
+        "properties": {
+          "rule_id": {"type": "string"},
+          "conclusion": {"enum": ["compliant", "non_compliant", "unable_to_determine", "not_applicable"]},
+          "severity": {"enum": ["blocking", "suggestion", "info"]},
+          "explanation": {"type": "string"},
+          "evidence": {"type": "array"},
+          "suggestion": {"type": "string"},
+          "limitations": {"type": "array"}
+        }
+      }
+    }
+  }
+}

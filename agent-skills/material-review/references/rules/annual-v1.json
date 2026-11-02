@@ -1,0 +1,11 @@
+{
+  "version": "annual-v1",
+  "kind": "annual",
+  "rules": [
+    {"id": "ANNUAL_PROGRESS_COVERAGE", "evidence_roles": ["annual_report"]},
+    {"id": "ANNUAL_ACHIEVEMENT_REF_CONSISTENCY", "evidence_roles": ["annual_report"]},
+    {"id": "ANNUAL_PLAN_PRESENT", "evidence_roles": ["annual_report"]},
+    {"id": "ANNUAL_DATE_COVERAGE", "evidence_roles": ["annual_report"]},
+    {"id": "ANNUAL_ATTACHMENT_ROLES", "evidence_roles": ["annual_report"]}
+  ]
+}

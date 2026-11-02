@@ -1,0 +1,12 @@
+{
+  "version": "paper-v1",
+  "kind": "paper",
+  "rules": [
+    {"id": "PAPER_TITLE_MATCH", "evidence_roles": ["paper_fulltext", "acceptance_notice"]},
+    {"id": "PAPER_AUTHOR_IDENTITY", "evidence_roles": ["paper_fulltext"]},
+    {"id": "PAPER_STATUS_CONSISTENCY", "evidence_roles": ["acceptance_notice", "publication_page"]},
+    {"id": "PAPER_VENUE_MATCH", "evidence_roles": ["paper_fulltext", "acceptance_notice"]},
+    {"id": "PAPER_DATE_CONSISTENCY", "evidence_roles": ["acceptance_notice", "publication_page"]},
+    {"id": "PAPER_CONTRIBUTION_CONSISTENCY", "evidence_roles": ["paper_fulltext", "contribution_statement"]}
+  ]
+}

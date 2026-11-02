@@ -16,6 +16,7 @@ def enqueue_ai(session, sub, version, actor_id, automatic=False):
         f=session.get(File,fid)
         files.append({'id':f.id,'name':f.name,'storage_key':f.storage_key,'sha256':f.sha256,'media_type':f.media_type})
     pack={'version_id':version.id,'snapshot':version.snapshot,'files':files}
+    pack['input_hash']=hashlib.sha256(json.dumps(pack,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     error=None
     try:
         config=job_config()
@@ -23,7 +24,7 @@ def enqueue_ai(session, sub, version, actor_id, automatic=False):
         if not automatic: raise
         config={'mode':'disabled','workflow':os.getenv('REVIEW_WORKFLOW','manual')};error='Agent 服务待配置或配置无效；材料已保存，配置完成后可重新启动审核'
     job=AIJob(id=uid(),submission_id=sub.id,version_id=version.id,requested_by=actor_id,input_pack=pack,
-        input_hash=hashlib.sha256(json.dumps(pack,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
+        input_hash=pack['input_hash'],
         config=config,status='failed' if error else 'queued',error=error)
     session.add(job)
     return job

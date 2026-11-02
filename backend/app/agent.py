@@ -40,8 +40,8 @@ class AgentResult(BaseModel):
 
 def job_config():
     mode = os.getenv('AI_MODE', 'rules')
-    if mode not in ('rules','chat','agent'):
-        raise ValueError('AI_MODE must be rules, chat or agent')
+    if mode not in ('rules','chat','agent','innoagent'):
+        raise ValueError('AI_MODE must be rules, chat, agent or innoagent')
     base = os.getenv('AI_BASE_URL', '').rstrip('/')
     model = os.getenv('AI_MODEL', '')
     if mode != 'rules' and (not base or (mode == 'chat' and not model)):
@@ -53,7 +53,9 @@ def job_config():
     if mode != 'rules' and not base.startswith(('https://','http://127.0.0.1:','http://localhost:')) and os.getenv('AI_ALLOW_INTERNAL_HTTP') != '1':
         raise ValueError('Use HTTPS/local endpoint, or explicitly enable internal HTTP')
     return {'workflow':os.getenv('REVIEW_WORKFLOW','manual'),'mode': mode, 'base_url': base, 'model': model, 'prompt_version':PROMPT_VERSION,
-            'parser_version':PARSER_VERSION, 'rule_version':'manual-assist-1'}
+            'parser_version':PARSER_VERSION, 'rule_version':'manual-assist-1',
+            'skill': os.getenv('INNOAGENT_SKILL', 'material-review') if mode == 'innoagent' else None,
+            'timeout_seconds': int(os.getenv('INNOAGENT_TIMEOUT_SECONDS', '240')) if mode == 'innoagent' else None}
 
 
 def parse_file(meta, root):
@@ -110,6 +112,12 @@ def invoke_model(config, payload):
                    '无证据时输出 unable_to_determine，不编造来源。')
     key = os.getenv('AI_API_KEY','')
     headers = {'Authorization':f'Bearer {key}'} if key else {}
+    if config['mode']=='innoagent':
+        from .adapters.innoagent import InnoAgentAdapter
+        result, metadata = InnoAgentAdapter(config).review(payload, AgentResult.model_json_schema())
+        parsed = AgentResult.model_validate(result)
+        validate_evidence(parsed.checks,payload['blocks'])
+        return [c.model_dump() for c in parsed.checks], metadata
     if config['mode']=='chat':
         url = config['base_url'] + '/chat/completions'
         body = {'model':config['model'], 'messages':[{'role':'system','content':instruction},
@@ -128,7 +136,7 @@ def invoke_model(config, payload):
         result = json.loads(result['choices'][0]['message']['content'])
     parsed = AgentResult.model_validate(result)
     validate_evidence(parsed.checks,payload['blocks'])
-    return [c.model_dump() for c in parsed.checks]
+    return [c.model_dump() for c in parsed.checks], {}
 
 
 def analyze(pack, config, root):
@@ -154,9 +162,15 @@ def analyze(pack, config, root):
         severity='info', explanation='附件需进一步人工核对' if limitations else '原生文本解析完成，尚不代表事实核验通过',
         limitations=limitations[:20]).model_dump()]
     if config['mode'] != 'rules':
-        payload = {'version_id':pack['version_id'],'form':form,'requirements':pack['snapshot']['requirements'],
+        payload = {'version_id':pack['version_id'],'input_hash':pack.get('input_hash'),'form':form,'requirements':pack['snapshot']['requirements'],
                    'blocks':sent,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()}
-        checks.extend(invoke_model(config,payload))
+        model_checks = invoke_model(config,payload)
+        if isinstance(model_checks, tuple):
+            semantic_checks, metadata = model_checks
+            checks.extend(semantic_checks)
+        else:
+            metadata = {}
+            checks.extend(model_checks)
     else:
         checks.append(Check(rule_id='SEMANTIC_REVIEW', conclusion='unable_to_determine', severity='info',
             explanation='当前为规则初审，未调用语言模型',suggestion='由复核教师对照原件核验事实').model_dump())
@@ -165,4 +179,5 @@ def analyze(pack, config, root):
     checks.append(Check(rule_id='FORM_COMPLETENESS', conclusion='non_compliant' if missing else 'compliant',
         severity='blocking' if missing else 'info', explanation='缺少字段：'+','.join(missing) if missing else '冻结表单的配置必填项齐全，事实真实性仍需复核').model_dump())
     return {'schema_version':'1.0','mode':config['mode'],'checks':checks,'blocks':sent,
-            'limitations':limitations,'config':config,'automatic_approval':False}
+            'limitations':limitations,'config':config,'agent':metadata if config['mode'] == 'innoagent' else {},
+            'automatic_approval':False}
