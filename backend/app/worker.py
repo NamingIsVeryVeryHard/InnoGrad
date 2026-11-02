@@ -3,18 +3,21 @@ import argparse
 import time
 from sqlalchemy import select, update
 from datetime import datetime, timedelta, timezone
-from .db import Outbox, Submission, Decision, Archive, Correction, Version, uid, connect
+from .db import Outbox, Submission, Decision, Archive, Correction, Version, uid, now, connect
 
 
 def drain(factory, limit=100):
     count = 0
     for _ in range(limit):
         with factory.begin() as session:
-            event = session.scalar(select(Outbox).where(Outbox.status == "pending").order_by(Outbox.created_at).limit(1))
+            session.execute(update(Outbox).where(Outbox.status == "processing", Outbox.attempts < 3)
+                            .values(status="pending", error_code="ARCHIVE_RECOVERED"))
+            event = session.scalar(select(Outbox).where(
+                Outbox.status == "pending",
+                (Outbox.next_attempt_at.is_(None) | (Outbox.next_attempt_at <= now()))
+            ).order_by(Outbox.created_at).limit(1))
             if not event:
                 break
-            if event.next_attempt_at and event.next_attempt_at > datetime.now(timezone.utc).isoformat():
-                continue
             claimed = session.execute(update(Outbox).where(Outbox.id == event.id, Outbox.status == "pending")
                                       .values(status="processing", attempts=Outbox.attempts + 1))
             if claimed.rowcount != 1:
