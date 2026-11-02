@@ -237,7 +237,7 @@ def register(app, ctx):
             error(403, '无取消权限')
         old, idem = replay(session, request, user, {})
         if old is not None: return old
-        changed = session.execute(update(AIJob).where(AIJob.id==ident, AIJob.status.in_(['queued','running']))
+        changed = session.execute(update(AIJob).where(AIJob.id==ident, AIJob.status.in_(['queued','running','retrying']))
             .values(status='cancelled', execution_token=None, finished_at=now()))
         if not changed.rowcount: error(409, '任务已经结束')
         audit(session, user, 'ai.cancelled', ident)
