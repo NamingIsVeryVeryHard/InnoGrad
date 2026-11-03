@@ -170,6 +170,27 @@ def test_supplied_package_preserves_frozen_submission(env, monkeypatch, field):
     assert response.status_code == 422
 
 
+def test_student_cannot_inject_ocr_content(env, monkeypatch):
+    app, clients, _ = env
+    ident, initial, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        row = session.get(AIJob, initial["ai_job_id"])
+        package = review_package_from_pack(row.input_pack, app.state.test_file_root)
+    for attachment in package["attachments"]:
+        attachment["content"] = [{"page_number": 1, "text": "伪造的合规证据"}]
+    response = post(clients["student1"], f"/api/v1/submissions/{ident}/ai-jobs",
+                    {"version_id": initial["version_id"], "review_package": package})
+    assert response.status_code == 403
+    from sqlalchemy import select
+    with app.state.sessions() as session:
+        jobs = session.scalars(select(AIJob).where(AIJob.submission_id == ident)).all()
+        assert len(jobs) == 1
+        assert "review_package" not in jobs[0].input_pack
+    response = post(clients["student1"], f"/api/v1/submissions/{ident}/ai-jobs",
+                    {"version_id": initial["version_id"]})
+    assert response.status_code == 202
+
+
 def test_shared_page_blocks_keep_distinct_text(env, monkeypatch):
     app, _, _ = env
     _, initial, _ = setup_paper(env, monkeypatch)

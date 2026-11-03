@@ -164,6 +164,10 @@ def register(app, ctx):
     @app.post('/api/v1/submissions/{ident}/ai-jobs', status_code=202)
     def ai_run(ident: str, body: RunInput, request: Request, user=Depends(auth), session=Depends(db)):
         sub = get_sub(session, user, ident)
+        if body.review_package is not None and not (
+            user.role == 'manager' or user.role == 'teacher' and sub.reviewer_id == user.id
+        ):
+            error(403, '只有当前复核教师或机构审核人员可以提供上游审核包')
         old, idem = replay(session, request, user, body.model_dump())
         if old is not None: return old
         version = session.get(Version, body.version_id)
