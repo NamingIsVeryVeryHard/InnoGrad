@@ -38,6 +38,107 @@ class AgentResult(BaseModel):
     checks: list[Check] = Field(min_length=1, max_length=50)
 
 
+class ReviewContent(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    page_number: int | None = Field(default=None, ge=1)
+    paragraph_id: str | None = None
+    text: str = Field(min_length=1, max_length=12000)
+
+
+class ReviewAttachment(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    file_id: str
+    name: str
+    role: str
+    media_type: str
+    size: int = Field(ge=0)
+    sha256: str
+    content: list[ReviewContent] = Field(default_factory=list)
+
+
+class ReviewPackage(BaseModel):
+    """The post-OCR contract sent to the material-review Agent."""
+    model_config = ConfigDict(extra='forbid')
+    schema_version: Literal['1.0'] = '1.0'
+    version_id: str
+    kind: Literal['paper', 'annual']
+    student: dict[str, str]
+    form: dict
+    attachments: list[ReviewAttachment]
+    references: list[dict]
+    requirements: dict
+    period: str | None = None
+    late: bool = False
+    limitations: list[dict | str] = Field(default_factory=list)
+
+
+def _blocks_from_attachments(attachments):
+    return [
+        {
+            'file_id': attachment['file_id'],
+            'page_number': block.get('page_number'),
+            'paragraph_id': block.get('paragraph_id'),
+            'text': block['text'],
+        }
+        for attachment in attachments
+        for block in attachment.get('content', [])
+    ]
+
+
+def review_package_from_pack(pack, root):
+    """Normalize a job to the self-contained post-OCR package.
+
+    New callers may provide ``pack['review_package']`` directly. Existing
+    submission jobs still carry storage metadata and are converted here as a
+    compatibility adapter.
+    """
+    supplied = pack.get('review_package')
+    if supplied is not None:
+        return ReviewPackage.model_validate(supplied).model_dump()
+
+    snapshot = pack['snapshot']
+    attachments = []
+    limitations = list(snapshot.get('limitations', []))
+    for meta in pack['files']:
+        content = meta.get('content')
+        if content is None:
+            try:
+                extracted, problems = parse_file(meta, root)
+                content = [
+                    {
+                        'page_number': block.get('page_number'),
+                        'paragraph_id': block.get('paragraph_id'),
+                        'text': block['text'],
+                    }
+                    for block in extracted
+                ]
+                limitations.extend({'file_id': meta['id'], 'message': problem} for problem in problems)
+            except Exception:
+                content = []
+                limitations.append({'file_id': meta['id'], 'message': '解析失败，需人工核对'})
+        attachments.append({
+            'file_id': meta['id'],
+            'name': meta['name'],
+            'role': meta.get('role', 'other'),
+            'media_type': meta['media_type'],
+            'size': meta.get('size', 0),
+            'sha256': meta['sha256'],
+            'content': content,
+        })
+    return ReviewPackage(
+        version_id=pack['version_id'],
+        kind=snapshot['kind'],
+        student=snapshot.get('student', {}),
+        form=snapshot.get('form', {}),
+        attachments=attachments,
+        references=snapshot.get('references', []),
+        requirements=snapshot.get('requirements', {}),
+        period=snapshot.get('period'),
+        late=bool(snapshot.get('late')),
+        limitations=limitations,
+    ).model_dump()
+
+
 def job_config():
     mode = os.getenv('AI_MODE', 'rules')
     if mode not in ('rules','chat','agent','innoagent'):
@@ -125,12 +226,16 @@ def invoke_model(config, payload):
         result, metadata = InnoAgentAdapter(config).review(payload, AgentResult.model_json_schema())
         try:
             parsed = AgentResult.model_validate(result)
-            validate_evidence(parsed.checks,payload['blocks'])
-            validate_rule_checks(parsed.checks, payload, payload['files'])
+            validate_evidence(parsed.checks, _blocks_from_attachments(payload['attachments']))
+            validate_rule_checks(parsed.checks, payload, [
+                {**attachment, 'id': attachment['file_id']}
+                for attachment in payload['attachments']
+            ])
         except ValueError as exc:
             code = str(exc) if str(exc) in ("RULE_INCOMPLETE", "EVIDENCE_INVALID") else "EVIDENCE_INVALID"
             raise ReviewFailure(code, metadata)
         return [c.model_dump() for c in parsed.checks], metadata
+    payload = {**payload, 'output_schema': AgentResult.model_json_schema()}
     if config['mode']=='chat':
         url = config['base_url'] + '/chat/completions'
         body = {'model':config['model'], 'messages':[{'role':'system','content':instruction},
@@ -148,19 +253,25 @@ def invoke_model(config, payload):
     if config['mode']=='chat':
         result = json.loads(result['choices'][0]['message']['content'])
     parsed = AgentResult.model_validate(result)
-    validate_evidence(parsed.checks,payload['blocks'])
+    validate_evidence(parsed.checks, _blocks_from_attachments(payload['attachments'])
+                      if 'attachments' in payload else payload['blocks'])
     return [c.model_dump() for c in parsed.checks]
 
 
 def analyze(pack, config, root):
-    blocks, limitations = [], []
-    for meta in pack['files']:
-        try:
-            extracted, problems = parse_file(meta,root)
-            blocks.extend(extracted)
-            limitations.extend(f"{meta['name']}: {p}" for p in problems)
-        except Exception:
-            limitations.append(f"{meta['name']}: 解析失败，需人工核对")
+    package = review_package_from_pack(pack, root)
+    attachments = package['attachments']
+    blocks = _blocks_from_attachments(attachments)
+    limitations = [
+        item if isinstance(item, str) else f"{item.get('file_id', '附件')}: {item.get('message', '需人工核对')}"
+        for item in package.get('limitations', [])
+    ]
+    for attachment in attachments:
+        if not attachment['content']:
+            limitations.append(f"{attachment['file_id']}: 上游未提供可审核文本")
+        elif any(block.get('page_number') is None and block.get('paragraph_id') is None
+                 for block in attachment['content']):
+            limitations.append(f"{attachment['file_id']}: 上游文本缺少证据定位")
     # Bound data sent to external services; retain only blocks actually provided for citation validation.
     sent, remaining = [], 60000
     for block in blocks:
@@ -170,15 +281,15 @@ def analyze(pack, config, root):
         text = block['text'][:remaining]
         if len(text)<len(block['text']): limitations.append('部分文本被截断，需人工核对完整原件')
         sent.append({**block,'text':text}); remaining-=len(text)
-    form = pack['snapshot']['form']
+    form = package['form']
     checks = [Check(rule_id='ATTACHMENT_READABILITY', conclusion='unable_to_determine' if limitations else 'compliant',
-        severity='info', explanation='附件需进一步人工核对' if limitations else '原生文本解析完成，尚不代表事实核验通过',
+        severity='info', explanation='附件需进一步人工核对' if limitations else '已接收附件文本，事实仍需逐项核验',
         limitations=limitations[:20]).model_dump()]
     metadata = {}
     if config['mode'] == 'innoagent':
         from .material_rules import required_roles
-        present = {item.get('role') for item in pack['files']}
-        missing_roles = sorted(required_roles(pack['snapshot']) - present)
+        present = {item.get('role') for item in attachments}
+        missing_roles = sorted(required_roles(package) - present)
         checks.append(Check(rule_id='ATTACHMENT_ROLES',
             conclusion='non_compliant' if missing_roles else 'compliant',
             severity='blocking' if missing_roles else 'info',
@@ -187,12 +298,15 @@ def analyze(pack, config, root):
     else:
         missing_roles = []
     if config['mode'] != 'rules' and not (config['mode'] == 'innoagent' and (missing_roles or limitations)):
-        payload = {key:pack['snapshot'].get(key) for key in
-                   ('kind','student','references','period','late')}
-        payload.update({'version_id':pack['version_id'],'input_hash':pack.get('input_hash'),
-                   'files':[{k:v for k,v in item.items() if k != 'storage_key'} for item in pack['files']],
-                   'form':form,'requirements':pack['snapshot']['requirements'],
-                   'blocks':sent,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()})
+        package['attachments'] = []
+        for attachment in attachments:
+            content = [
+                {key: block[key] for key in ('page_number', 'paragraph_id', 'text')}
+                for block in sent if block['file_id'] == attachment['file_id']
+            ]
+            package['attachments'].append({**attachment, 'content': content})
+        package['limitations'] = limitations[:20]
+        payload = package
         model_checks = invoke_model(config,payload)
         if isinstance(model_checks, tuple):
             semantic_checks, metadata = model_checks
@@ -203,7 +317,7 @@ def analyze(pack, config, root):
     elif config['mode'] == 'rules':
         checks.append(Check(rule_id='SEMANTIC_REVIEW', conclusion='unable_to_determine', severity='info',
             explanation='当前为规则初审，未调用语言模型',suggestion='由复核教师对照原件核验事实').model_dump())
-    required = pack['snapshot']['requirements'].get('required_fields') or (['title','contribution','publication_status'] if 'title' in form else ['summary'])
+    required = package['requirements'].get('required_fields') or (['title','contribution','publication_status'] if 'title' in form else ['summary'])
     missing = [key for key in required if not isinstance(form.get(key), str) or not form[key].strip()]
     checks.append(Check(rule_id='FORM_COMPLETENESS', conclusion='non_compliant' if missing else 'compliant',
         severity='blocking' if missing else 'info', explanation='缺少字段：'+','.join(missing) if missing else '冻结表单的配置必填项齐全，事实真实性仍需复核').model_dump())

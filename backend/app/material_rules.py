@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[2] / "agent-skills" / "material-review"
-SKILL_VERSION = "material-review-2"
+SKILL_VERSION = "material-review-3"
 
 
 def canonical_hash(value):

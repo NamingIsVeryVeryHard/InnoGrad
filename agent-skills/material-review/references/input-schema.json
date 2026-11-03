@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "ReviewAttachment": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "title": "File Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "content": {
+          "items": {
+            "$ref": "#/$defs/ReviewContent"
+          },
+          "title": "Content",
+          "type": "array"
+        }
+      },
+      "required": [
+        "file_id",
+        "name",
+        "role",
+        "media_type",
+        "size",
+        "sha256"
+      ],
+      "title": "ReviewAttachment",
+      "type": "object"
+    },
+    "ReviewContent": {
+      "additionalProperties": false,
+      "properties": {
+        "page_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "paragraph_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paragraph Id"
+        },
+        "text": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ReviewContent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The post-OCR contract sent to the material-review Agent.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "version_id": {
+      "title": "Version Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "paper",
+        "annual"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "student": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Student",
+      "type": "object"
+    },
+    "form": {
+      "additionalProperties": true,
+      "title": "Form",
+      "type": "object"
+    },
+    "attachments": {
+      "items": {
+        "$ref": "#/$defs/ReviewAttachment"
+      },
+      "title": "Attachments",
+      "type": "array"
+    },
+    "references": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "References",
+      "type": "array"
+    },
+    "requirements": {
+      "additionalProperties": true,
+      "title": "Requirements",
+      "type": "object"
+    },
+    "period": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period"
+    },
+    "late": {
+      "default": false,
+      "title": "Late",
+      "type": "boolean"
+    },
+    "limitations": {
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "version_id",
+    "kind",
+    "student",
+    "form",
+    "attachments",
+    "references",
+    "requirements"
+  ],
+  "title": "ReviewPackage",
+  "type": "object"
+}

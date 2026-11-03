@@ -5,7 +5,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 import httpx
 import pytest
-from app.agent import AgentResult, analyze
+from app.agent import AgentResult, analyze, review_package_from_pack
 from app.adapters.innoagent import InnoAgentAdapter
 from app.auto_review import assess
 from app.db import AIJob
@@ -51,8 +51,9 @@ def setup_paper(env, monkeypatch, missing=False):
 def semantic_result(payload):
     checks = []
     for rule in payload["requirements"]["review_rules"]:
-        fid = next(f["id"] for f in payload["files"] if f["role"] in rule["evidence_roles"])
-        block = next(b for b in payload["blocks"] if b["file_id"] == fid)
+        attachment = next(f for f in payload["attachments"] if f["role"] in rule["evidence_roles"])
+        fid = attachment["file_id"]
+        block = next(b | {"file_id": fid} for b in attachment["content"])
         checks.append(dict(rule_id=rule["id"],conclusion="compliant",severity="info",
             explanation="证明一致",evidence=[{k:block[k] for k in ("file_id","page_number","paragraph_id")} | {"quote":block["text"]}],
             suggestion="",limitations=[]))
@@ -61,9 +62,10 @@ def semantic_result(payload):
 
 def fake_review(self, payload, schema):
     assert "storage_key" not in json.dumps(payload)
+    assert "attachments" in payload and "files" not in payload and "blocks" not in payload
     assert payload["student"]["name"] and payload["references"] == []
-    assert payload["input_hash"]
-    return semantic_result(payload), {"agent_session_id":"isolated","cleanup_status":"deleted","skill_version":"material-review-2"}
+    assert "input_hash" not in payload and "output_schema" not in payload
+    return semantic_result(payload), {"agent_session_id":"isolated","cleanup_status":"deleted","skill_version":"material-review-3"}
 
 
 def test_real_analysis_routes_to_archive(env, monkeypatch):
@@ -111,6 +113,95 @@ def test_all_not_applicable_is_rejected(env, monkeypatch):
     monkeypatch.setattr(InnoAgentAdapter,"review",wrong)
     with pytest.raises(ReviewFailure,match="RULE_INCOMPLETE"):
         analyze(pack,config,app.state.test_file_root)
+
+
+def test_analyze_accepts_post_ocr_review_package(env, monkeypatch):
+    app, _, _ = env
+    _, job, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        row = session.get(AIJob, job["ai_job_id"])
+        original_pack, config = row.input_pack, row.config
+    canonical = review_package_from_pack(original_pack, app.state.test_file_root)
+    supplied = {
+        "review_package": canonical,
+    }
+    def unexpected_parse(*args):
+        pytest.fail("post-OCR input must not read original files")
+    monkeypatch.setattr("app.agent.parse_file", unexpected_parse)
+    monkeypatch.setattr(InnoAgentAdapter, "review", fake_review)
+    result = analyze(supplied, config, "/path/is_not_read")
+    assert result["mode"] == "innoagent"
+    assert result["blocks"]
+    assert result["agent"]["cleanup_status"] == "deleted"
+
+
+def test_ai_job_endpoint_accepts_post_ocr_review_package(env, monkeypatch):
+    app, clients, _ = env
+    ident, initial, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        row = session.get(AIJob, initial["ai_job_id"])
+        canonical = review_package_from_pack(row.input_pack, app.state.test_file_root)
+    response = post(
+        clients["teacher"],
+        f"/api/v1/submissions/{ident}/ai-jobs",
+        {"version_id": initial["version_id"], "review_package": canonical},
+    )
+    assert response.status_code == 202
+    with app.state.sessions() as session:
+        job = session.get(AIJob, response.json()["id"])
+        assert job.input_pack["review_package"]["attachments"]
+
+
+@pytest.mark.parametrize("field", ["form", "requirements", "student", "attachments", "duplicate"])
+def test_supplied_package_preserves_frozen_submission(env, monkeypatch, field):
+    app, clients, _ = env
+    ident, initial, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        row = session.get(AIJob, initial["ai_job_id"])
+        package = review_package_from_pack(row.input_pack, app.state.test_file_root)
+    if field == "attachments":
+        package["attachments"][0]["sha256"] = "wrong-file"
+    elif field == "duplicate":
+        package["attachments"].append(deepcopy(package["attachments"][0]))
+    else:
+        package[field] = {}
+    response = post(clients["teacher"], f"/api/v1/submissions/{ident}/ai-jobs",
+                    {"version_id": initial["version_id"], "review_package": package})
+    assert response.status_code == 422
+
+
+def test_shared_page_blocks_keep_distinct_text(env, monkeypatch):
+    app, _, _ = env
+    _, initial, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        job = session.get(AIJob, initial["ai_job_id"])
+        package = review_package_from_pack(job.input_pack, app.state.test_file_root)
+        config = job.config
+    content = [
+        {"page_number": 1, "paragraph_id": None, "text": "第一块"},
+        {"page_number": 1, "paragraph_id": None, "text": "第二块"},
+    ]
+    package["attachments"][0]["content"] = content
+    def review(self, payload, schema):
+        assert payload["attachments"][0]["content"] == content
+        return fake_review(self, payload, schema)
+    monkeypatch.setattr(InnoAgentAdapter, "review", review)
+    analyze({"review_package": package}, config, "/unused")
+
+
+def test_empty_upstream_content_requires_manual_review(env, monkeypatch):
+    app, _, _ = env
+    _, initial, _ = setup_paper(env, monkeypatch)
+    with app.state.sessions() as session:
+        job = session.get(AIJob, initial["ai_job_id"])
+        package = review_package_from_pack(job.input_pack, app.state.test_file_root)
+        config = job.config
+    package["attachments"][0]["content"] = []
+    monkeypatch.setattr(InnoAgentAdapter, "review",
+                        lambda *args: pytest.fail("empty OCR content must not reach Agent"))
+    result = analyze({"review_package": package}, config, "/unused")
+    assert result["checks"][0]["conclusion"] == "unable_to_determine"
+    assert result["limitations"]
 
 
 def test_adapter_uses_actual_protocol_and_cleans_workspace(monkeypatch):

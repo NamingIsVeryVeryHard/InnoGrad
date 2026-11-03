@@ -11,7 +11,7 @@ from .policy import can_read
 from .agent import job_config, analyze
 
 
-def enqueue_ai(session, sub, version, actor_id, automatic=False):
+def enqueue_ai(session, sub, version, actor_id, automatic=False, review_package=None):
     files=[]
     for fid in version.snapshot['file_ids']:
         f=session.get(File,fid)
@@ -20,7 +20,35 @@ def enqueue_ai(session, sub, version, actor_id, automatic=False):
                       'role': version.snapshot.get('file_roles', {}).get(f.id, 'other')}),
                       'storage_key': f.storage_key})
     pack={'version_id':version.id,'snapshot':version.snapshot,'files':files}
-    pack['input_hash']=hashlib.sha256(json.dumps(pack,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    if review_package is not None:
+        from .agent import ReviewPackage
+        normalized = ReviewPackage.model_validate(review_package).model_dump()
+        if normalized['version_id'] != version.id or normalized['kind'] != version.snapshot['kind']:
+            raise ValueError('审核包版本或类型与提交版本不一致')
+        for key, default in (
+            ('student', {}), ('form', {}), ('references', []),
+            ('requirements', {}), ('period', None), ('late', False),
+        ):
+            if normalized[key] != version.snapshot.get(key, default):
+                raise ValueError('审核包字段与冻结版本不一致：' + key)
+        attachments = normalized['attachments']
+        supplied_ids = [item['file_id'] for item in attachments]
+        if len(set(supplied_ids)) != len(supplied_ids) or set(supplied_ids) != {item['id'] for item in files}:
+            raise ValueError('审核包附件与冻结版本不一致')
+        by_id = {item['id']: item for item in files}
+        for attachment in attachments:
+            frozen = by_id[attachment['file_id']]
+            if any(attachment[key] != frozen.get(key, 0 if key == 'size' else None)
+                   for key in ('name', 'role', 'media_type', 'size', 'sha256')):
+                raise ValueError('审核包附件元数据与冻结版本不一致')
+        pack['review_package'] = normalized
+    hash_input = {
+        'version_id': pack['version_id'],
+        'snapshot': pack['snapshot'],
+        'files': [{key: value for key, value in item.items() if key != 'storage_key'} for item in pack['files']],
+        'review_package': pack.get('review_package'),
+    }
+    pack['input_hash']=hashlib.sha256(json.dumps(hash_input,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     error=None
     try:
         config=job_config()

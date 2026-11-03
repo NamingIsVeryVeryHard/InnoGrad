@@ -34,6 +34,7 @@ def register(app, ctx):
 
     class RunInput(Input):
         version_id: str
+        review_package: dict | None = None
 
     @app.post('/api/v1/submissions/{ident}/reviewer')
     def reassign(ident: str, body: Reassign, request: Request, user=Depends(auth), session=Depends(db)):
@@ -173,7 +174,10 @@ def register(app, ctx):
             error(422, 'AI 服务配置不完整，请联系管理员')
         cas(session, sub, sub.lock_version)
         from .jobs import enqueue_ai
-        row = enqueue_ai(session, sub, version, user.id)
+        try:
+            row = enqueue_ai(session, sub, version, user.id, review_package=body.review_package)
+        except ValueError as exc:
+            error(422, str(exc))
         audit(session, user, 'ai.requested', row.id)
         return finish(session, idem, {'id': row.id, 'status': 'queued'})
 
