@@ -4,6 +4,7 @@ from typing import Literal
 import hashlib
 import json
 import os
+import re
 import zipfile
 from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
@@ -92,12 +93,31 @@ def parse_file(meta, root):
     return blocks, limitations
 
 
+def _evidence_keys(value):
+    """PDF extraction wraps lines (even inside URLs) and keeps hyphenation.
+
+    Compare content ignoring whitespace, and also ignoring hyphens so a quote
+    reconstructed from a wrapped line is still verifiable against the source.
+    """
+    compact = re.sub(r'\s+', '', value)
+    return compact, compact.replace('-', '')
+
+
+def _verified(evidence, blocks):
+    matches = [b for b in blocks if b['file_id']==evidence.file_id and
+               b['page_number']==evidence.page_number and b['paragraph_id']==evidence.paragraph_id]
+    quote_key, quote_dehyphenated = _evidence_keys(evidence.quote)
+    for block in matches:
+        block_key, block_dehyphenated = _evidence_keys(block['text'])
+        if quote_key and (quote_key in block_key or quote_dehyphenated in block_dehyphenated):
+            return True
+    return False
+
+
 def validate_evidence(checks, blocks):
     for check in checks:
         for evidence in check.evidence:
-            matches = [b for b in blocks if b['file_id']==evidence.file_id and
-                       b['page_number']==evidence.page_number and b['paragraph_id']==evidence.paragraph_id]
-            if not any(evidence.quote in block['text'] for block in matches):
+            if not _verified(evidence, blocks):
                 raise ValueError('模型引用了无法核验或审核包之外的证据')
         if check.conclusion in ('compliant','non_compliant') and not check.evidence:
             raise ValueError('模型的确定性语义结论必须提供原文证据')
@@ -112,21 +132,51 @@ def invoke_model(config, payload):
     headers = {'Authorization':f'Bearer {key}'} if key else {}
     if config['mode']=='chat':
         url = config['base_url'] + '/chat/completions'
-        body = {'model':config['model'], 'messages':[{'role':'system','content':instruction},
+        body = {'model':config['model'], 'temperature':0,
+                'messages':[{'role':'system','content':instruction},
                 {'role':'user','content':json.dumps(payload, ensure_ascii=False)}],
                 'response_format':{'type':'json_object'}}
     else:
         url = config['base_url'] + '/review'
         body = {'schema_version':'1.0','instruction':instruction,'input':payload}
     # Fixed administrator-configured endpoint; no URL from documents or model output is followed.
-    with httpx.Client(timeout=httpx.Timeout(60, connect=10), follow_redirects=False) as client:
-        response = client.post(url,json=body,headers=headers)
-        response.raise_for_status()
-        if len(response.content)>1024*1024: raise ValueError('模型响应超过上限')
-        result = response.json()
+    for attempt in range(2):
+        try:
+            with httpx.Client(timeout=httpx.Timeout(60, connect=10), follow_redirects=False) as client:
+                response = client.post(url,json=body,headers=headers)
+                response.raise_for_status()
+            if len(response.content)>1024*1024: raise ValueError('模型响应超过上限')
+            result = response.json()
+            break
+        except httpx.TransportError:
+            # A single retry covers transient gateway disconnects; validation
+            # failures are repaired below rather than reported as execution errors.
+            if attempt:
+                raise
     if config['mode']=='chat':
         result = json.loads(result['choices'][0]['message']['content'])
     parsed = AgentResult.model_validate(result)
+    blocks = payload['blocks']
+    for check in parsed.checks:
+        kept = []
+        for evidence in check.evidence:
+            if not any(b['file_id']==evidence.file_id for b in blocks):
+                raise ValueError('模型引用了无法核验或审核包之外的证据')
+            if _verified(evidence, blocks):
+                kept.append(evidence)
+            else:
+                note = '引用的原文无法在原件中逐字定位，该项证据已移除'
+                if note not in check.limitations:
+                    check.limitations.append(note)
+        check.evidence = kept
+        # A definitive conclusion without evidence cannot be auto-approved; keep
+        # the report and let institutional review decide instead of failing it.
+        if check.conclusion in ('compliant','non_compliant') and not check.evidence:
+            check.conclusion = 'unable_to_determine'
+            check.severity = 'info'
+            note = '模型未提供可核验的原文证据，该项降级为无法判断'
+            if note not in check.limitations:
+                check.limitations.append(note)
     validate_evidence(parsed.checks,payload['blocks'])
     return [c.model_dump() for c in parsed.checks]
 
