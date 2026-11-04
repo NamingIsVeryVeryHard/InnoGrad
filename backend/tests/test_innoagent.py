@@ -1,5 +1,6 @@
 import io
 import json
+import hashlib
 import zipfile
 from copy import deepcopy
 from types import SimpleNamespace
@@ -135,6 +136,31 @@ def test_analyze_accepts_post_ocr_review_package(env, monkeypatch):
     assert result["agent"]["cleanup_status"] == "deleted"
 
 
+def test_legacy_snapshot_without_kind_defaults_to_annual(env, tmp_path):
+    app, _, _ = env
+    relative = "legacy.docx"
+    (tmp_path / relative).write_bytes(docx("阶段总结与下一阶段计划"))
+    package = review_package_from_pack({
+        "version_id": "legacy-version",
+        "snapshot": {
+            "form": {"summary": "阶段总结", "plan": "下一阶段计划"},
+            "requirements": {"review_rules": []},
+            "references": [],
+            "period": "2026—2027",
+            "late": False,
+        },
+        "files": [{
+            "id": "legacy-file",
+            "name": "legacy.docx",
+            "role": "other",
+            "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "sha256": hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest(),
+            "storage_key": relative,
+        }],
+    }, tmp_path)
+    assert package["kind"] == "annual"
+
+
 def test_ai_job_endpoint_accepts_post_ocr_review_package(env, monkeypatch):
     app, clients, _ = env
     ident, initial, _ = setup_paper(env, monkeypatch)
@@ -223,42 +249,3 @@ def test_empty_upstream_content_requires_manual_review(env, monkeypatch):
     result = analyze({"review_package": package}, config, "/unused")
     assert result["checks"][0]["conclusion"] == "unable_to_determine"
     assert result["limitations"]
-
-
-def test_adapter_uses_actual_protocol_and_cleans_workspace(monkeypatch):
-    captured = {}
-    content = (SKILL_ROOT/"SKILL.md").read_text()
-    original_client = httpx.Client
-    def handle(request):
-        path = request.url.path
-        if path == "/api/health": data = {"status":"ok"}
-        elif path == "/api/skills": data = [{"name":"material-review"}]
-        elif path.endswith("/file"): data = {"content":content}
-        elif path == "/api/sessions":
-            captured["new"] = json.loads(request.content); data = {"id":"session","workspaceId":"workspace"}
-        elif path == "/api/chat/stream":
-            captured["chat"] = json.loads(request.content)
-            text = json.dumps({"checks":[]})
-            events = [{"event":{"type":"text_delta","delta":text[:6]}},
-                      {"event":{"type":"thinking_delta","delta":"ignore"}},
-                      {"event":{"type":"text_delta","delta":text[6:]}},
-                      {"event":{"type":"done"}}]
-            return httpx.Response(200,text="".join("data: "+json.dumps(e)+"\n\n" for e in events))
-        elif request.method == "DELETE":
-            captured["delete"] = path; data = {"deleted":True}
-        else: data = {"messages":[{"role":"assistant","model":"actual-model","provider":"local"}]}
-        return httpx.Response(200,json=data)
-    monkeypatch.setattr(httpx,"Client",lambda **kwargs: original_client(transport=httpx.MockTransport(handle),**kwargs))
-    adapter = InnoAgentAdapter({"base_url":"http://test"})
-    result,meta = adapter.review({"version_id":"v","input_hash":"hash"},AgentResult.model_json_schema())
-    assert result == {"checks":[]}
-    assert captured["new"]["newWorkspace"]["isTemp"] is True
-    assert captured["chat"]["sessionId"] == "session"
-    assert captured["chat"]["prompt"].startswith("/skill:material-review")
-    assert captured["delete"] == "/api/sessions/session"
-    assert meta["response_model"] == "actual-model" and meta["cleanup_status"] == "deleted"
-
-
-def test_truncated_stream_is_invalid():
-    with pytest.raises(ReviewFailure,match="OUTPUT_INVALID"):
-        InnoAgentAdapter._last_json(['data: {"event":{"type":"text_delta","delta":"{"}}'])

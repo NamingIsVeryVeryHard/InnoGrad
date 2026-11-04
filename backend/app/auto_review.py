@@ -2,11 +2,38 @@
 from sqlalchemy import select, update
 from .db import User, AIJob, Submission, Decision, Outbox, Audit, uid
 from .agent import Check, validate_evidence
-from .material_rules import validate_rule_checks
+from .material_rules import requires_correction, validate_rule_checks
+
+LOCAL_IDS = {"ATTACHMENT_READABILITY", "FORM_COMPLETENESS", "ATTACHMENT_ROLES"}
 
 
 def required_rules(job):
     return {r["id"] for r in job.input_pack["snapshot"].get("requirements", {}).get("review_rules", [])}
+
+
+def _feedback(check):
+    if check.suggestion.strip():
+        return check.suggestion.strip()
+    if check.conclusion == "unable_to_determine" and check.limitations:
+        return "请补充或更正：" + "；".join(check.limitations)
+    return check.explanation.strip()
+
+
+def material_findings(job):
+    """Split findings into student corrections and non-blocking hints by each frozen rule's level."""
+    snapshot = job.input_pack["snapshot"]
+    rules = {r["id"]: r for r in snapshot.get("requirements", {}).get("review_rules", [])}
+    corrections, hints = [], []
+    for check in (Check.model_validate(c) for c in (job.result or {}).get("checks", [])):
+        if check.conclusion not in ("non_compliant", "unable_to_determine"):
+            continue
+        blocking = check.rule_id in LOCAL_IDS or requires_correction(rules.get(check.rule_id, {}), check.conclusion)
+        (corrections if blocking else hints).append(f"{check.rule_id}：{_feedback(check)}")
+    if any(ref.get("recognition") != "archived" for ref in snapshot.get("references", [])):
+        hints.append("REF_UNRECOGNIZED：引用成果仍由成果认定流程确认，本次通过不代表成果已认定")
+    if snapshot.get("late"):
+        hints.append("LATE：逾期提交，已记录提交时间")
+    return corrections, hints
 
 
 def assess_material(job):
@@ -20,21 +47,20 @@ def assess_material(job):
     if result.get("routing", {}).get("reason", "").startswith("AUTH_CHANGED"):
         return "exception", result["routing"]["reason"]
     checks = result.get("checks", [])
-    local_ids = {"ATTACHMENT_READABILITY", "FORM_COMPLETENESS", "ATTACHMENT_ROLES"}
     try:
         parsed = [Check.model_validate(c) for c in checks]
     except ValueError:
         return "exception", "OUTPUT_INVALID:审核格式无效"
     if len({c.rule_id for c in parsed}) != len(parsed):
         return "exception", "RULE_INCOMPLETE:重复检查"
-    local = {c.rule_id: c for c in parsed if c.rule_id in local_ids}
-    if set(local) != local_ids:
+    local = {c.rule_id: c for c in parsed if c.rule_id in LOCAL_IDS}
+    if set(local) != LOCAL_IDS:
         return "exception", "RULE_INCOMPLETE:缺少确定性检查"
     if result.get("limitations") or local["ATTACHMENT_READABILITY"].conclusion != "compliant":
-        return "exception", "PARSE_LIMIT:原件无法完整解析"
+        return "correction", "PARSE_LIMIT:请重新上传可读取的原件"
     if any(local[key].conclusion == "non_compliant" for key in ("FORM_COMPLETENESS", "ATTACHMENT_ROLES")):
         return "correction", "FINDING_BLOCKING:请补齐表单或必需附件"
-    semantic = [c for c in parsed if c.rule_id not in local_ids]
+    semantic = [c for c in parsed if c.rule_id not in LOCAL_IDS]
     try:
         validate_rule_checks(semantic, job.input_pack["snapshot"], job.input_pack["files"])
         validate_evidence(semantic, result.get("blocks", []))
@@ -44,22 +70,19 @@ def assess_material(job):
     agent = result.get("agent") or {}
     if not agent.get("agent_session_id") or agent.get("cleanup_status") != "deleted":
         return "exception", "CONFIG_ERROR:Agent 会话或清理状态无法确认"
-    if any(c.conclusion == "unable_to_determine" or c.limitations for c in semantic):
-        return "exception", "FINDING_UNCERTAIN:存在无法安全判断的规则"
-    failures = [c for c in semantic if c.conclusion == "non_compliant"]
-    if failures:
-        if all(c.severity == "blocking" and c.suggestion.strip() for c in failures):
-            return "correction", "FINDING_BLOCKING:存在明确补正要求"
-        return "exception", "FINDING_UNCERTAIN:需进一步确认"
-    snapshot = job.input_pack["snapshot"]
-    if any(ref.get("recognition") != "archived" for ref in snapshot.get("references", [])):
-        return "exception", "REF_UNRECOGNIZED:引用成果尚未认定"
-    if snapshot.get("late"):
-        return "exception", "LATE:逾期提交"
+    # Material content never routes to institution review: blocking findings go back to the
+    # student, everything else (advisory rules, uncertainty, caveats) is attached as hints.
+    corrections, hints = material_findings(job)
+    if corrections:
+        return "correction", "FINDING_BLOCKING:存在需学生补正的阻断项"
+    if hints:
+        return "passed", f"阻断项全部通过；另有 {len(hints)} 条提示"
     return "passed", "全部规则与证据检查通过"
 
 
 def assess(job):
+    if job.config.get('mode') == 'disabled' and job.config.get('workflow') == 'agent':
+        return 'exception', 'CONFIG_ERROR:审核服务未就绪'
     if job.config.get('mode') == 'innoagent':
         return assess_material(job)
     if job.config.get('mode') not in ('agent','chat','innoagent'):
@@ -74,13 +97,13 @@ def assess(job):
     checks=result.get('checks',[])
     if not checks:
         return 'exception', 'OUTPUT_INVALID:报告缺失'
-    if result.get('limitations'):
-        return 'exception', 'PARSE_LIMIT:存在解析限制'
     local={'ATTACHMENT_READABILITY','FORM_COMPLETENESS'}
     if len({c.get('rule_id') for c in checks}) != len(checks):
         return 'exception','OUTPUT_INVALID:报告包含重复检查项'
     if not all(any(c.get('rule_id')==key and c.get('conclusion')=='compliant' for c in checks) for key in local):
         return 'exception','RULE_INCOMPLETE:缺少完整的解析与必填检查'
+    if result.get('limitations'):
+        return 'correction', 'PARSE_LIMIT:请重新上传可读取的原件'
     semantic=[c for c in checks if c.get('rule_id') not in local]
     expected = required_rules(job) if job.config.get('mode') == 'innoagent' else set()
     actual = {c.get('rule_id') for c in semantic}
@@ -141,7 +164,13 @@ def apply_auto_decision(session,job):
         agent=User(id=uid(),username='__innograd_agent__',name='InnoGrad 审核 Agent',role='service',enabled=0,password_hash='disabled$disabled')
         session.add(agent);session.flush()
     if agent.role!='service' or agent.enabled: raise ValueError('Invalid Agent service identity')
-    suggestions = "；".join(c.get("suggestion", "") for c in job.result.get("checks", []) if c.get("suggestion"))
+    if job.config.get('mode') == 'innoagent':
+        corrections, hints = material_findings(job)
+        parts = (['需补正：' + '；'.join(corrections)] if target == 'returned' and corrections else []) \
+            + (['提示：' + '；'.join(hints)] if hints else [])
+        suggestions = '；'.join(parts)
+    else:
+        suggestions = "；".join(c.get("suggestion", "") for c in job.result.get("checks", []) if c.get("suggestion"))
     decision=Decision(id=uid(),version_id=job.version_id,reviewer_id=agent.id,outcome=target,
         opinion=(reason + "；" + suggestions + "。报告 " + job.id)[:5000],actor_type='agent',ai_job_id=job.id)
     session.add(decision);session.flush()

@@ -131,8 +131,33 @@ def run_ai(factory, root=None, processor=None):
             return False
         ident, pack, config, maximum = job.id, job.input_pack, job.config, job.max_attempts
     metadata = {}
+    from .agent_contracts import AgentExecution
+
+    def save_progress(progress):
+        with factory.begin() as session:
+            session.execute(update(AIJob).where(
+                AIJob.id == ident, AIJob.status == 'running', AIJob.execution_token == token,
+            ).values(agent_metadata={'progress': {
+                'state': progress.state, 'attempt': progress.attempt,
+                'queue_wait_seconds': progress.queue_wait_seconds,
+            }}))
+
+    last_cancel_check, cancelled = 0, False
+
+    def is_cancelled():
+        import time
+        nonlocal last_cancel_check, cancelled
+        if cancelled or time.monotonic() - last_cancel_check < 1:
+            return cancelled
+        last_cancel_check = time.monotonic()
+        with factory() as session:
+            row = session.get(AIJob, ident)
+            cancelled = not row or row.status != 'running' or row.execution_token != token
+        return cancelled
+
     try:
-        result = processor(pack, config, root)
+        execution = AgentExecution(on_progress=save_progress, is_cancelled=is_cancelled)
+        result = processor(pack, config, root, execution=execution) if processor is analyze else processor(pack, config, root)
         from .agent import Check
         if result.get('automatic_approval') is not False:
             raise ReviewFailure('OUTPUT_INVALID')
@@ -160,4 +185,8 @@ def run_ai(factory, root=None, processor=None):
             completed_job = session.get(AIJob, ident)
             session.refresh(completed_job)
             apply_auto_decision(session, completed_job)
+        else:
+            session.execute(update(AIJob).where(
+                AIJob.id == ident, AIJob.status == 'cancelled', AIJob.attempts == attempt,
+            ).values(agent_metadata=metadata))
     return True

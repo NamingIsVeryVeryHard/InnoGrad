@@ -15,6 +15,7 @@ from .db import (User,Supervision,StudentProfile,Task,Assignment,Submission,Vers
 from .main import password_hash
 from .portraits import ensure_snapshot
 from .growth import warning_candidates
+from .material_rules import freeze_requirements
 
 BATCH='innograd-synthetic-cohort-v1'
 STUDENTS=[
@@ -36,7 +37,13 @@ STUDENTS=[
 def ident(key):return str(uuid5(NAMESPACE_URL,BATCH+'/'+key))
 def stamp(day):return datetime.combine(day,time(10),tzinfo=ZoneInfo('Asia/Shanghai')).astimezone(timezone.utc).isoformat()
 def docx_bytes(title,form):
-    paragraphs=[title,'模拟数据 · 仅用于 InnoGrad 功能演示，不对应真实学生或真实成果。']+[str(k)+'：'+str(v) for k,v in form.items()]
+    labels={'title':'材料标题','summary':'研究进展与总结','plan':'下一阶段计划','period':'报告周期',
+            'education_context':'教育应用背景','academic_exchange':'学术交流','practice_record':'实践记录',
+            'contribution':'本人贡献','publication_status':'成果状态','journal':'期刊或会议',
+            'submission_date':'投稿日期','acceptance_date':'录用日期','publication_date':'发表日期',
+            'simulation_notice':'模拟说明'}
+    values={**form,'publication_status':{'submitted':'已投稿','accepted':'已录用','published':'已发表'}.get(form.get('publication_status'),form.get('publication_status'))}
+    paragraphs=[title,'模拟数据 · 仅用于 InnoGrad 功能演示，不对应真实学生或真实成果。']+[labels.get(k,k)+'：'+str(values[k]) for k in form]
     xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+''.join('<w:p><w:r><w:t xml:space="preserve">'+escape(p)+'</w:t></w:r></w:p>' for p in paragraphs)+'</w:body></w:document>'
     output=io.BytesIO()
     with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as z:
@@ -64,11 +71,22 @@ def seed_scenarios(factory,root,bundle,as_of):
             sim_actor=User(id=ident('simulation-actor'),username='__innograd_simulation__',name='InnoGrad 模拟场景生成器',role='service',enabled=0,password_hash='disabled$disabled')
             session.add(sim_actor);session.flush()
             def task(key,title,sid,period,deadline):
+                requirements=freeze_requirements('annual', {
+                    'version':'simulation-annual-v1',
+                    'required_fields':['summary','plan'],
+                    'instructions':'请记录本周期的研究进展、下一阶段计划、教育应用背景、学术交流和实践情况。',
+                    'attachment_required':True,
+                    'proof_attachments_required':False,
+                    'review_policy':'simulation',
+                    'simulation':True,
+                })
                 t=Task(id=ident('task/'+key),title='[模拟] '+title,period=period,deadline=stamp(deadline),reviewer_id=teacher.id,
-                    requirements={'version':'simulation-annual-v1','required_fields':['summary','plan'],'attachment_required':True,'review_policy':'simulation','simulation':True},created_by=manager.id)
+                    requirements=requirements,created_by=manager.id)
                 session.add(t);session.flush();session.add(Assignment(id=ident('assignment/'+key),task_id=t.id,student_id=sid));return t
             def material(key,student,kind,title,form,period,day,status='archived',task_row=None):
                 form={'title':'[模拟] '+title,**form,'simulation_notice':'全部内容为模拟，不用于真实评价'}
+                if kind == 'annual':
+                    form={**form,'period':period}
                 sub=Submission(id=ident('submission/'+key),student_id=student.id,kind=kind,task_id=task_row.id if task_row else None,
                     reviewer_id=teacher.id,status=status,lock_version=3 if status=='archived' else 2,created_at=stamp(day))
                 session.add(sub);session.flush()
@@ -78,10 +96,14 @@ def seed_scenarios(factory,root,bundle,as_of):
                 path.write_bytes(data);written.append(path)
                 f=File(id=ident('file/'+key),owner_id=student.id,submission_id=sub.id,name=form['title']+'.docx',media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',storage_key=storage,sha256=hashlib.sha256(data).hexdigest(),size=len(data))
                 session.add(f);session.flush()
-                sub.draft={'form':form,'file_ids':[f.id],'reference_ids':[]}
+                roles={f.id:'annual_report' if kind=='annual' else 'paper_fulltext'}
+                sub.draft={'form':form,'file_ids':[f.id],'file_roles':roles,'reference_ids':[]}
                 if status=='draft':return sub,None,None
-                v=Version(id=ident('version/'+key),submission_id=sub.id,number=1,created_at=stamp(day),snapshot={'simulation':True,'form':form,'file_ids':[f.id],'references':[],
-                    'requirements':task_row.requirements if task_row else {'version':'simulation-paper-v1','review_policy':'simulation'},'period':period,'late':False,'review_workflow':'simulation'})
+                requirements=task_row.requirements if task_row else freeze_requirements('paper', {'version':'simulation-paper-v1','review_policy':'simulation','simulation':True})
+                v=Version(id=ident('version/'+key),submission_id=sub.id,number=1,created_at=stamp(day),snapshot={
+                    'simulation':True,'kind':kind,'form':form,'file_ids':[f.id],
+                    'file_roles':roles,
+                    'references':[],'requirements':requirements,'period':period,'late':False,'review_workflow':'simulation'})
                 session.add(v);session.flush();sub.current_version_id=v.id
                 if status in ('archived','returned'):
                     d=Decision(id=ident('decision/'+key),version_id=v.id,reviewer_id=sim_actor.id,actor_type='simulation',outcome='approved' if status=='archived' else 'returned',

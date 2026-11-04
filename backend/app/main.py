@@ -487,7 +487,7 @@ def create_app(database_url=None, storage=None):
                 AIJob.version_id == sub.current_version_id).order_by(AIJob.created_at.desc(), AIJob.id.desc()).limit(1))
             from .auto_review import assess
             if not latest or assess(latest)[0] != 'exception':
-                error(409, '只有 Agent 发现异常、无法判断或执行失败的任务需要机构处理')
+                error(409, '只有当前审核异常或执行失败的任务需要机构处理；材料内容问题请按补正要求重新提交')
         decision = Decision(id=uid(), version_id=body.version_id, reviewer_id=user.id,
                             outcome=body.outcome, opinion=body.opinion)
         session.add(decision)

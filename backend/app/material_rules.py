@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[2] / "agent-skills" / "material-review"
-SKILL_VERSION = "material-review-3"
+SKILL_VERSION = "material-review-5"
+RULE_SET = "v2"
 
 
 def canonical_hash(value):
@@ -15,10 +16,10 @@ def canonical_hash(value):
 def freeze_requirements(kind, requirements=None):
     result = deepcopy(requirements or {})
     if "review_rules" not in result:
-        manifest = json.loads((SKILL_ROOT / "references" / "rules" / f"{kind}-v1.json").read_text())
+        manifest = json.loads((SKILL_ROOT / "references" / "rules" / f"{kind}-{RULE_SET}.json").read_text())
         result["review_rules"] = manifest["rules"]
         result["rule_version"] = manifest["version"]
-    result.setdefault("version", f"{kind}-v1")
+    result.setdefault("version", f"{kind}-{RULE_SET}")
     result["rules_hash"] = canonical_hash(result["review_rules"])
     return result
 
@@ -40,7 +41,21 @@ def not_applicable(rule, snapshot):
     return bool(
         condition == "no_references" and not snapshot.get("references")
         or condition == "submitted" and snapshot["form"].get("publication_status") == "submitted"
+        or condition == "proofs_not_required"
+        and not snapshot.get("requirements", {}).get("proof_attachments_required")
     )
+
+
+def requires_correction(rule, conclusion):
+    """Blocking rules return the material to the student; advisory findings only become hints.
+
+    Rules frozen before levels existed default to blocking with correction on uncertainty.
+    """
+    if rule.get("level", "blocking") != "blocking":
+        return False
+    if conclusion == "non_compliant":
+        return True
+    return conclusion == "unable_to_determine" and rule.get("on_uncertain", "correction") == "correction"
 
 
 def validate_rule_checks(checks, snapshot, files):

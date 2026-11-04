@@ -190,16 +190,12 @@ def register(app, ctx):
         row = session.get(AIJob, ident)
         if not row: error(404, '初审任务不存在')
         sub = get_sub(session, user, row.submission_id)
-        from .db import Decision
-        used_for_archive = session.scalar(select(Decision.id).where(Decision.ai_job_id == row.id)) is not None
-        current = sub.current_version_id == row.version_id and (sub.status == 'pending_review' or used_for_archive)
-        from .review_flow import material_outcome
-        from .auto_review import assess
-        return {'institution_required':assess(row)[0]=='exception','material_review':material_outcome(row),'id':row.id, 'version_id':row.version_id, 'status':row.status, 'attempts':row.attempts,
+        from .review_flow import review_context
+        return {**review_context(session, row, sub), 'id':row.id, 'version_id':row.version_id, 'status':row.status, 'attempts':row.attempts,
                 'mode':row.config['mode'], 'result':row.result, 'error':row.error, 'error_code':row.error_code,
                 'agent_session_id':row.agent_session_id, 'skill_version':row.skill_version,
                 'response_model':row.response_model, 'next_attempt_at':row.next_attempt_at,
-                'historical_only':not current, 'input_hash':row.input_hash}
+                'input_hash':row.input_hash}
 
     @app.get('/api/v1/ai-jobs/{ident}/report')
     def ai_report(ident: str, user=Depends(auth), session=Depends(db)):
@@ -214,7 +210,9 @@ def register(app, ctx):
             for item in row.input_pack.get('files', [])
         ]
         result = row.result or {}
+        from .review_flow import review_context
         return {
+            **review_context(session, row, sub),
             'schema_version': result.get('schema_version', '1.0'),
             'job_id': row.id, 'submission_id': sub.id, 'version_id': row.version_id,
             'status': row.status, 'input_hash': row.input_hash,

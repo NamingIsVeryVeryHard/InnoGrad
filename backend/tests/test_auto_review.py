@@ -52,6 +52,10 @@ def test_exceptions_do_not_archive_and_can_be_handled_by_institution(env,monkeyp
         return r
     run_ai(app.state.sessions,processor=process);drain(app.state.sessions)
     row=c['student1'].get('/api/v1/submissions/'+ident).json()
+    if case == 'limits':
+        assert row['status'] == 'returned' and not row['effective_archive_id']
+        assert c['manager'].get('/api/v1/review-queue').json()[0]['institution_required'] is False
+        return
     assert row['status']=='pending_review' and not row['effective_archive_id']
     assert c['manager'].get('/api/v1/review-queue').json()[0]['institution_required']
     response=post(c['manager'],'/api/v1/submissions/'+ident+'/decision',{'expected_lock_version':row['lock_version'],

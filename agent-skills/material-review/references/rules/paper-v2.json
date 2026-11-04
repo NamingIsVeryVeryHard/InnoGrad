@@ -1,0 +1,72 @@
+{
+  "version": "paper-v2",
+  "kind": "paper",
+  "rules": [
+    {
+      "id": "PAPER_TITLE_MATCH",
+      "level": "blocking",
+      "on_uncertain": "correction",
+      "evidence_roles": [
+        "paper_fulltext",
+        "acceptance_notice",
+        "publication_page"
+      ],
+      "instruction": "对照表单标题与论文首页、录用通知或见刊页标题；忽略大小写、空白、换行和常规标点差异，只有实质性用词差异才判不符合。"
+    },
+    {
+      "id": "PAPER_AUTHOR_IDENTITY",
+      "level": "blocking",
+      "on_uncertain": "correction",
+      "evidence_roles": [
+        "paper_fulltext",
+        "publication_page",
+        "acceptance_notice"
+      ],
+      "instruction": "在作者列表中查找 student.name；中文姓名与其拼音或英文写法（含姓名顺序互换、大小写、连字符和空格差异）视为同一写法。找到后核对表单署名顺序。作者列表可读但没有对应姓名时判不符合；作者列表不可读时无法判断。"
+    },
+    {
+      "id": "PAPER_STATUS_CONSISTENCY",
+      "level": "blocking",
+      "on_uncertain": "correction",
+      "evidence_roles": [
+        "acceptance_notice",
+        "publication_page"
+      ],
+      "instruction": "已录用需有录用通知，已发表需有见刊页或含发表信息的论文首页。按证明的实际内容判断：投稿回执、版权转让表或会议汇报不能单独证明录用或发表；证明须对应本论文标题。",
+      "not_applicable_when": "submitted"
+    },
+    {
+      "id": "PAPER_VENUE_MATCH",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "paper_fulltext",
+        "acceptance_notice",
+        "publication_page"
+      ],
+      "instruction": "对照表单 journal 与首页、录用通知或见刊页的期刊或会议名称；全称与缩写、大小写和届次写法差异视为一致；刊物或会议不同，或届次、年份数值不同时判不符合。"
+    },
+    {
+      "id": "PAPER_DATE_CONSISTENCY",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "acceptance_notice",
+        "publication_page",
+        "paper_fulltext"
+      ],
+      "instruction": "核对表单录用或发表日期与原件可见日期。只比较双方都给出的精度（年、月或日）；任一方缺少更细日期时按已有精度比较，不视为矛盾，也不写入限制。",
+      "not_applicable_when": "submitted"
+    },
+    {
+      "id": "PAPER_CONTRIBUTION_CONSISTENCY",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "paper_fulltext",
+        "contribution_statement"
+      ],
+      "instruction": "检查个人贡献陈述所述工作能否在论文内容或贡献声明中找到对应；能找到即符合。只有陈述的研究内容、方法、对象或数据与论文明确不符时判不符合。本规则不要求证明作者之间的具体分工。"
+    }
+  ]
+}
