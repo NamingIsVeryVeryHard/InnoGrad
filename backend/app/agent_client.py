@@ -50,9 +50,6 @@ class AgentClient:
                 or self.timeout <= 0 or self.queue_timeout <= 0
                 or not 1 <= self.max_attempts <= 10 or not 0 <= self.retry_seconds <= 3600):
             raise AgentFailure("CONFIG_ERROR")
-        if (endpoint.scheme == "http" and endpoint.hostname not in ("127.0.0.1", "localhost", "::1")
-                and os.getenv("AI_ALLOW_INTERNAL_HTTP") != "1"):
-            raise AgentFailure("CONFIG_ERROR")
         key = os.getenv("AI_API_KEY", "")
         self.headers = {"Authorization": f"Bearer {key}"} if key else {}
         self._instance_lock = threading.Lock()
