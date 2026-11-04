@@ -506,6 +506,12 @@ def create_app(database_url=None, storage=None):
     from .portraits import register as register_portraits
     register_portraits(app, db, authenticated)
 
+    # Additive PDF → OCR → material organization → fixed rules → bundle
+    # pipeline.  It uses the existing authenticated submission/file boundary
+    # and does not alter the existing review or portrait endpoints.
+    from .material_pipeline_api import register as register_material_pipeline
+    register_material_pipeline(app, db, authenticated, get_sub, root)
+
     static = Path(__file__).resolve().parents[2] / "frontend"
     if static.exists():
         app.mount("/", StaticFiles(directory=static, html=True), name="frontend")
