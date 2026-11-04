@@ -10,7 +10,7 @@ from .db import (User, Submission, Version, Archive, PortraitSnapshot, Task, Ass
                  Decision, AIJob, GrowthEntry, WarningAction, uid, now)
 from .workspace import scope_ids
 from .policy import relation
-from .auto_review import assess
+from .review_flow import review_context
 
 DIMENSIONS = [
     ('goals','年度目标','研究计划、年度总结与下一阶段安排'),
@@ -49,8 +49,11 @@ def warning_candidates(session, student_ids, instant=None):
             emit(sub.student_id,'returned',sub.id,sub.current_version_id,'材料需要补充', '材料已退回或重开，请根据处理意见补充后重新提交。','medium','submission',sub.id)
         if sub.status=='pending_review':
             job=session.scalar(select(AIJob).where(AIJob.submission_id==sub.id,AIJob.version_id==sub.current_version_id).order_by(AIJob.created_at.desc(),AIJob.id.desc()).limit(1))
-            if job and assess(job)[0]=='exception':
-                emit(sub.student_id,'agent_exception',sub.id,job.id,'审核异常待核验',assess(job)[1]+'。请查看审核报告与原件，记录下一步处理。','high','submission',sub.id)
+            context = review_context(session, job, sub) if job else {}
+            if context.get('institution_required'):
+                outcome = context['material_review']
+                emit(sub.student_id,'agent_exception',sub.id,job.id,'审核异常待核验',
+                     (outcome.get('reason') or outcome['label'])+'。请查看审核报告与原件，记录下一步处理。','high','submission',sub.id)
     today=instant.astimezone(ZoneInfo('Asia/Shanghai')).date()
     for entry in session.scalars(select(GrowthEntry).where(GrowthEntry.student_id.in_(student_ids),GrowthEntry.kind.in_(['goal','milestone']),GrowthEntry.status=='planned')):
         if entry.due_date and date.fromisoformat(entry.due_date)<today:

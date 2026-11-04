@@ -67,15 +67,16 @@ def review_context(session, job, sub):
         not used and (sub.status != 'pending_review' or latest != job.id)
     )
     result = job.result or {}
+    simulation = bool(result.get('simulation') or job.config.get('simulation'))
     rules = job.input_pack.get('snapshot', {}).get('requirements', {}).get('review_rules', [])
     return {
         'material_review': material_outcome(job),
-        'institution_required': not historical and sub.status == 'pending_review' and assess(job)[0] == 'exception',
+        'institution_required': not historical and not simulation and sub.status == 'pending_review' and assess(job)[0] == 'exception',
         'business_status': sub.status,
         'historical_only': historical,
         'semantic_reviewed': bool(job.status == 'succeeded' and not result.get('simulation')
                                   and (result.get('agent') or {}).get('agent_session_id')),
-        'simulation': bool(result.get('simulation') or job.config.get('simulation')),
+        'simulation': simulation,
         'rule_policies': {rule['id']: {'level': rule.get('level', 'blocking'),
                                      'on_uncertain': rule.get('on_uncertain', 'correction')} for rule in rules},
     }
@@ -91,7 +92,7 @@ def register(app,db,auth):
             context = review_context(session, job, sub) if job else {}
             result.append({'submission_id':sub.id,'version_id':sub.current_version_id,
                 'job_id':job.id if job else None,'job_status':job.status if job else None,
-                'simulation':bool(job and job.config.get('simulation')),
+                'simulation':context.get('simulation', False),
                 'mode':job.config.get('mode') if job else None,'outcome':material_outcome(job),
                 'institution_required':context.get('institution_required', False),
                 'error':job.error if job else None,'business_status':sub.status})
