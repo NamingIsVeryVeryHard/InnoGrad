@@ -1,0 +1,53 @@
+{
+  "version": "annual-v2",
+  "kind": "annual",
+  "rules": [
+    {
+      "id": "ANNUAL_PROGRESS_COVERAGE",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照 requirements.instructions 列出的栏目，检查报告是否有对应内容。某个栏目完全没有内容时判不符合；内容简略或缺少独立证明不影响符合。区分未报告与未完成。"
+    },
+    {
+      "id": "ANNUAL_ACHIEVEMENT_REF_CONSISTENCY",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照 references 中的成果标题、载体和状态核查报告引用。只有标题、载体或状态明确矛盾（例如把在投写成已发表）时判不符合；成果是否已认定由成果认定流程负责，不影响本规则。",
+      "not_applicable_when": "no_references"
+    },
+    {
+      "id": "ANNUAL_PLAN_PRESENT",
+      "level": "blocking",
+      "on_uncertain": "correction",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "定位下一阶段计划，至少包含一项具体行动即符合；报告中没有计划内容时判不符合。不能把过去完成的工作当成未来计划。"
+    },
+    {
+      "id": "ANNUAL_DATE_COVERAGE",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照 period 与报告标题或正文中的周期说明，周期明确不同时判不符合。日期被脱敏或报告未写周期时无法判断。"
+    },
+    {
+      "id": "ANNUAL_ATTACHMENT_ROLES",
+      "level": "blocking",
+      "on_uncertain": "hint",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "仅在任务要求提交成果证明时适用：检查报告列出的已录用或已发表成果是否有对应用途的证明附件；缺少时判不符合，并说明应补哪项证明。",
+      "not_applicable_when": "proofs_not_required"
+    }
+  ]
+}

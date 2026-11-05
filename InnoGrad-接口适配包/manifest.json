@@ -1,0 +1,57 @@
+[
+  {
+    "path": "backend/app/agent_client.py",
+    "expected_sha256": "c398283caec6b293e0db69d0d979ed90a736b219e3d49e414d5b4286bd1560a4",
+    "new_sha256": "809a7989ea33ab7e1d1e0e05047b30151bfc397474884fd1f628fd4308dfa606"
+  },
+  {
+    "path": "backend/app/material_rules.py",
+    "expected_sha256": "4b10df9aee5f0bd47caf1efd77d7c8ad0544dba56b813e7dba6f1405ed1e5936",
+    "new_sha256": "bb3d53368b1f6fd5643b441f68842d3d1f5de316f7658109aabca6fa56afcc10"
+  },
+  {
+    "path": "backend/app/adapters/innoagent.py",
+    "expected_sha256": "6891621fe54c8b443ac6b663ddffc5e7ad5aeda3910c99d71e015becb86dd51d",
+    "new_sha256": "8d96ad28d8350cb524201b7aa84fe549d1504a605e24ab78b2f2f7824520be47"
+  },
+  {
+    "path": "backend/app/seed_scenarios.py",
+    "expected_sha256": "fe1398412ecdd828155583aa6c73e734614f5a0da39e27c772b249ed12ebdd48",
+    "new_sha256": "50566cadf9b8b9234b7c54878e0d7a6693709f6ec41dca0fc978978da7320a80"
+  },
+  {
+    "path": "backend/app/run_local.py",
+    "expected_sha256": "aca353b70bd80c666136fda8a4a4d57114c558dcd1372d553180ea4757d3fcb7",
+    "new_sha256": "588b428d320b3050289283b56d514f016b0a451b757f19186bf86321c49d7579"
+  },
+  {
+    "path": "backend/migrations/env.py",
+    "expected_sha256": "52fe8e29bb4f067eb307acf0f343ab99cc8f2a44565ab02df41746cbe03590bc",
+    "new_sha256": "6f1fbadfd8641483557749d3f4181f2a9ced4ba05f2d6f3ca3fd402508231352"
+  },
+  {
+    "path": "backend/verify_local.py",
+    "expected_sha256": "1ab2a96a1a198e150674a7360cbc0e30736a073d8717955f1d5b5d8f93dc277a",
+    "new_sha256": "de46f3a6ec9c3a1ac28c7c0a25ffb42c44d1c1124c93abc748d51485066ecf47"
+  },
+  {
+    "path": "backend/tests/test_review_workspace.py",
+    "expected_sha256": "296e36fbcc82ee6230e8352185f4544f6924e624599430ad1eb7ae5b2c675017",
+    "new_sha256": "8038bf63f001867c7c3d9406fd9fb9a89db32c2fe8dbc46b9a261015bf143393"
+  },
+  {
+    "path": "backend/tests/test_simulation_cohort.py",
+    "expected_sha256": "042c41510d95a0f1d7620810b99cde7a70f6a6fe04e48966451341f29ab382b2",
+    "new_sha256": "a6f74c6bf446ebeef89b130fd861e59896ed57dc69da0d9322cdc97bf6698f1a"
+  },
+  {
+    "path": "backend/tests/test_agent_platform.py",
+    "expected_sha256": null,
+    "new_sha256": "81b9b276dcbad2af69c6f980f3bee2c32f67e37dc8c40ecfa91e2bb134ca8d51"
+  },
+  {
+    "path": "backend/tests/test_agent_review_flow.py",
+    "expected_sha256": "32e12d793f757ce6ba61b278c0f7ff7c1ab87062c5882f78063f1a8035e29ded",
+    "new_sha256": "7e80324b34c62a33144f7ebe6694b9178a84752293d27aa64f15cca9d88870f4"
+  }
+]

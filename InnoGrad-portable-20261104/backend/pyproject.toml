@@ -1,0 +1,9 @@
+[project]
+name = "graduate-lifecycle"
+version = "0.3.0"
+requires-python = ">=3.11"
+dependencies = ["fastapi", "uvicorn", "sqlalchemy>=2.0", "alembic", "psycopg[binary]", "pydantic-settings", "python-multipart", "httpx", "pypdf", "python-dotenv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,42 @@
+{
+  "version": "annual-v1",
+  "kind": "annual",
+  "rules": [
+    {
+      "id": "ANNUAL_PROGRESS_COVERAGE",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照任务 instructions 与报告正文，检查工作内容覆盖；区分未报告与未完成。"
+    },
+    {
+      "id": "ANNUAL_ACHIEVEMENT_REF_CONSISTENCY",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照 references 中的冻结成果信息核查报告引用；没有引用成果时说明不适用。",
+      "not_applicable_when": "no_references"
+    },
+    {
+      "id": "ANNUAL_PLAN_PRESENT",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "定位下一阶段计划的具体行动；不能把过去完成的工作当成未来计划。"
+    },
+    {
+      "id": "ANNUAL_DATE_COVERAGE",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照任务 period 与报告周期；缺失周期信息时无法判断。"
+    },
+    {
+      "id": "ANNUAL_ATTACHMENT_ROLES",
+      "evidence_roles": [
+        "annual_report"
+      ],
+      "instruction": "对照文件用途与报告中的证明要求，检查相应证明是否已提供。"
+    }
+  ]
+}

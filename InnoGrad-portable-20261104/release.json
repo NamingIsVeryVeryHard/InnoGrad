@@ -1,0 +1,10 @@
+{
+  "version": "20261104-portable-rc1",
+  "baseline": "b1f9e74c8278b76406b39ba35039440bcaecb330",
+  "source": "local feature/school-agent-material-review including uncommitted adaptations",
+  "deployment": "single host, single API and Worker, SQLite volume",
+  "default_workflow": "manual",
+  "contains_secrets": false,
+  "contains_runtime_data": false,
+  "docker_verified": false
+}

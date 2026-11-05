@@ -1,0 +1,38 @@
+name: innograd
+x-app: &app
+  image: innograd:20261104
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: sqlite:////data/innograd.db
+    FILE_ROOT: /data/files
+    APP_ENV: production
+    AGENT_LOCK_ROOT: /data/agent-locks
+  volumes:
+    - innograd-data:/data
+  restart: unless-stopped
+services:
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+  api:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+  worker:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker"]
+volumes:
+  innograd-data:

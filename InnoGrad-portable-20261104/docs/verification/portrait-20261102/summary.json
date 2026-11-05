@@ -1,0 +1,83 @@
+{
+  "created_at": "2026-11-02T06:01:29.441842+00:00",
+  "data": "synthetic only",
+  "external_model_calls": false,
+  "checks": [
+    {
+      "check": "pytest",
+      "exit_code": 0
+    },
+    {
+      "check": "migration_previous",
+      "exit_code": 0
+    },
+    {
+      "check": "migration_head",
+      "exit_code": 0
+    },
+    {
+      "check": "migration_check",
+      "exit_code": 0
+    },
+    {
+      "check": "existing_synthetic_row_preserved",
+      "exit_code": 0
+    },
+    {
+      "check": "syntax_app.js",
+      "exit_code": 0
+    },
+    {
+      "check": "syntax_workflow.js",
+      "exit_code": 0
+    },
+    {
+      "check": "syntax_prototype_app.js",
+      "exit_code": 0
+    },
+    {
+      "check": "offline_portrait_regression",
+      "exit_code": 0
+    },
+    {
+      "check": "python_compile",
+      "exit_code": 0
+    },
+    {
+      "check": "source_unchanged_during_verification",
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "backend/app/worker.py": "fee38ed8c1dd3dfcae4aeeec670532ef6745144fe0ade220d0c1cf9d2c4a3c70",
+    "backend/app/db.py": "d1cc1a447917022f9d3353165f3ca61e77243b584d1d60945eb46912358b325b",
+    "backend/app/backup.py": "35fd724a164332337f39e4a5f71a829911b94d4a2416c21673c15994c154d764",
+    "backend/app/policy.py": "2fe54e9cfca13b67b288ad8054c93cde057808757096b4f010d8075871d7624e",
+    "backend/app/portraits.py": "b251e1cf815ca0e1193ded684b3e7847a5895328c26cbf64903fe18b5b17d5cc",
+    "backend/app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend/app/jobs.py": "240ef1de7f6862384b16e735afcbeeab1b120f003a2aeae0d11ce42c6df34748",
+    "backend/app/extensions.py": "c89885c8b98779e8a31ad2ddf1ce162d6467d0a7e209b4d0f1ecbcd3d044c079",
+    "backend/app/seed.py": "b56d4d79b4ed12ad60747d9b79ce498dcaafc03d11c5825e7ac5f0c5dbdc3261",
+    "backend/app/agent.py": "e1f796380a8fc076b72402f89cd6e49c5d235113d6fbc0c52b21ff368f0ba750",
+    "backend/app/workspace.py": "dfc843b826bb7f99ff32a3cf846604e2636ff92e1e8bfe868bdbefa9556966fd",
+    "backend/app/main.py": "1e6099eb9367c72cd09d290999210cff255a3d17d865d5fc2a0b7e792c59cd69",
+    "backend/tests/test_extensions.py": "23790667f3d426d5dd5403cc2d790d2aff84755fae330de40351cfd326462207",
+    "backend/tests/test_workflow.py": "2132ef7195fcccf441ebb9f90627a12606cf62c51d4b6d2492980a9987ab6f3f",
+    "backend/tests/test_portraits.py": "f16ffc4a889758e365c02b9a74361b4da37c22cb9f1e516f46efee55603eb62e",
+    "backend/migrations/env.py": "3f95028dadad2821d1bb3726c4b40cfb47969277ec296f7060ed56234d604598",
+    "backend/migrations/versions/c8fa362c75aa_initial_manual_workflow.py": "a934ac6a728f375a483024d0b24bc1668ccd51d74e328f0643bdd4e9ef9947a0",
+    "backend/migrations/versions/b10d4f2a1930_workspace.py": "eaa305034a6402c851cc06e61b704d38ea2da1691d0d2477d0fd48f764c63109",
+    "backend/migrations/versions/8e3b091c2d40_portrait_snapshots.py": "8afba76927b46fb1b779fbfb2d3246964a04afa89ebf56a24b32bc56d1dc9940",
+    "backend/migrations/versions/54f51b05aa83_manual_corrections_exports_ai_jobs.py": "c2871dbbb3eaab0cb9c617ce64e283497c01290ad4e12285857a0690b9cefb18",
+    "frontend/workflow.js": "16cb7d8a72141e8859b1568e1f640fe23c04898b5237272bedbfd239740edc5f",
+    "frontend/app.js": "66a1d30aaaf96415d39976c402be68d89468ab3a4cef23c23bab3a84ab09898f",
+    "frontend/prototype/app.js": "ced7ec7b94906ab3cfb4ecfff4b6b3520e8af9783fff097106ae084593414530"
+  },
+  "not_run": [
+    "browser E2E",
+    "PostgreSQL/S3",
+    "real model quality",
+    "production load/recovery"
+  ],
+  "frontend_build": "Native HTML/JS; no bundler configured; syntax checked"
+}
