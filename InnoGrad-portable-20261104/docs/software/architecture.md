@@ -140,6 +140,19 @@
 
 ## 3. 总体架构
 
+**AI Agent 技术栈总览**
+
+| 层级 | 主要职责 | 项目采用技术 |
+| --- | --- | --- |
+| 前端交互层 | 材料申报、文件上传、审核结果、成长画像与预警展示 | HTML、CSS、原生 JavaScript |
+| API 层 | 身份认证、权限控制、请求校验、业务接口管理 | Python、FastAPI、Uvicorn、Pydantic、Session |
+| Agent 层 | 材料解析、审核规则、流程编排、证据校验、任务重试 | 自研 Python 流水线、Worker、AIJob、pypdf、材料审核 Skill；InnoAgent HTTP/SSE 客户端 |
+| 模型层 | 材料语义核验、结构化意见生成、模型服务调用 | ECNUChat（`ecnu-max` 请求别名）、httpx、Chat Completions 接口 |
+| 数据层 | 用户与材料数据、版本记录、审核任务、成长画像、原件存储 | SQLite、SQLAlchemy、Alembic、受控文件目录、SHA-256 |
+| 基础设施层 | 环境隔离、服务启停、日志、健康检查、备份恢复与部署 | venv、本机启动脚本、日志与心跳检查；Docker Compose、HTTPS 代理配置 |
+
+注：本机演示采用规则模式和人工审核，不实时调用模型；原生 InnoAgent 客户端已实现，服务尚未在本机部署；Docker/HTTPS 目标部署尚未完成验收。
+
 ### 3.1 六层架构图
 
 ```mermaid
