@@ -1,6 +1,4 @@
 """Authenticated API entry point for the additive material pipeline."""
-from __future__ import annotations
-
 from datetime import date
 import re
 from pathlib import Path

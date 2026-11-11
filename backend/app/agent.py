@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 import httpx
 
 PROMPT_VERSION = 'review-assistant-1'
-PARSER_VERSION = 'native-text-1'
+PARSER_VERSION = 'native-text-2'
 
 
 class Evidence(BaseModel):
@@ -68,7 +68,7 @@ def parse_file(meta, root):
         if reader.is_encrypted or len(reader.pages) > 200:
             return [], ['PDF 加密或超过 200 页解析上限，需人工核对']
         for number, page in enumerate(reader.pages, 1):
-            text = (page.extract_text() or '')[:12000]
+            text = (page.extract_text() or '')
             if text.strip():
                 blocks.append({'file_id':meta['id'], 'page_number':number, 'paragraph_id':None, 'text':text})
             else:
@@ -84,7 +84,7 @@ def parse_file(meta, root):
             tree = ET.fromstring(xml)
             ns = {'w':'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
             for index, paragraph in enumerate(tree.findall('.//w:p',ns),1):
-                text = ''.join(t.text or '' for t in paragraph.findall('.//w:t',ns))[:12000]
+                text = ''.join(t.text or '' for t in paragraph.findall('.//w:t',ns))
                 if text.strip(): blocks.append({'file_id':meta['id'], 'page_number':None,'paragraph_id':f'p-{index}','text':text})
     else:
         limitations.append('图片 OCR 尚未配置，需人工核对原图')
@@ -181,6 +181,24 @@ def invoke_model(config, payload):
     return [c.model_dump() for c in parsed.checks]
 
 
+def review_batches(blocks, limit=60000):
+    batch = []
+    remaining = limit
+    for block in blocks:
+        text = block['text']
+        offset = 0
+        while offset < len(text):
+            if remaining == 0:
+                yield batch
+                batch = []
+                remaining = limit
+            part = text[offset:offset + remaining]
+            batch.append({**block, 'text':part})
+            remaining -= len(part)
+            offset += len(part)
+    yield batch
+
+
 def analyze(pack, config, root):
     blocks, limitations = [], []
     for meta in pack['files']:
@@ -190,23 +208,17 @@ def analyze(pack, config, root):
             limitations.extend(f"{meta['name']}: {p}" for p in problems)
         except Exception:
             limitations.append(f"{meta['name']}: 解析失败，需人工核对")
-    # Bound data sent to external services; retain only blocks actually provided for citation validation.
-    sent, remaining = [], 60000
-    for block in blocks:
-        if remaining <= 0:
-            limitations.append('正文超过分析长度上限，未分析部分需人工核对')
-            break
-        text = block['text'][:remaining]
-        if len(text)<len(block['text']): limitations.append('部分文本被截断，需人工核对完整原件')
-        sent.append({**block,'text':text}); remaining-=len(text)
     form = pack['snapshot']['form']
     checks = [Check(rule_id='ATTACHMENT_READABILITY', conclusion='unable_to_determine' if limitations else 'compliant',
         severity='info', explanation='附件需进一步人工核对' if limitations else '原生文本解析完成，尚不代表事实核验通过',
         limitations=limitations[:20]).model_dump()]
     if config['mode'] != 'rules':
-        payload = {'version_id':pack['version_id'],'form':form,'requirements':pack['snapshot']['requirements'],
-                   'blocks':sent,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()}
-        checks.extend(invoke_model(config,payload))
+        for batch in review_batches(blocks):
+            payload = {'version_id':pack['version_id'],'form':form,'requirements':pack['snapshot']['requirements'],
+                       'blocks':batch,'limitations':limitations[:20],'output_schema':AgentResult.model_json_schema()}
+            checks.extend(invoke_model(config,payload))
+        if sum(len(block['text']) for block in blocks) > 60000:
+            limitations.append('全文已分批送审，跨批次结论需人工核验')
     else:
         checks.append(Check(rule_id='SEMANTIC_REVIEW', conclusion='unable_to_determine', severity='info',
             explanation='当前为规则初审，未调用语言模型',suggestion='由复核教师对照原件核验事实').model_dump())
@@ -214,5 +226,5 @@ def analyze(pack, config, root):
     missing = [key for key in required if not isinstance(form.get(key), str) or not form[key].strip()]
     checks.append(Check(rule_id='FORM_COMPLETENESS', conclusion='non_compliant' if missing else 'compliant',
         severity='blocking' if missing else 'info', explanation='缺少字段：'+','.join(missing) if missing else '冻结表单的配置必填项齐全，事实真实性仍需复核').model_dump())
-    return {'schema_version':'1.0','mode':config['mode'],'checks':checks,'blocks':sent,
+    return {'schema_version':'1.0','mode':config['mode'],'checks':checks,'blocks':blocks,
             'limitations':limitations,'config':config,'automatic_approval':False}
