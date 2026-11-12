@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import secrets
+import httpx
+from pydantic import ValidationError
 from sqlalchemy import select, update, or_, and_
 from .db import AIJob, File, ExportJob, User, Submission, Archive, Version, Audit, now, uid
 from .policy import can_read
@@ -82,9 +84,23 @@ def run_ai(factory, root=None, processor=None):
         if result.get('automatic_approval') is not False: raise ValueError('Invalid approval field')
         for check in result['checks']: Check.model_validate(check)
         values={'status':'succeeded','result':result,'error':None}
-    except Exception:
-        # No raw provider exceptions: they can include credentials, endpoints or submitted content.
-        values={'status':'failed','result':None,'error':'初审执行或输出校验失败，请重试或由教师人工复核'}
+    except Exception as exc:
+        # Only expose fixed categories and HTTP status, never response or document content.
+        if isinstance(exc, httpx.HTTPStatusError):
+            reason = f'模型服务拒绝请求（HTTP {exc.response.status_code}）'
+        elif isinstance(exc, httpx.TimeoutException):
+            reason = '等待模型服务响应超时'
+        elif isinstance(exc, httpx.TransportError):
+            reason = '无法连接模型服务或连接中断'
+        elif isinstance(exc, json.JSONDecodeError):
+            reason = '模型返回内容无法解析为 JSON'
+        elif isinstance(exc, (ValidationError, KeyError, IndexError)):
+            reason = '审核响应缺少必需字段或格式不符'
+        elif isinstance(exc, ValueError):
+            reason = '审核数据或原文证据未通过校验'
+        else:
+            reason = '后台审核执行异常'
+        values={'status':'failed','result':None,'error':reason+'，请联系教师复核'}
     with factory.begin() as session:
         completed=session.execute(update(AIJob).where(AIJob.id==ident,AIJob.status=='running',AIJob.execution_token==token)
             .values(**values,finished_at=now(),execution_token=None,lease_until=None))
