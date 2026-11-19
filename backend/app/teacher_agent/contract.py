@@ -6,6 +6,7 @@ from datetime import date
 from typing import Annotated, Any, Final, Literal, Union, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
+from pydantic.json_schema import models_json_schema
 
 
 CONTRACT_SCHEMA_VERSION: Final[Literal["teacher-agent-result-1"]] = "teacher-agent-result-1"
@@ -589,6 +590,19 @@ class QueryPatch(_StrictModel):
         if unknown:
             raise ValueError(f"unknown filter fields in remove_filter_fields: {unknown}")
         return list(dict.fromkeys(fields))
+
+
+def export_paper_tool_input_schema() -> dict[str, Any]:
+    models = {"spec": PaperQuerySpec, "patch": QueryPatch}
+    refs, definitions = models_json_schema([(model, "validation") for model in models.values()], by_alias=True)
+    return {
+        "type": "object",
+        "properties": {name: refs[(model, "validation")] for name, model in models.items()},
+        "additionalProperties": False,
+        "minProperties": 1,
+        "maxProperties": 1,
+        **definitions,
+    }
 
 
 class ReplaceSpecAction(_StrictModel):

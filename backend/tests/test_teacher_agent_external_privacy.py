@@ -4,9 +4,10 @@ from pathlib import Path
 import pytest
 
 from app.teacher_agent.contract import BreakdownRow, PaperQuerySpec, PaperTimeRange, ResultEnvelope
-from app.teacher_agent.errors import PlannerInvalidOutputError, ResourceNotFoundError, TeacherAgentError
+from app.teacher_agent.errors import PlannerInvalidOutputError, ResourceNotFoundError, RetryableToolInputError, TeacherAgentError
 from app.teacher_agent.privacy import (
-    Student, agent_tool_view, prepare_agent_question, prepare_question, render_agent_analysis, render_agent_response,
+    Student, agent_clarification_subjects, agent_tool_view, prepare_agent_question, prepare_question,
+    render_agent_analysis, render_agent_response,
     resolve_agent_spec, student_ids,
 )
 
@@ -26,6 +27,14 @@ def test_school_question_preserves_prose_and_legacy_planner_keeps_its_boundary()
     assert prepare_question(question, ROSTER) == (None, ["id-a"])
     assert prepare_question("查看李四的论文", ROSTER) == ("查看指定学生的论文", ["id-a"])
     assert prepare_agent_question(" \t", ROSTER) == (None, [])
+
+
+def test_same_name_requires_an_unambiguous_teacher_selection():
+    students = [*ROSTER, Student("id-c", "李四", "C300")]
+    assert agent_clarification_subjects("查看李四的论文", students) == ["id-a", "id-c"]
+    assert agent_clarification_subjects("查看李四 C300 的论文", students) == []
+    assert agent_clarification_subjects("对比李四和王宁", students) == ["id-a", "id-c"]
+    assert agent_clarification_subjects("查看 id-c 的论文", students) == []
 
 
 @pytest.mark.parametrize(("field", "value"), [
@@ -52,13 +61,33 @@ def test_named_student_and_group_can_be_compared_in_one_turn():
 
 
 @pytest.mark.parametrize(("field", "value", "selected"), [
-    ("student_name", "校外学生", []), ("student_id", "hidden", []),
+    ("student_id", "hidden", []),
     ("student_id", "hidden", ["id-a"]), ("student_number", "hidden", ["id-a"]),
     ("student_id", "selected-student", ["revoked"]),
 ])
 def test_scope_is_checked_before_execution(field, value, selected):
     with pytest.raises(ResourceNotFoundError):
         resolve_agent_spec(PaperQuerySpec(filters=[{"field": field, "value": value}]), selected, ROSTER)
+
+
+def test_unknown_names_have_identical_neutral_feedback():
+    messages = []
+    for name in ("校外学生", "未登记姓名"):
+        spec = PaperQuerySpec(filters=[{"field": "student_name", "operator": "eq", "value": name}])
+        with pytest.raises(RetryableToolInputError) as caught:
+            resolve_agent_spec(spec, [], ROSTER)
+        messages.append(str(caught.value))
+        assert name not in messages[-1]
+    assert messages[0] == messages[1]
+
+
+@pytest.mark.parametrize("field", ["student_id", "student_number"])
+def test_unknown_name_cannot_mask_a_denied_identifier(field):
+    spec = PaperQuerySpec(filters=[
+        {"field": "student_name", "value": "校外学生"}, {"field": field, "value": "hidden"},
+    ])
+    with pytest.raises(ResourceNotFoundError):
+        resolve_agent_spec(spec, [], ROSTER)
 
 
 def test_sentinel_cannot_discard_other_subject_selectors():

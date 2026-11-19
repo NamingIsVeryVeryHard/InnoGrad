@@ -9,7 +9,7 @@ import stat
 import time
 from collections.abc import Callable
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -20,17 +20,22 @@ from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 import httpx
+from .budget import TurnBudget
 from .contract import (
     ClarifyAction, DegreeFilter, DomainName, PaperQuerySpec, PaperTimeRange, PatchSpecAction,
     PlannerOutput, PlannerOutputAdapter, PublicationStatusFilter, QueryPatch, QuerySpec,
     ReplaceSpecAction, ReviewStatusFilter, StudentIdFilter, UnsupportedAction, YearFilter, apply_patch,
+    export_paper_tool_input_schema,
 )
 from .errors import PlannerConfigError, PlannerInvalidOutputError, PlannerUnavailableError
 from .privacy import SELECTED_STUDENT, SUBJECT_FIELDS, planner_view, safe_language, with_subject
 
 
 PlannerMode = Literal["rules", "innoagent", "chat"]
-TOOL_NAME = "query_papers"
+TOOL_NAME = "mcp"
+MCP_SERVER = "innograd_teacher"
+MCP_QUERY_TOOL = "query_papers"
+MCP_INVALID_ARGS = "TEACHER_QUERY_ARGS_INVALID: args 必须是 JSON 对象或其 JSON 字符串，并且只含一个 spec 或 patch 对象。"
 SKILL_NAME = "teacher-query-planner"
 CLARIFY = "请明确要查询的论文范围、筛选条件或学生。"
 UNSUPPORTED = "当前仅支持论文查询，暂未开放奖学金查询。"
@@ -54,6 +59,7 @@ class PlanRequest:
     previous_spec: QuerySpec | None
     today: date
     enabled_domains: tuple[DomainName, ...] = ("paper",)
+    budget: TurnBudget = TurnBudget()
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,7 +346,7 @@ class ChatCompletionQueryPlanner(_ExternalTransport):
         start = time.monotonic()
         if safe_language(request.user_message) is None:
             return _result(self.mode, start, ClarifyAction(message=CLARIFY))
-        request = PlanRequest(request.user_message, _previous_view(request.previous_spec), request.today, request.enabled_domains)
+        request = replace(request, previous_spec=_previous_view(request.previous_spec))
         output, repairs = self._call(self._plan, request)
         return _result(self.mode, start, output, repairs)
 
@@ -434,6 +440,121 @@ def _session_grant(directory, session_id, issue_token: Callable[[], str]):
         target.unlink(missing_ok=True)
 
 
+def _reject_json_constant(_value):
+    raise ValueError("Nonfinite JSON constant")
+
+
+@lru_cache(maxsize=1)
+def _compact_domain_schema() -> str:
+    schema = export_paper_tool_input_schema()
+    definitions = schema["$defs"]
+    spec = definitions[schema["properties"]["spec"]["$ref"].rsplit("/", 1)[1]]["properties"]
+    patch = definitions[schema["properties"]["patch"]["$ref"].rsplit("/", 1)[1]]["properties"]
+    time_range = definitions["PaperTimeRange"]
+    filters = {}
+    for field, ref in spec["filters"]["items"]["discriminator"]["mapping"].items():
+        properties = definitions[ref.rsplit("/", 1)[1]]["properties"]
+        value = properties["value"]
+        scalar = next(choice for choice in value.get("anyOf", [value]) if choice["type"] != "array")
+        operator = properties["operator"]
+        filters[field] = {
+            "operator": operator["enum"] if "enum" in operator else [operator["const"]],
+            "value": scalar.get("enum", scalar["type"]),
+        }
+    return json.dumps({
+        "spec_fields": list(spec),
+        "patch_fields": list(patch),
+        "operation": spec["operation"]["enum"],
+        "basis": spec["basis"]["enum"],
+        "time_range": {
+            **dict.fromkeys(time_range["required"], "YYYY-MM-DD"),
+            "field": time_range["properties"]["field"]["enum"],
+        },
+        "group_by": spec["group_by"]["items"]["enum"],
+        "distinct_subject": spec["distinct_subject"]["enum"],
+        "include": spec["include"]["items"]["enum"],
+        "filter_fields": filters,
+    }, ensure_ascii=False, separators=(",", ":"))
+
+
+def _validate_tool_target(arguments) -> bool:
+    if (not isinstance(arguments, dict) or arguments.keys() != {"server", "tool", "args"}
+            or arguments["server"] != MCP_SERVER or arguments["tool"] != MCP_QUERY_TOOL):
+        raise PlannerInvalidOutputError("论文查询工具参数无效")
+    inner = arguments["args"]
+    if isinstance(inner, str):
+        try:
+            inner = json.loads(inner, parse_constant=_reject_json_constant)
+        except (ValueError, RecursionError):
+            return False
+    return (isinstance(inner, dict) and inner.keys() in ({"spec"}, {"patch"})
+            and isinstance(next(iter(inner.values())), dict))
+
+
+_MCP_SCHEMA_ERROR = re.compile(
+    r"data(?: must NOT have (?:(?:more|fewer) than [0-9]+ |additional )properties|"
+    r"/(?:spec|patch)(?:/[A-Za-z0-9_~-]+)* (?:"
+    r"must be (?:object|array|string|integer|number|boolean|null|equal to (?:constant|one of the allowed values))|"
+    r"must match (?:a schema in (?:anyOf|oneOf)|exactly one schema in oneOf|pattern \"[^\n\"]+\")|"
+    r"must have required property '[A-Za-z0-9_]+'|must NOT have additional properties|"
+    r"must NOT have (?:more|fewer) than [0-9]+ (?:items|characters)|must [<>]=? -?[0-9]+))"
+)
+
+
+def _local_validation_error(event, invalid_args: bool):
+    result = event.get("result")
+    if not isinstance(result, dict):
+        return False
+    details = result.get("details")
+    content = result.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        return False
+    part = content[0]
+    if not isinstance(part, dict) or part.get("type") != "text" or not isinstance(part.get("text"), str):
+        return False
+    text = part["text"]
+    if details == {}:
+        if invalid_args and text == MCP_INVALID_ARGS:
+            return True
+        return text.startswith(f'Validation failed for tool "{TOOL_NAME}":\n') and "\n\nReceived arguments:\n" in text
+    if (not isinstance(details, dict) or details.get("mode") != "call"
+            or details.get("server") != MCP_SERVER or details.get("tool") != MCP_QUERY_TOOL
+            or details.get("error") != "call_failed" or "mcpResult" in details
+            or not isinstance(message := details.get("message"), str)):
+        return False
+    return (text.startswith(f"Failed to call tool: {message}\n\nExpected parameters:\n")
+            and all(_MCP_SCHEMA_ERROR.fullmatch(error) for error in message.split(", ")))
+
+
+def _tool_outcome(event, invalid_args: bool) -> Literal["query", "clarification", "retry"]:
+    is_error = event.get("isError")
+    if is_error is True and _local_validation_error(event, invalid_args):
+        return "retry"
+
+    result = event.get("result")
+    details = result.get("details") if isinstance(result, dict) else None
+    if (not isinstance(details, dict) or details.get("mode") != "call"
+            or details.get("server") != MCP_SERVER or details.get("tool") != MCP_QUERY_TOOL):
+        raise PlannerInvalidOutputError("论文查询工具未成功执行")
+    receipt = details.get("mcpResult")
+    if not isinstance(receipt, dict) or not isinstance(is_error, bool) or receipt.get("isError") is not is_error:
+        raise PlannerInvalidOutputError("论文查询工具未成功执行")
+    structured = receipt.get("structuredContent")
+    if not isinstance(structured, dict):
+        raise PlannerInvalidOutputError("论文查询工具缺少有效结果")
+    code = structured.get("code")
+    if is_error:
+        if details.get("error") == "tool_error" and code == "RETRYABLE_TOOL_INPUT":
+            return "retry"
+    elif "error" not in details:
+        if code == "CLARIFICATION_NEEDED" and "query_run_id" not in structured:
+            return "clarification"
+        run_id = structured.get("query_run_id")
+        if code is None and isinstance(run_id, str) and re.fullmatch(r"[A-Za-z0-9_-]+", run_id):
+            return "query"
+    raise PlannerInvalidOutputError("论文查询工具未成功执行")
+
+
 class InnoAgentQueryPlanner(_ExternalTransport):
     mode = "innoagent"
 
@@ -442,16 +563,23 @@ class InnoAgentQueryPlanner(_ExternalTransport):
 
     async def _analyze(self, client, request, issue_token):
         defaults = PaperQuerySpec().model_dump_json(by_alias=True, exclude_none=True)
+        budget = request.budget
+        proxy_query = json.dumps(
+            {"server": MCP_SERVER, "tool": MCP_QUERY_TOOL, "args": {"spec": {}}}, separators=(",", ":"),
+        )
         prompt = (
-            f"/skill:{SKILL_NAME} 使用 query_papers 查询论文，最多五次。用中文直接回答，每个比较维度独立一句。"
-            "在数值位置原样摘录对应查询的 metric_refs 引用，系统会填入数值。"
-            "不要另写或重复数字，不解释查询过程。问题不明确时直接询问。"
+            f"/skill:{SKILL_NAME} 通过 mcp({proxy_query}) 查询论文，args 只包含一个 spec 或 patch 对象。"
+            f"最多 {budget.max_queries} 次成功查询，"
+            f"同一轮最多纠错 {budget.max_tool_retries} 次。用中文直接给出结论，每句都带对应查询的引用。"
+            "计数只用工具返回的 metric_refs 完整值，系统会填入数值。省略开场、过程和额外总结。"
+            "问题不明确时直接询问。"
+            f"\n{MCP_SERVER}/{MCP_QUERY_TOOL} 的参数字段和可选值：\n{_compact_domain_schema()}"
             f"\n默认查询：{defaults}\n{_payload(request)}"
         )
         async with AsyncExitStack() as cleanup, asyncio.timeout(self.config.timeout_seconds):
             session_id = await cleanup.enter_async_context(self._session(client))
             with _session_grant(self.config.grant_dir, session_id, issue_token):
-                return await self._analysis_stream(client, session_id, prompt)
+                return await self._analysis_stream(client, session_id, prompt, budget)
 
     @asynccontextmanager
     async def _session(self, client):
@@ -465,6 +593,7 @@ class InnoAgentQueryPlanner(_ExternalTransport):
         if not _resource_id(workspace_id) or workspace.get("name") != name or workspace.get("isTemp") is not False:
             raise PlannerConfigError("规划服务未创建独立工作区")
         session_id = None
+        terminal_error = False
         try:
             session = await _object(client, "POST", "api/sessions", json={"workspaceId": workspace_id})
             if not _resource_id(session.get("id")):
@@ -473,6 +602,9 @@ class InnoAgentQueryPlanner(_ExternalTransport):
             if session.get("workspaceId") != workspace_id:
                 raise PlannerConfigError("规划会话未绑定到独立工作区")
             yield session_id
+        except (PlannerConfigError, PlannerInvalidOutputError):
+            terminal_error = True
+            raise
         finally:
             try:
                 async with asyncio.timeout(self.config.timeout_seconds):
@@ -483,10 +615,14 @@ class InnoAgentQueryPlanner(_ExternalTransport):
                         response = await client.delete(f"api/workspaces/{workspace_id}", params={"removeFiles": 1})
                         if response.status_code != 404:
                             _http_status(response)
+            except PlannerUnavailableError:
+                if not terminal_error:
+                    raise
             except (TimeoutError, httpx.HTTPError):
-                raise PlannerUnavailableError("规划工作区清理未完成") from None
+                if not terminal_error:
+                    raise PlannerUnavailableError("规划工作区清理未完成") from None
 
-    async def _analysis_stream(self, client, session_id, prompt):
+    async def _analysis_stream(self, client, session_id, prompt, budget: TurnBudget):
         request_id = str(uuid4())
         body = {"prompt": prompt, "sessionId": session_id, "clientRequestId": request_id}
         async with client.stream("POST", "api/chat/stream", json=body) as response:
@@ -494,24 +630,31 @@ class InnoAgentQueryPlanner(_ExternalTransport):
             started = set()
             finished = set()
             proposed = set()
+            invalid_args = set()
+            successful_queries = 0
+            tool_retries = 0
             text = []
             async for line in response.aiter_lines():
                 if not line.startswith("data:"):
                     continue
                 data = line[5:].strip()
                 if data == "[DONE]":
-                    break
+                    raise PlannerInvalidOutputError("规划流缺少回合结束事件")
                 try:
                     envelope = json.loads(data)
                 except ValueError:
-                    raise PlannerUnavailableError("规划事件格式无效") from None
+                    raise PlannerInvalidOutputError("规划事件格式无效") from None
                 if (not isinstance(envelope, dict) or envelope.get("sessionId") != session_id
                         or envelope.get("clientRequestId") != request_id or not isinstance(envelope.get("event"), dict)):
-                    raise PlannerUnavailableError("规划事件与请求不匹配")
+                    raise PlannerInvalidOutputError("规划事件与请求不匹配")
                 event = envelope["event"]
                 kind = event.get("type")
-                if kind in ("error", "aborted", "question", "permission_request"):
+                if not isinstance(kind, str):
+                    raise PlannerInvalidOutputError("规划事件类型无效")
+                if kind == "error":
                     raise PlannerUnavailableError(UNAVAILABLE)
+                if kind in ("aborted", "question", "permission_request"):
+                    raise PlannerInvalidOutputError("规划回合中止或需要额外授权")
                 if kind in ("tool_call_start", "tool_call_delta"):
                     name = event.get("toolName")
                     if name is not None and (not isinstance(name, str) or not TOOL_NAME.startswith(name)):
@@ -522,6 +665,8 @@ class InnoAgentQueryPlanner(_ExternalTransport):
                     call_id = event.get("toolCallId")
                     if not isinstance(call_id, str) or not call_id:
                         raise PlannerInvalidOutputError("查询调用缺少标识")
+                    if kind in ("tool_call_end", "tool_start") and not _validate_tool_target(event.get("args")):
+                        invalid_args.add(call_id)
                     if kind == "tool_call_end":
                         if call_id in proposed or call_id in started:
                             raise PlannerInvalidOutputError("重复的查询调用")
@@ -529,18 +674,25 @@ class InnoAgentQueryPlanner(_ExternalTransport):
                     elif kind == "tool_start":
                         if call_id in started:
                             raise PlannerInvalidOutputError("重复的查询调用")
+                        if successful_queries + len(started) - len(finished) >= budget.max_queries:
+                            raise PlannerInvalidOutputError("本次论文查询次数超限")
                         started.add(call_id)
                         text.clear()
                     elif kind in ("tool_update", "tool_end"):
                         if call_id not in started or call_id in finished:
                             raise PlannerInvalidOutputError("查询调用未正确配对")
                         if kind == "tool_end":
-                            if event.get("isError") is not False:
-                                raise PlannerInvalidOutputError("论文查询工具未成功执行")
+                            outcome = _tool_outcome(event, call_id in invalid_args)
+                            if call_id in invalid_args and outcome != "retry":
+                                raise PlannerInvalidOutputError("论文查询工具参数无效")
+                            if outcome == "query":
+                                successful_queries += 1
+                            elif outcome == "retry":
+                                tool_retries += 1
+                                if tool_retries > budget.max_tool_retries:
+                                    raise PlannerInvalidOutputError("本次论文查询纠错次数超限")
                             finished.add(call_id)
                             text.clear()
-                    if len(started | proposed) > 5:
-                        raise PlannerInvalidOutputError("本次论文查询次数超限")
                 elif kind == "system_event" and event.get("eventType") in ("message_start", "auto_retry_start"):
                     text.clear()
                 elif kind == "text_delta":

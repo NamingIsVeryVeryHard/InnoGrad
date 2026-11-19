@@ -40,3 +40,11 @@ class PlannerConfigError(TeacherAgentError):
 class PlannerInvalidOutputError(TeacherAgentError):
     status_code = 502
     code = "INVALID_PLANNER_OUTPUT"
+
+
+class RetryableToolInputError(TeacherAgentError):
+    code = "RETRYABLE_TOOL_INPUT"
+
+
+class AgentResultViewChangedError(ConcurrencyConflictError):
+    pass

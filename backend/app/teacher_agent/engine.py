@@ -1,33 +1,35 @@
 import hashlib
 import json
 import secrets
-import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
-from sqlalchemy import delete, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from ..db import Audit, Idempotency, QueryConversation, QueryRun, QueryTurn, QueryTurnGrant, User, now, uid
+from ..db import Audit, Idempotency, QueryConversation, QueryRun, User, now, uid
 from ..workspace import scope_ids
+from .budget import TurnBudget
 from .contract import (
     ClarificationPrompt, ClarifyAction, ConversationDetail, ConversationSummary, PaperQuerySpec,
-    PatchSpecAction, ReplaceSpecAction, ResultEnvelope, TurnResponse, TurnTimelineItem,
+    PatchSpecAction, QueryPatch, ReplaceSpecAction, ResultEnvelope, TurnResponse, TurnTimelineItem,
     UnsupportedAction, apply_patch, validate_query_spec,
 )
 from .errors import (
-    ConcurrencyConflictError, ForbiddenRoleError, IdempotencyConflictError, PlannerInvalidOutputError,
-    ResourceNotFoundError, TeacherAgentError,
+    AgentResultViewChangedError, ConcurrencyConflictError, ForbiddenRoleError, IdempotencyConflictError,
+    PlannerInvalidOutputError, PlannerUnavailableError, ResourceNotFoundError, RetryableToolInputError,
+    TeacherAgentError,
 )
+from .grants import ActiveTurnGrant, InMemoryTurnGrantStore, TurnGrantStore
 from .papers import materialize
 from .planner import PlanRequest, build_planner
 from .privacy import (
-    SELECTED_STUDENT, agent_tool_view, free_text_filter, planner_view, prepare_agent_question,
+    SELECTED_STUDENT, agent_clarification_subjects, agent_tool_view, free_text_filter, planner_view, prepare_agent_question,
     prepare_question, render_agent_response, resolve_agent_spec, resolve_subjects,
-    roster, safe_language, student_ids, with_subject,
+    roster, safe_agent_clarification, safe_language, student_ids, subject_filter, with_subject,
 )
 
 
@@ -70,8 +72,8 @@ def _stored_view(raw, scope, original_digest):
     if any(free_text_filter(item) for item in spec.filters):
         raise ResourceNotFoundError("查询范围已变更，请重新设置筛选")
     selected = student_ids(spec)
-    if selected:
-        return with_subject(spec, sorted(ids.intersection(selected)))
+    if selected and not set(selected) <= ids:
+        raise ResourceNotFoundError("查询范围已变更，请重新设置筛选")
     return spec
 
 
@@ -109,12 +111,26 @@ def _notice(status):
     return ResultEnvelope(status=status, clarification=ClarificationPrompt(message=text))
 
 
-def _timeline(turn, spec, run, *, revoked=False, clarification=None, runs=()):
+@dataclass(frozen=True)
+class StoredTurn:
+    id: str
+    turn_index: int
+    input_mode: str
+    user_message: str
+    resolved_query_spec: dict | None
+    planner_trace: dict
+    status: str
+    run_ids: list[str]
+    created_at: str
+
+
+def _timeline(turn, spec=None, *, revoked=False, clarification=None):
+    run_ids = [] if revoked else turn.run_ids
     return TurnTimelineItem(id=turn.id, turn_index=turn.turn_index, input_mode=turn.input_mode,
                             user_message="当时的查询范围已变更" if revoked else turn.user_message,
-                            resolved_query=spec, status=turn.status, run_id=run.id if run else None,
+                            resolved_query=spec, status=turn.status, run_id=run_ids[-1] if run_ids else None,
                             access_revoked=revoked, clarification=clarification, created_at=turn.created_at,
-                            run_ids=[item.id for item in runs] if runs else ([run.id] if run and not revoked else []))
+                            run_ids=run_ids)
 
 
 def _run_result(session, user, run, scope):
@@ -132,6 +148,8 @@ def _record_run(session, user, spec, scope, *, conversation_id=None, turn_id=Non
     ident, stamp = run_id or uid(), now()
     result = (materialize(session, user, spec, run_id=ident, data_as_of=stamp)
               if spec.domain == "paper" else _notice("unsupported_domain"))
+    if result.status == "clarification_needed":
+        return result.model_copy(update={"turn_id": turn_id, "conversation_id": conversation_id, "applied_query": None})
     session.add(QueryRun(id=ident, conversation_id=conversation_id, turn_id=turn_id,
                          parent_run_id=parent_run_id, teacher_id=user.id, domain=spec.domain,
                          operation=spec.operation, basis=spec.basis, applied_query=spec.model_dump(mode="json", by_alias=True),
@@ -143,10 +161,68 @@ def _record_run(session, user, spec, scope, *, conversation_id=None, turn_id=Non
     return result.model_copy(update={"turn_id": turn_id, "conversation_id": conversation_id, "query_run_id": ident})
 
 
+_TOOL_ARGUMENTS = "请提供且仅提供 spec 或 patch。"
+_TOOL_RETRIES_EXHAUSTED = "论文查询参数纠错次数已用完"
+_SELECT_STUDENT = "请选择一位学生查看画像。"
+_RESULT_VIEW_CHANGED = "查询期间论文数据已变化，请重新提问"
+_SAFE_VALIDATION_REASONS = {
+    "filtering pending_review/returned requires basis='submitted_latest'",
+    "time_range.field='archived_at' requires basis='current_effective_archives'",
+    "operation='portrait' requires a student_id, student_name, or student_number filter",
+    "operation='portrait' does not support group_by",
+    "group_by must not contain duplicates",
+    "include must not contain duplicates",
+}
+
+
+def _tool_validation_message(argument, error):
+    messages = []
+    for issue in error.errors(include_input=False, include_url=False)[:4]:
+        kind = issue["type"]
+        location = issue["loc"]
+        context = issue.get("ctx", {})
+        if kind == "extra_forbidden":
+            location, message = location[:-1], "请移除未定义的字段"
+        elif kind == "union_tag_invalid":
+            message = f"请选择合法类型 {context['expected_tags']}"
+        elif kind == "literal_error":
+            message = f"请使用合法值 {context['expected']}"
+        elif kind == "value_error":
+            reason = str(context["error"])
+            message = reason if reason in _SAFE_VALIDATION_REASONS else "请检查字段和筛选条件是否兼容"
+        else:
+            message = "请检查字段是否齐全且类型正确"
+        path = ".".join((argument, *(str(part) for part in location)))
+        messages.append(f"{path}：{message}")
+    return "；".join(dict.fromkeys(messages))
+
+
+def _parse_tool_query(body: dict[str, object], previous) -> tuple[PaperQuerySpec, str | None]:
+    if set(body) not in ({"spec"}, {"patch"}):
+        raise RetryableToolInputError(_TOOL_ARGUMENTS)
+    argument, data = next(iter(body.items()))
+    try:
+        if argument == "spec":
+            spec = PaperQuerySpec.model_validate(data)
+            filters = spec.filters
+        else:
+            patch = QueryPatch.model_validate(data)
+            spec = apply_patch(previous or PaperQuerySpec(), patch)
+            filters = patch.set_filters
+    except ValidationError as error:
+        raise RetryableToolInputError(_tool_validation_message(argument, error)) from None
+    except ValueError:
+        raise RetryableToolInputError("patch 中的筛选条件与当前查询不兼容。") from None
+    explicit_id = next((item.value for item in filters if item.field == "student_id"
+                        and item.operator == "eq" and item.value != SELECTED_STUDENT), None)
+    return spec, explicit_id
+
+
 class TeacherQueryEngine:
-    def __init__(self, session_factory, planner=None):
+    def __init__(self, session_factory, planner=None, *, grants: TurnGrantStore | None = None):
         self.sessions = session_factory
         self.planner = planner if planner is not None else build_planner()
+        self.grants = grants if grants is not None else InMemoryTurnGrantStore()
 
     def _write_once(self, actor, record, write, replay):
         try:
@@ -200,24 +276,23 @@ class TeacherQueryEngine:
             user = _user(session, actor)
             conversation = _owned(session, user, QueryConversation, conversation_id)
             scope = _scope(session, user)
-            rows = session.scalars(select(QueryTurn).where(QueryTurn.conversation_id == conversation.id)
-                                   .order_by(QueryTurn.turn_index)).all()
+            rows = [StoredTurn(**raw) for raw in conversation.turns_json]
+            runs_by_id = self._conversation_runs(session, conversation)
             turns, latest, results = [], None, []
             for index, turn in enumerate(rows):
-                runs = self._runs(session, turn)
-                run = runs[-1] if runs else None
                 try:
+                    runs = self._turn_runs(turn, runs_by_id)
                     specs = [_stored_view(item.applied_query, scope, item.scope_digest) for item in runs]
                     spec = specs[-1] if specs else None
-                    latest, results = None, []
-                    if index == len(rows) - 1 or turn.status == "clarification_needed":
+                    clarification = _notice(turn.status).clarification if not runs else None
+                    if index == len(rows) - 1:
                         results = [_run_result(session, user, item, scope) for item in runs]
-                        latest = results[-1] if results else _notice(turn.status)
-                    timeline = _timeline(turn, spec, run, runs=runs, clarification=latest.clarification if latest else None)
-                    turns.append(timeline)
+                        latest = results[-1] if results else _notice(turn.status).model_copy(
+                            update={"conversation_id": conversation.id, "turn_id": turn.id},
+                        )
+                    turns.append(_timeline(turn, spec, clarification=clarification))
                 except ResourceNotFoundError:
-                    turns.append(_timeline(turn, None, run, revoked=True))
-                    latest, results = None, []
+                    turns.append(_timeline(turn, revoked=True))
             try:
                 active = _stored_view(conversation.active_query_spec, scope, conversation.scope_digest_snapshot)
             except ResourceNotFoundError:
@@ -239,37 +314,66 @@ class TeacherQueryEngine:
             return _run_result(session, user, run, _scope(session, user))
 
     @staticmethod
-    def _runs(session, turn):
-        return session.scalars(select(QueryRun).where(QueryRun.turn_id == turn.id)
-                               .order_by(QueryRun.created_at, QueryRun.id)).all()
+    def _conversation_runs(session, conversation, ids=None):
+        query = select(QueryRun).where(
+            QueryRun.conversation_id == conversation.id, QueryRun.teacher_id == conversation.teacher_id,
+        )
+        if ids is not None:
+            query = query.where(QueryRun.id.in_(ids))
+        return {run.id: run for run in session.scalars(query)}
 
     @staticmethod
-    def _replay_turn(session, user, receipt):
-        turn = session.get(QueryTurn, receipt["turn_id"])
-        conversation = _owned(session, user, QueryConversation, turn.conversation_id)
-        runs = TeacherQueryEngine._runs(session, turn)
-        run = runs[-1] if runs else None
+    def _turn_runs(turn, runs_by_id):
+        runs = [runs_by_id.get(ident) for ident in turn.run_ids]
+        if any(run is None or run.turn_id != turn.id for run in runs):
+            raise ResourceNotFoundError("记录不存在或无权访问")
+        return runs
+
+    @staticmethod
+    def _replay_turn(session, user, conversation_id, receipt):
+        conversation = _owned(session, user, QueryConversation, conversation_id)
+        raw = next((item for item in conversation.turns_json if item["id"] == receipt["turn_id"]), None)
+        if raw is None:
+            raise ResourceNotFoundError("记录不存在或无权访问")
+        turn = StoredTurn(**raw)
+        runs = TeacherQueryEngine._turn_runs(
+            turn, TeacherQueryEngine._conversation_runs(session, conversation, turn.run_ids),
+        )
         scope = _scope(session, user)
         results = [_run_result(session, user, item, scope) for item in runs]
         result = (results[-1] if results else
                   _notice(turn.status).model_copy(update={"conversation_id": conversation.id, "turn_id": turn.id}))
-        spec = _stored_view(run.applied_query, scope, run.scope_digest) if run else None
-        timeline = _timeline(turn, spec, run, runs=runs, clarification=result.clarification)
+        timeline = _timeline(turn, result.applied_query, clarification=result.clarification)
         return TurnResponse(conversation_id=conversation.id, conversation_lock_version=conversation.lock_version,
                             turn=timeline, result=result, results=results)
+
+    @staticmethod
+    def _append_turn(session, conversation, version, scope, turn, *, active_query=None):
+        values = dict(lock_version=version + 1, turn_count=turn.turn_index, updated_at=turn.created_at,
+                      turns_json=[*conversation.turns_json, asdict(turn)])
+        if active_query is not None:
+            values.update(active_query_spec=active_query, active_domain="paper", scope_digest_snapshot=scope[1],
+                          scope_size_snapshot=len(scope[0]))
+        changed = session.execute(update(QueryConversation).where(
+            QueryConversation.id == conversation.id, QueryConversation.teacher_id == conversation.teacher_id,
+            QueryConversation.status == "active", QueryConversation.lock_version == version,
+        ).values(**values))
+        if changed.rowcount != 1:
+            raise ConcurrencyConflictError("对话已变化，请刷新后重试")
+        session.add(Audit(actor_id=conversation.teacher_id, action="teacher_agent.turn", object_id=turn.id))
 
     def submit_turn(self, actor, conversation_id, request, *, idempotency_key):
         record = _request_record(actor, f"teacher_agent.turn/{conversation_id}", idempotency_key,
                                  request.model_dump(mode="json", by_alias=True))
         entry = request.input
         parent_run_id = entry.parent_run_id if entry.mode == "drilldown_patch" else None
-        selected, question, domain = [], None, "paper"
+        selected, question, ambiguous, domain = [], None, [], "paper"
         with self.sessions() as session:
             user = _user(session, actor)
             conversation = _owned(session, user, QueryConversation, conversation_id)
             receipt = _receipt(session, record)
             if receipt:
-                return self._replay_turn(session, user, receipt.response)
+                return self._replay_turn(session, user, conversation_id, receipt.response)
             version, domain = conversation.lock_version, conversation.active_domain
             if conversation.status != "active" or request.expected_lock_version not in (None, version):
                 raise ConcurrencyConflictError("对话已变化，请刷新后重试")
@@ -289,9 +393,12 @@ class TeacherQueryEngine:
             if entry.mode == "natural_language":
                 agent_mode = self.planner.mode == "innoagent" and domain == "paper"
                 prepare = prepare_agent_question if agent_mode else prepare_question
-                question, selected = prepare(entry.message, roster(session, scope[0]))
+                students = roster(session, scope[0])
+                question, selected = prepare(entry.message, students)
+                if agent_mode:
+                    ambiguous = agent_clarification_subjects(entry.message, students)
         if entry.mode == "natural_language" and agent_mode and question:
-            return self._agent_turn(actor, conversation_id, record, version, scope[1], previous, selected, question)
+            return self._agent_turn(actor, conversation_id, record, version, scope[1], previous, selected, ambiguous, question)
         trace = {"mode": "direct", "action": "direct"}
         if entry.mode == "structured_spec":
             action, label = ReplaceSpecAction(spec=entry.spec), "结构化查询"
@@ -308,9 +415,14 @@ class TeacherQueryEngine:
 
         def write(session, user):
             conversation = _owned(session, user, QueryConversation, conversation_id)
+            if conversation.status != "active" or conversation.lock_version != version:
+                raise ConcurrencyConflictError("对话已变化，请刷新后重试")
             current_scope = _scope(session, user)
             current = previous
-            if current and current_scope[1] != scope[1]:
+            if parent_run_id:
+                parent = _owned(session, user, QueryRun, parent_run_id)
+                current = _stored_view(parent.applied_query, current_scope, parent.scope_digest)
+            elif current and current_scope[1] != scope[1]:
                 current = _stored_view(current.model_dump(mode="json", by_alias=True), current_scope, scope[1])
             spec = None
             if isinstance(action, ReplaceSpecAction):
@@ -332,155 +444,197 @@ class TeacherQueryEngine:
                     elif selected:
                         spec = with_subject(spec, selected)
                 spec = resolve_subjects(spec, roster(session, current_scope[0]))
-            stamp = now()
-            values = dict(lock_version=version + 1, turn_count=QueryConversation.turn_count + 1, updated_at=stamp)
-            raw = spec.model_dump(mode="json", by_alias=True) if spec else None
-            if spec and spec.domain == "paper":
-                values.update(active_query_spec=raw, active_domain=spec.domain,
-                              scope_digest_snapshot=current_scope[1], scope_size_snapshot=len(current_scope[0]))
-            changed = session.execute(update(QueryConversation).where(
-                QueryConversation.id == conversation.id, QueryConversation.status == "active",
-                QueryConversation.lock_version == version).values(**values))
-            if changed.rowcount != 1:
-                raise ConcurrencyConflictError("对话已变化，请刷新后重试")
-            turn = QueryTurn(id=uid(), conversation_id=conversation.id, turn_index=conversation.turn_count,
-                             input_mode=entry.mode, user_message=label, resolved_query_spec=raw,
-                             planner_trace=trace, status="succeeded", created_at=stamp)
-            session.add(turn)
-            session.flush()
+            turn_id = uid()
             if spec is not None:
                 result = _record_run(session, user, spec, current_scope, conversation_id=conversation.id,
-                                     turn_id=turn.id, parent_run_id=parent_run_id)
+                                     turn_id=turn_id, parent_run_id=parent_run_id)
             else:
                 status = "unsupported_domain" if isinstance(action, UnsupportedAction) else "clarification_needed"
-                result = _notice(status).model_copy(update={"conversation_id": conversation.id, "turn_id": turn.id})
-            turn.status = "succeeded" if result.status == "ok" else result.status
-            session.add(Audit(actor_id=user.id, action="teacher_agent.turn", object_id=turn.id))
-            run = session.get(QueryRun, result.query_run_id) if result.query_run_id else None
-            timeline = _timeline(turn, spec, run, clarification=result.clarification)
+                result = _notice(status).model_copy(update={"conversation_id": conversation.id, "turn_id": turn_id})
+            run_ids = [result.query_run_id] if result.query_run_id else []
+            resolved = spec if run_ids else None
+            raw = resolved.model_dump(mode="json", by_alias=True) if resolved else None
+            turn = StoredTurn(turn_id, conversation.turn_count + 1, entry.mode, label, raw, trace,
+                              "succeeded" if result.status == "ok" else result.status, run_ids, now())
+            self._append_turn(session, conversation, version, current_scope, turn,
+                              active_query=raw if resolved and resolved.domain == "paper" else None)
+            timeline = _timeline(turn, resolved, clarification=result.clarification)
             response = TurnResponse(conversation_id=conversation.id, conversation_lock_version=version + 1,
-                                    turn=timeline, result=result, results=[result] if run else [])
-            return response, {"turn_id": turn.id, "query_run_id": result.query_run_id}
+                                    turn=timeline, result=result, results=[result] if run_ids else [])
+            return response, {"turn_id": turn.id}
 
-        return self._write_once(actor, record, write, self._replay_turn)
+        return self._write_once(actor, record, write,
+                                lambda session, user, receipt: self._replay_turn(session, user, conversation_id, receipt))
 
     @contextmanager
-    def _grant(self, actor, conversation_id, version, digest, selected):
+    def _grant(self, actor, conversation_id, version, digest, selected, ambiguous, budget):
         token = secrets.token_urlsafe(32)
         key = hashlib.sha256(token.encode()).hexdigest()
 
         def issue_token():
-            current_time = int(time.time())
-            try:
-                with self.sessions.begin() as session:
-                    grant = QueryTurnGrant(token_hash=key, teacher_id=actor.user_id,
-                                           conversation_id=conversation_id, turn_id=uid(), version=version,
-                                           expires_at=current_time + 60, scope_digest=digest, selected=selected,
-                                           calls=[], used=0)
-                    self._grant_scope(session, grant)
-                    session.execute(delete(QueryTurnGrant).where(QueryTurnGrant.expires_at <= current_time,
-                                                                QueryTurnGrant.conversation_id == conversation_id))
-                    session.add(grant)
-            except IntegrityError as error:
-                raise ConcurrencyConflictError("当前对话正在处理另一轮查询") from error
+            with self.sessions() as session:
+                self._active_scope(session, actor.user_id, conversation_id, version, digest)
+            self.grants.issue(key, ActiveTurnGrant(
+                actor.user_id, conversation_id, uid(), version, digest, selected, budget,
+                clarification_subjects=ambiguous or None,
+            ))
+            with self.sessions() as session:
+                self._active_scope(session, actor.user_id, conversation_id, version, digest)
             return token
 
         try:
             yield issue_token, key
         finally:
-            with self.sessions.begin() as session:
-                session.execute(delete(QueryTurnGrant).where(QueryTurnGrant.token_hash == key))
+            self.grants.revoke(key)
 
     @staticmethod
-    def _grant_scope(session, grant, *, finalizing=False):
-        if grant is None or (not finalizing and grant.expires_at <= time.time()):
-            raise ResourceNotFoundError("本轮查询授权已结束")
-        user = session.get(User, grant.teacher_id)
+    def _active_scope(session, teacher_id, conversation_id, version, digest):
+        user = session.get(User, teacher_id)
         ActorContext.from_user(user)
-        conversation = _owned(session, user, QueryConversation, grant.conversation_id)
+        conversation = _owned(session, user, QueryConversation, conversation_id)
         scope = _scope(session, user)
-        if (scope[1] != grant.scope_digest or conversation.lock_version != grant.version
-                or conversation.status != "active"):
+        if scope[1] != digest or conversation.lock_version != version or conversation.status != "active":
             raise ConcurrencyConflictError("查询期间对话或指导范围已变化，请重新提问")
         return user, conversation, scope
 
-    def query_for_agent(self, token, query):
+    def _grant_scope(self, session, grant):
+        return self._active_scope(session, grant.teacher_id, grant.conversation_id, grant.version, grant.scope_digest)
+
+    def query_for_agent(self, token: str, raw: dict[str, object], call_id: str | None):
         key = hashlib.sha256(token.encode()).hexdigest()
-        with self.sessions.begin() as session:
-            claimed = session.execute(update(QueryTurnGrant).where(
-                QueryTurnGrant.token_hash == key, QueryTurnGrant.expires_at > time.time(),
-                QueryTurnGrant.used < 5).values(used=QueryTurnGrant.used + 1))
-            if claimed.rowcount != 1:
-                raise ResourceNotFoundError("本轮查询授权已结束或查询次数已用完")
-            grant = session.get(QueryTurnGrant, key)
+        with self.grants.claim(key) as grant, self.sessions() as session:
             user, conversation, scope = self._grant_scope(session, grant)
+            if grant.tool_failures > grant.budget.max_tool_retries:
+                raise PlannerInvalidOutputError(_TOOL_RETRIES_EXHAUSTED)
+            if not call_id or call_id in grant.call_ids:
+                raise PlannerInvalidOutputError("论文查询调用标识缺失或重复")
+            if grant.query_count >= grant.budget.max_queries:
+                raise ResourceNotFoundError("本轮查询次数已用完")
+            grant.call_ids = [*grant.call_ids, call_id]
             try:
                 previous = (validate_query_spec(grant.calls[-1]["spec"]) if grant.calls else
                             _stored_view(conversation.active_query_spec, scope, conversation.scope_digest_snapshot))
             except ResourceNotFoundError:
                 previous = None
             try:
-                spec = query.spec if hasattr(query, "spec") else apply_patch(previous or PaperQuerySpec(), query.patch)
-            except ValueError as error:
-                raise TeacherAgentError("筛选条件与当前查询不兼容") from error
-            selected = grant.selected
-            if not selected and SELECTED_STUDENT in student_ids(spec):
-                selected = student_ids(previous)
-            spec = resolve_agent_spec(spec, selected, roster(session, scope[0]))
-            run_id = uid()
-            result = materialize(session, user, spec, run_id=run_id, data_as_of=now())
-            if result.status != "ok":
-                raise TeacherAgentError("请指定当前可见的一位学生")
-            view = agent_tool_view(result)
-            grant.calls = [*grant.calls, {"spec": spec.model_dump(mode="json", by_alias=True), "id": run_id,
-                                        "view_digest": _view_digest(view)}]
-            return view
+                spec, explicit_id = _parse_tool_query(raw, previous)
+                return self._preview_agent_query(session, user, scope, grant, spec, previous, explicit_id)
+            except RetryableToolInputError as error:
+                grant.tool_failures += 1
+                failure = error
+                if grant.tool_failures > grant.budget.max_tool_retries:
+                    failure = PlannerInvalidOutputError(_TOOL_RETRIES_EXHAUSTED)
+        raise failure
 
-    def _agent_turn(self, actor, conversation_id, record, version, digest, previous, selected, question):
-        request = PlanRequest(question, previous, datetime.now(ZoneInfo("Asia/Shanghai")).date())
-        with self._grant(actor, conversation_id, version, digest, selected) as (issue_token, key):
-            text = self.planner.analyze(request, issue_token)
+    @staticmethod
+    def _preview_agent_query(session, user, scope, grant, spec, previous, explicit_id):
+        selected = grant.selected or student_ids(previous)
+        if SELECTED_STUDENT in student_ids(spec) and not selected:
+            raise RetryableToolInputError("student_id 中的 selected-student 必须对应已指定的学生。")
+        resolved = resolve_agent_spec(spec, selected, roster(session, scope[0]))
+        subjects = student_ids(resolved)
+        pending = grant.clarification_subjects
+        if pending is None and len(subjects) > 1 and any(
+            item.field in ("student_name", "student_number") for item in spec.filters
+        ):
+            pending = grant.clarification_subjects = subjects
+        if pending is not None and (explicit_id not in pending or subjects != [explicit_id]):
+            clarification = TeacherQueryEngine._student_clarification(session, user, pending)
+            return {"clarification": clarification.model_dump(mode="json")}
+        run_id = uid()
+        result = materialize(session, user, resolved, run_id=run_id, data_as_of=now())
+        if result.clarification:
+            grant.clarification_subjects = [candidate.student_id for candidate in result.clarification.student_candidates]
+            return {"clarification": result.clarification.model_dump(mode="json")}
+        view = agent_tool_view(result)
+        grant.calls = [*grant.calls, {"spec": resolved.model_dump(mode="json", by_alias=True), "id": run_id,
+                                      "view_digest": _view_digest(view)}]
+        return view
+
+    @staticmethod
+    def _student_clarification(session, user, subjects):
+        if subjects and len(subjects) <= 50:
+            spec = PaperQuerySpec(operation="portrait", filters=[subject_filter(subjects)])
+            result = materialize(session, user, spec, run_id=uid(), data_as_of=now())
+            if result.clarification:
+                return result.clarification
+        return ClarificationPrompt(message=_SELECT_STUDENT)
+
+    @staticmethod
+    def _agent_clarification(session, user, grant, text):
+        if grant.clarification_subjects is not None:
+            return TeacherQueryEngine._student_clarification(session, user, grant.clarification_subjects)
+        message = safe_agent_clarification(text)
+        return ClarificationPrompt(message=message) if message else _notice("clarification_needed").clarification
+
+    def _agent_turn(self, actor, conversation_id, record, version, digest, previous, selected, ambiguous, question):
+        budget = TurnBudget.from_env()
+        request = PlanRequest(question, previous, datetime.now(ZoneInfo("Asia/Shanghai")).date(), budget=budget)
+        for attempt in range(budget.max_turn_retries + 1):
+            try:
+                return self._agent_turn_attempt(actor, conversation_id, record, version, digest, selected, ambiguous, request)
+            except (PlannerUnavailableError, PlannerInvalidOutputError, AgentResultViewChangedError,
+                    SQLAlchemyError) as error:
+                with self.sessions() as session:
+                    receipt = _receipt(session, record)
+                    if receipt:
+                        return self._replay_turn(session, _user(session, actor), conversation_id, receipt.response)
+                    if isinstance(error, SQLAlchemyError):
+                        raise
+                    self._active_scope(session, actor.user_id, conversation_id, version, digest)
+                if isinstance(error, PlannerInvalidOutputError) or attempt == budget.max_turn_retries:
+                    raise
+
+    def _agent_turn_attempt(self, actor, conversation_id, record, version, digest, selected, ambiguous, request):
+        with self._grant(actor, conversation_id, version, digest, selected, ambiguous, request.budget) as (issue_token, key):
+            try:
+                text = self.planner.analyze(request, issue_token)
+            except TimeoutError:
+                raise PlannerUnavailableError("规划服务超时", retry_after_seconds=1) from None
 
             def finish(session, user):
-                grant = session.get(QueryTurnGrant, key)
-                user, conversation, scope = self._grant_scope(session, grant, finalizing=True)
-                stamp = now()
-                raw = grant.calls[-1]["spec"] if grant.calls else None
-                values = dict(lock_version=version + 1, updated_at=stamp, turn_count=QueryConversation.turn_count + 1)
-                if raw:
-                    values.update(active_query_spec=raw, active_domain="paper", scope_digest_snapshot=scope[1],
-                                  scope_size_snapshot=len(scope[0]))
-                changed = session.execute(update(QueryConversation).where(QueryConversation.id == conversation_id,
-                    QueryConversation.status == "active", QueryConversation.lock_version == version).values(**values))
-                if changed.rowcount != 1:
-                    raise ConcurrencyConflictError("对话已变化，请刷新后重试")
-                turn = QueryTurn(id=grant.turn_id, conversation_id=conversation_id, turn_index=conversation.turn_count,
-                                 input_mode="natural_language", user_message=safe_language(question) or "论文分析", resolved_query_spec=raw,
-                                 status="succeeded" if raw else "clarification_needed", created_at=stamp,
-                                 planner_trace={"mode": "innoagent", "query_count": len(grant.calls)})
-                session.add(turn)
-                session.flush()
+                user, conversation, scope = self._grant_scope(session, grant)
+                if grant.tool_failures > grant.budget.max_tool_retries:
+                    raise PlannerInvalidOutputError(_TOOL_RETRIES_EXHAUSTED)
+                calls = grant.calls
+                raw = calls[-1]["spec"] if calls else None
                 results = []
-                for call in grant.calls:
-                    result = _record_run(session, user, validate_query_spec(call["spec"]), scope,
-                                         conversation_id=conversation_id, turn_id=turn.id,
-                                         run_id=call["id"])
-                    if _view_digest(agent_tool_view(result)) != call["view_digest"]:
-                        raise ConcurrencyConflictError("查询期间论文数据已变化，请重新提问")
+                for call in calls:
+                    try:
+                        result = _record_run(session, user, validate_query_spec(call["spec"]), scope,
+                                             conversation_id=conversation_id, turn_id=grant.turn_id, run_id=call["id"])
+                    except ResourceNotFoundError:
+                        raise AgentResultViewChangedError(_RESULT_VIEW_CHANGED) from None
+                    if result.status != "ok" or _view_digest(agent_tool_view(result)) != call["view_digest"]:
+                        raise AgentResultViewChangedError(_RESULT_VIEW_CHANGED)
                     results.append(result)
                 analysis, notice = render_agent_response(text, results) if results else (None, None)
-                session.add(Audit(actor_id=user.id, action="teacher_agent.turn", object_id=turn.id))
-                receipt = {"turn_id": turn.id, "query_run_id": results[-1].query_run_id if results else None}
-                final = results[-1] if results else _notice(turn.status).model_copy(
-                    update={"conversation_id": conversation_id, "turn_id": turn.id})
-                run = session.get(QueryRun, final.query_run_id) if results else None
-                timeline = _timeline(turn, final.applied_query, run, clarification=final.clarification,
-                                     runs=self._runs(session, turn))
+                safe_question, _ = prepare_question(request.user_message, roster(session, scope[0]))
+                turn = StoredTurn(
+                    grant.turn_id, conversation.turn_count + 1, "natural_language",
+                    safe_question or "论文分析", raw,
+                    {"mode": "innoagent", "query_count": grant.query_count},
+                    "succeeded" if results else "clarification_needed",
+                    [item.query_run_id for item in results], now(),
+                )
+                clarification = None
+                if not results or grant.clarification_subjects is not None:
+                    clarification = self._agent_clarification(session, user, grant, text)
+                self._append_turn(session, conversation, version, scope, turn, active_query=raw)
+                final = (results[-1] if results else ResultEnvelope(
+                    status="clarification_needed", clarification=clarification,
+                    conversation_id=conversation_id, turn_id=turn.id,
+                ))
+                timeline = _timeline(turn, final.applied_query, clarification=clarification)
                 return TurnResponse(conversation_id=conversation_id, conversation_lock_version=version + 1,
                                     turn=timeline, result=final, results=results,
-                                    analysis=analysis, analysis_notice=notice), receipt
+                                    analysis=analysis, analysis_notice=notice), {"turn_id": turn.id}
 
-            return self._write_once(actor, record, finish, self._replay_turn)
+            with self.grants.finalize(key) as grant:
+                return self._write_once(actor, record, finish,
+                                        lambda session, user, receipt: self._replay_turn(
+                                            session, user, conversation_id, receipt,
+                                        ))
 
     def archive_conversation(self, actor, conversation_id):
         with self.sessions.begin() as session:

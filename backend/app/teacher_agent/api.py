@@ -6,7 +6,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -14,8 +13,6 @@ from .contract import (
     ConversationDetail,
     ConversationSummary,
     CreateConversationRequest,
-    PaperQuerySpec,
-    QueryPatch,
     QuerySpec,
     ResultEnvelope,
     TurnRequest,
@@ -23,7 +20,8 @@ from .contract import (
     export_schemas,
 )
 from .engine import ActorContext, TeacherQueryEngine
-from .errors import PlannerConfigError, ResourceNotFoundError, TeacherAgentError
+from .errors import PlannerConfigError, TeacherAgentError
+from .mcp_server import handle_mcp
 from .planner import PlanRequest, PlanResult, QueryPlanner, build_planner, teacher_agent_config
 
 
@@ -46,16 +44,6 @@ class _ConfiguredPlanner:
 
     def analyze(self, request, issue_token):
         return self.planner.analyze(request, issue_token)
-
-
-class ToolSpec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    spec: PaperQuerySpec
-
-
-class ToolPatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    patch: QueryPatch
 
 
 class _NoStore:
@@ -116,11 +104,10 @@ def register(app: FastAPI, ctx: Mapping[str, Any], *, planner: QueryPlanner | No
     ) -> ResultEnvelope:
         return engine.execute_spec(current, body)
 
-    @router.post("/tools/query-papers")
-    def query_papers(body: ToolSpec | ToolPatch, authorization: TurnBearer):
-        if not authorization:
-            raise ResourceNotFoundError("本轮查询授权无效")
-        return engine.query_for_agent(authorization.credentials, body)
+    @router.post("/mcp")
+    @router.api_route("/mcp", methods=["GET", "DELETE"], include_in_schema=False)
+    async def mcp(request: Request, authorization: TurnBearer) -> Response:
+        return await handle_mcp(request, engine, authorization.credentials if authorization else None)
 
     @router.post("/conversations", status_code=201)
     def create_conversation(

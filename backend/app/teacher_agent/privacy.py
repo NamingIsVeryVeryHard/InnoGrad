@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from ..db import StudentProfile, User
 from .contract import METRIC_CATALOG, PaperQuerySpec, ResultEnvelope, StudentIdFilter, validate_query_spec
-from .errors import PlannerInvalidOutputError, ResourceNotFoundError, TeacherAgentError
+from .errors import PlannerInvalidOutputError, ResourceNotFoundError, RetryableToolInputError, TeacherAgentError
 
 
 SELECTED_STUDENT = "selected-student"
@@ -29,6 +29,8 @@ _WORDS = """
 篇 条 位 人 个 页 名 单 数 教师 论文题目 论文标题 期刊 有无 DOI doi
 """.split()
 _VOCAB = re.compile("|".join(map(re.escape, sorted(set(_WORDS), key=len, reverse=True))))
+_CLARIFICATION_WORDS = set(_WORDS) | set("您 还是 明确 选择 提供 指定 范围 条件 哪一位".split())
+_CLARIFICATION_VOCAB = re.compile("|".join(map(re.escape, sorted(_CLARIFICATION_WORDS, key=len, reverse=True))))
 _YEAR = re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}(?=\s*[年级])")
 _PUNCTUATION = re.compile(r"[\s，。！？、；：,.?!：:（）()“”「」『』《》\-—]+")
 
@@ -47,11 +49,11 @@ def roster(session, student_ids):
     return [Student(row.id, row.name, row.number or "") for row in rows]
 
 
-def safe_language(message):
+def safe_language(message, *, vocabulary=_VOCAB):
     parts = []
     cursor = 0
     while cursor < len(message):
-        match = (_VOCAB.match(message, cursor) or _YEAR.match(message, cursor)
+        match = (vocabulary.match(message, cursor) or _YEAR.match(message, cursor)
                  or _PUNCTUATION.match(message, cursor))
         if match is None:
             return None
@@ -90,12 +92,13 @@ def subject_filter(ids):
     return StudentIdFilter(operator="eq" if len(ids) == 1 else "in", value=ids[0] if len(ids) == 1 else sorted(ids))
 
 
-def resolve_subjects(spec, students):
+def resolve_subjects(spec, students, *, retry_unknown_name=False):
     selectors = [item for item in spec.filters if item.field in SUBJECT_FIELDS]
     if not selectors:
         return spec
     visible_ids = {student.id for student in students}
     matched = visible_ids.copy()
+    unknown_name = False
     for item in selectors:
         if item.field == "student_id":
             requested = set(item.value if isinstance(item.value, list) else [item.value])
@@ -105,9 +108,15 @@ def resolve_subjects(spec, students):
         else:
             attr = "number" if item.field == "student_number" else "name"
             if item.operator == "contains":
-                matched &= {student.id for student in students if item.value.casefold() in getattr(student, attr).casefold()}
+                matches = {student.id for student in students if item.value.casefold() in getattr(student, attr).casefold()}
             else:
-                matched &= {student.id for student in students if getattr(student, attr) == item.value}
+                matches = {student.id for student in students if getattr(student, attr) == item.value}
+            if not matches and item.field == "student_number":
+                raise ResourceNotFoundError("记录不存在或无权访问")
+            unknown_name |= not matches and item.field == "student_name"
+            matched &= matches
+    if retry_unknown_name and unknown_name:
+        raise RetryableToolInputError("student_name 未匹配当前可查询的学生，请核对姓名或请教师确认。")
     return with_subject(spec, sorted(matched))
 
 
@@ -143,8 +152,25 @@ def planner_view(spec):
 
 
 def prepare_agent_question(message: str, students) -> tuple[str | None, list[str]]:
-    selected = {ident for _, ids in _roster_mentions(message, students) for ident in ids}
+    matches = [ids for _, ids in _roster_mentions(message, students)]
+    explicit = set().union(*(ids for ids in matches if len(ids) == 1))
+    selected = set().union(*(ids & explicit or ids for ids in matches))
     return message.strip() or None, sorted(selected)
+
+
+def agent_clarification_subjects(message, students):
+    matches = [ids for _, ids in _roster_mentions(message, students)]
+    explicit = set().union(*(ids for ids in matches if len(ids) == 1))
+    return sorted(set().union(*(ids for ids in matches if len(ids) > 1 and ids.isdisjoint(explicit))))
+
+
+def safe_agent_clarification(text: str) -> str | None:
+    line = text.strip()
+    if not line or len(line) > 200 or len(line.splitlines()) != 1 or re.search(r"[。！？.!?]", line[:-1]):
+        return None
+    if line.endswith(("？", "?")) or line.startswith(("请明确", "请选择", "请提供", "请指定")):
+        return line if safe_language(line, vocabulary=_CLARIFICATION_VOCAB) else None
+    return None
 
 
 def resolve_agent_spec(spec: PaperQuerySpec, selected, visible_students) -> PaperQuerySpec:
@@ -160,7 +186,7 @@ def resolve_agent_spec(spec: PaperQuerySpec, selected, visible_students) -> Pape
         raw["filters"] = [subject_filter(sorted(requested)).model_dump() if item["field"] == "student_id" else item
                           for item in raw["filters"]]
         spec = validate_query_spec(raw)
-    return resolve_subjects(spec, visible_students)
+    return resolve_subjects(spec, visible_students, retry_unknown_name=True)
 
 
 def _metrics(result: ResultEnvelope) -> dict[str, int]:

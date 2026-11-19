@@ -16,7 +16,7 @@ test('workspace questions, drills, evidence and scope-checked history', async ()
     const turns = [], results = [];
     const stamp = '2026-11-19T08:00:00Z';
     const firstRun = '62b00623-40e9-4856-a1eb-ed490e93912a';
-    const secondRun = '174e0b06-65e3-43f3-86a5-892a3ff35628';
+    const secondRun = 'run_174e0b06-65e3-43f3-86a5-892a3ff35628';
     const analysis = `先统计论文 [${firstRun}]，再查看名单 [${secondRun}]。\n<b>分析原文</b> [00000000-0000-4000-8000-000000000000]`;
     const notice = '分析原文中的 <b>数值</b> 未能核实，请查看查询结果。';
     const patch = {operation: 'list', group_by: [], include: ['items', 'sources']};

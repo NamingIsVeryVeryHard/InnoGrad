@@ -37,7 +37,7 @@ function clarification(prompt) {
 function analysisParagraph(text, targets) {
   const paragraph = element('p', null, 'agent-analysis');
   let offset = 0;
-  for (const match of text.matchAll(/\[(?:run )?([a-zA-Z0-9-]+)\]/g)) {
+  for (const match of text.matchAll(/\[(?:run )?([a-zA-Z0-9_-]+)\]/g)) {
     const card = targets.get(match[1]);
     if (!card) continue;
     const link = element('a', match[0]);

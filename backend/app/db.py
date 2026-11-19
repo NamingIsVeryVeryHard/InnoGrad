@@ -324,6 +324,7 @@ class QueryConversation(Base):
     title: Mapped[str] = mapped_column(String(200), default="新对话", server_default="新对话")
     active_domain: Mapped[str] = mapped_column(String(30), default="paper", server_default="paper")
     active_query_spec: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    turns_json: Mapped[list[dict]] = mapped_column(JSON(none_as_null=True), default=list, server_default=text("'[]'"))
     status: Mapped[str] = mapped_column(String(30), default="active", server_default="active")
     scope_digest_snapshot: Mapped[str] = mapped_column(String(64))
     scope_size_snapshot: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -331,43 +332,6 @@ class QueryConversation(Base):
     lock_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[str] = mapped_column(String(40), default=now)
     updated_at: Mapped[str] = mapped_column(String(40), default=now)
-
-
-class QueryTurn(Base):
-    __tablename__ = "query_turn"
-    __table_args__ = (
-        UniqueConstraint("conversation_id", "turn_index", name="uq_query_turn_conv_index"),
-        Index("ix_query_turn_conversation_id", "conversation_id"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("query_conversation.id"))
-    turn_index: Mapped[int] = mapped_column(Integer)
-    parent_turn_id: Mapped[str | None] = mapped_column(ForeignKey("query_turn.id"))
-    input_mode: Mapped[str] = mapped_column(String(30))
-    user_message: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
-    input_patch: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
-    resolved_query_spec: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
-    planner_trace: Mapped[dict] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(30))
-    clarification_payload: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
-    error_code: Mapped[str | None] = mapped_column(String(64))
-    created_at: Mapped[str] = mapped_column(String(40), default=now)
-
-
-class QueryTurnGrant(Base):
-    __tablename__ = "query_turn_grant"
-
-    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
-    teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("query_conversation.id"), unique=True)
-    turn_id: Mapped[str] = mapped_column(String(36), unique=True)
-    version: Mapped[int] = mapped_column(Integer)
-    expires_at: Mapped[int] = mapped_column(Integer)
-    scope_digest: Mapped[str] = mapped_column(String(64))
-    selected: Mapped[list] = mapped_column(JSON)
-    calls: Mapped[list] = mapped_column(JSON)
-    used: Mapped[int] = mapped_column(Integer)
 
 
 class QueryRun(Base):
@@ -379,7 +343,7 @@ class QueryRun(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     conversation_id: Mapped[str | None] = mapped_column(ForeignKey("query_conversation.id"))
-    turn_id: Mapped[str | None] = mapped_column(ForeignKey("query_turn.id"))
+    turn_id: Mapped[str | None] = mapped_column(String(36))
     parent_run_id: Mapped[str | None] = mapped_column(ForeignKey("query_run.id"))
     teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     domain: Mapped[str] = mapped_column(String(30))
