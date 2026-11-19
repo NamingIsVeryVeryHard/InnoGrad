@@ -216,7 +216,7 @@ flowchart LR
 
 1. **先定契约再开工**：第一天先由两人评审并冻结 `QuerySpec` 与 `ResultEnvelope` 的 JSON Schema。zzb 提供 3 份标准 Mock 响应（统计汇总、继续筛选、单学生画像），xyt 据此独立开发前端组件。
 2. **后端双轨验证**：zzb 先实现“直接传 `QuerySpec` 调查询服务”的接口并跑通数字核对，再接入 Pi Agent 做自然语言解析，避免把 LLM 解析问题和 SQL 逻辑问题混在一起排查。
-3. **Git 分支规范**：`LANJM1` 已合并至 `main`（`00d6ea3`），后端开发分支为 `feat/zzb-teacher-agent-query`，按功能粒度提交 commit，完成后通过 PR 合入 `main`。
+3. **Git 分支规范**：`LANJM1` 已合并至 `main`（`00d6ea3`），后端开发分支为 `feat/teacher-agent-query`，按功能粒度提交 commit，完成后通过 PR 合入 `main`。
 
 ## 8. 验收顺序
 
