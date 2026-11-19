@@ -512,6 +512,9 @@ def create_app(database_url=None, storage=None):
     from .material_pipeline_api import register as register_material_pipeline
     register_material_pipeline(app, db, authenticated, get_sub, root)
 
+    from .teacher_agent import register as register_teacher_agent
+    register_teacher_agent(app, {"db": db, "authenticated": authenticated})
+
     static = Path(__file__).resolve().parents[2] / "frontend"
     if static.exists():
         app.mount("/", StaticFiles(directory=static, html=True), name="frontend")
