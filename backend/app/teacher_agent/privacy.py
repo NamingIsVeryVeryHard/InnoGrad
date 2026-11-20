@@ -290,7 +290,7 @@ def render_agent_analysis(text: str, results: list[ResultEnvelope]) -> str:
 
 
 def render_agent_response(text: str, results: list[ResultEnvelope]) -> tuple[str | None, str | None]:
-    """Keep independently cited sentences. Return backend notices separately from model prose."""
+    """Verify model sentences and use card summaries when the turn includes grouping."""
     kept = []
     omitted = False
     start = 0
@@ -315,4 +315,12 @@ def render_agent_response(text: str, results: list[ResultEnvelope]) -> tuple[str
     analysis = "".join(kept).strip()
     if not analysis:
         return None, "本次分析未能核实，请以结果卡为准。"
+    cards = [result for result in results if result.status == "ok"]
+    if any(card.applied_query.group_by for card in cards):
+        analysis = "\n".join(
+            f"各组统计请查看分组结果卡 [{card.query_run_id}]。"
+            if card.applied_query.group_by
+            else f"未分组查询 [{card.query_run_id}]：{card.summary.headline}"
+            for card in cards
+        )
     return analysis, "部分分析未能核实，请以结果卡为准。" if omitted else None
