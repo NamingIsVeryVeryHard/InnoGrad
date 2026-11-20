@@ -15,8 +15,8 @@ from ..workspace import scope_ids
 from .budget import TurnBudget
 from .contract import (
     ClarificationPrompt, ClarifyAction, ConversationDetail, ConversationSummary, PaperQuerySpec,
-    PatchSpecAction, QueryPatch, ReplaceSpecAction, ResultEnvelope, TurnResponse, TurnTimelineItem,
-    UnsupportedAction, apply_patch, validate_query_spec,
+    PatchSpecAction, PublicationStatusFilter, QueryPatch, ReplaceSpecAction, ResultEnvelope, TurnResponse,
+    TurnTimelineItem, UnsupportedAction, apply_patch, validate_query_spec,
 )
 from .errors import (
     AgentResultViewChangedError, ConcurrencyConflictError, ForbiddenRoleError, IdempotencyConflictError,
@@ -25,7 +25,7 @@ from .errors import (
 )
 from .grants import ActiveTurnGrant, InMemoryTurnGrantStore, TurnGrantStore
 from .papers import materialize
-from .planner import PlanRequest, build_planner, requests_scholarship
+from .planner import PlanRequest, build_planner, requests_only_published, requests_scholarship
 from .privacy import (
     SELECTED_STUDENT, agent_clarification_subjects, agent_tool_view, free_text_filter, planner_view, prepare_agent_question,
     prepare_question, render_agent_response, resolve_agent_spec, resolve_subjects,
@@ -197,7 +197,7 @@ def _tool_validation_message(argument, error):
     return "；".join(dict.fromkeys(messages))
 
 
-def _parse_tool_query(body: dict[str, object], previous) -> tuple[PaperQuerySpec, str | None]:
+def _parse_tool_query(body: dict[str, object], previous, *, only_published: bool) -> tuple[PaperQuerySpec, str | None]:
     if set(body) not in ({"spec"}, {"patch"}):
         raise RetryableToolInputError(_TOOL_ARGUMENTS)
     argument, data = next(iter(body.items()))
@@ -209,6 +209,12 @@ def _parse_tool_query(body: dict[str, object], previous) -> tuple[PaperQuerySpec
             patch = QueryPatch.model_validate(data)
             spec = apply_patch(previous or PaperQuerySpec(), patch)
             filters = patch.set_filters
+        if only_published and spec.operation != "portrait" and not any(
+            isinstance(item, PublicationStatusFilter) for item in spec.filters
+        ):
+            spec = PaperQuerySpec.model_validate({
+                **spec.model_dump(), "filters": [*spec.filters, PublicationStatusFilter(value="published")],
+            })
     except ValidationError as error:
         raise RetryableToolInputError(_tool_validation_message(argument, error)) from None
     except ValueError:
@@ -473,7 +479,7 @@ class TeacherQueryEngine:
                                 lambda session, user, receipt: self._replay_turn(session, user, conversation_id, receipt))
 
     @contextmanager
-    def _grant(self, actor, conversation_id, version, digest, selected, ambiguous, budget):
+    def _grant(self, actor, conversation_id, version, digest, selected, ambiguous, budget, *, only_published):
         token = secrets.token_urlsafe(32)
         key = hashlib.sha256(token.encode()).hexdigest()
 
@@ -482,7 +488,7 @@ class TeacherQueryEngine:
                 self._active_scope(session, actor.user_id, conversation_id, version, digest)
             self.grants.issue(key, ActiveTurnGrant(
                 actor.user_id, conversation_id, uid(), version, digest, selected, budget,
-                clarification_subjects=ambiguous or None,
+                clarification_subjects=ambiguous or None, only_published=only_published,
             ))
             with self.sessions() as session:
                 self._active_scope(session, actor.user_id, conversation_id, version, digest)
@@ -523,7 +529,7 @@ class TeacherQueryEngine:
             except ResourceNotFoundError:
                 previous = None
             try:
-                spec, explicit_id = _parse_tool_query(raw, previous)
+                spec, explicit_id = _parse_tool_query(raw, previous, only_published=grant.only_published)
                 return self._preview_agent_query(session, user, scope, grant, spec, previous, explicit_id)
             except RetryableToolInputError as error:
                 grant.tool_failures += 1
@@ -592,7 +598,8 @@ class TeacherQueryEngine:
                     raise
 
     def _agent_turn_attempt(self, actor, conversation_id, record, version, digest, selected, ambiguous, request):
-        with self._grant(actor, conversation_id, version, digest, selected, ambiguous, request.budget) as (issue_token, key):
+        with self._grant(actor, conversation_id, version, digest, selected, ambiguous, request.budget,
+                         only_published=requests_only_published(request.user_message)) as (issue_token, key):
             try:
                 text = self.planner.analyze(request, issue_token)
             except TimeoutError:

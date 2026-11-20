@@ -116,6 +116,17 @@ def requests_scholarship(message: str) -> bool:
     return "奖学金" in question or bool(_AWARD_DATA.search(question))
 
 
+def requests_only_published(message: str) -> bool:
+    text = re.sub(r"[^\S\n]+", "", message).translate(_SEARCH_QUOTES)
+    question = re.sub(r'"[^"]*"', "", _PAPER_SEARCH_TEXT.sub("", text)).strip("。！？.!?；;\n")
+    return bool(re.search(r"已(?:经)?发表|发表[过了]", question)) and not re.search(
+        r"[。！？!?；;\n]|(?<!\d)\.(?!\d)"
+        r"|发表状态|发表情况|录用|投稿|未发表|未曾|从未|尚未|还未|没有|并未|还没|没发表|不曾|不含|不包括|排除"
+        r"|(?:再|另|同时|并且?)(?:看|列|查|统计|汇总|对比|比较)",
+        question,
+    )
+
+
 def _period(message, today):
     year_match = re.search(r"((?:19|20)\d{2})年(?!级)", message)
     if year_match or any(term in message for term in ("今年", "本年", "去年", "上一年")):

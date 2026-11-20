@@ -25,6 +25,7 @@ class ActiveTurnGrant:
     call_ids: list[str] = field(default_factory=list)
     tool_failures: int = 0
     clarification_subjects: list[str] | None = None
+    only_published: bool = False
 
     @property
     def query_count(self) -> int:

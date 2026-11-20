@@ -90,10 +90,15 @@ def test_missing_published_filter_is_applied_before_materializing(mixed_papers, 
     check_query(agent, view, card, filters=[PUBLISHED], records=3, students=2, breakdown=breakdown)
     assert body["turn"]["resolved_query"] == card["applied_query"]
     assert card["applied_query"]["distinct_subject"] == spec.get("distinct_subject", "paper_record")
-    assert {item.get("publication_status", "published") for item in card["items"]} == {"published"}
+    if metric == "paper_student_count":
+        assert {item["student_id"]: item["matched_record_count"] for item in card["items"]} == {
+            agent.ids["student1"]: 2, agent.ids["student2"]: 1,
+        }
+    else:
+        assert {item["title"] for item in card["items"]} == {"合成甲", "合成乙", "合成丙"}
     if not breakdown:
         count = 2 if unit == "人" else 3
-        assert f"{count} {unit}" in body["analysis"]
+        assert body["analysis"] == f"共 {count} [{view['query_run_id']}] {unit}。"
     assert_persisted(agent, turns=1, runs=1)
 
 
@@ -106,7 +111,6 @@ def test_missing_published_filter_is_applied_before_materializing(mixed_papers, 
      {"filters": [{"field": "title", "operator": "contains", "value": "发表过"}]}, 1, 1, []),
     ("标题包含发表过的研究的论文有多少篇？",
      {"filters": [{"field": "title", "operator": "contains", "value": "发表过的研究"}]}, 1, 1, []),
-    ("哪些学生没有发表过论文？", {"distinct_subject": "student"}, 5, 4, []),
     ("有多少篇论文已经录用但还没发表？",
      {"filters": [{"field": "publication_status", "operator": "eq", "value": "accepted"}]}, 1, 1, []),
     ("有哪些尚未发表过的论文？",
@@ -147,3 +151,33 @@ def test_mixed_intent_keeps_independent_cards(mixed_papers):
     check_query(agent, views[1], listing, filters=[PUBLISHED], records=3, students=2, breakdown=[])
     assert {item["title"] for item in views[1]["items"]} == {"合成甲", "合成乙", "合成丙"}
     assert_persisted(agent, turns=1, runs=2)
+
+
+@pytest.mark.parametrize("separator", ["？", "。", "；", "\n"])
+def test_separate_questions_keep_the_all_papers_card(mixed_papers, separator):
+    agent = mixed_papers
+    views = []
+
+    def analyze(token):
+        views.append(tool_result(agent.query(token, spec={"operation": "list", "filters": [PUBLISHED]})))
+        views.append(tool_result(agent.query(token, spec={})))
+        return ""
+
+    response = agent.ask(analyze, message=f"学生发表了哪些论文{separator}所有论文总共有多少篇？")
+    assert response.status_code == 200, response.text
+    listing, total = response.json()["results"]
+    check_query(agent, views[0], listing, filters=[PUBLISHED], records=3, students=2, breakdown=[])
+    check_query(agent, views[1], total, filters=[], records=5, students=4, breakdown=[])
+
+
+def test_negative_roster_question_does_not_force_positive_status(mixed_papers):
+    agent = mixed_papers
+
+    def analyze(token):
+        tool_result(agent.query(token, spec={"distinct_subject": "student"}))
+        return ""
+
+    response = agent.ask(analyze, message="哪些学生没有发表过论文？")
+    assert response.status_code == 200, response.text
+    card, = response.json()["results"]
+    assert card["applied_query"]["filters"] == []
