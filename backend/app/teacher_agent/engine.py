@@ -25,7 +25,7 @@ from .errors import (
 )
 from .grants import ActiveTurnGrant, InMemoryTurnGrantStore, TurnGrantStore
 from .papers import materialize
-from .planner import PlanRequest, build_planner
+from .planner import PlanRequest, build_planner, requests_scholarship
 from .privacy import (
     SELECTED_STUDENT, agent_clarification_subjects, agent_tool_view, free_text_filter, planner_view, prepare_agent_question,
     prepare_question, render_agent_response, resolve_agent_spec, resolve_subjects,
@@ -368,6 +368,8 @@ class TeacherQueryEngine:
         entry = request.input
         parent_run_id = entry.parent_run_id if entry.mode == "drilldown_patch" else None
         selected, question, ambiguous, domain = [], None, [], "paper"
+        requested_domain = None
+        agent_mode = False
         with self.sessions() as session:
             user = _user(session, actor)
             conversation = _owned(session, user, QueryConversation, conversation_id)
@@ -391,21 +393,25 @@ class TeacherQueryEngine:
                 if entry.mode == "drilldown_patch":
                     raise
             if entry.mode == "natural_language":
-                agent_mode = self.planner.mode == "innoagent" and domain == "paper"
-                prepare = prepare_agent_question if agent_mode else prepare_question
-                students = roster(session, scope[0])
-                question, selected = prepare(entry.message, students)
-                if agent_mode:
-                    ambiguous = agent_clarification_subjects(entry.message, students)
-        if entry.mode == "natural_language" and agent_mode and question:
+                if requests_scholarship(entry.message):
+                    requested_domain = "scholarship"
+                else:
+                    agent_mode = self.planner.mode == "innoagent" and domain == "paper"
+                    prepare = prepare_agent_question if agent_mode else prepare_question
+                    students = roster(session, scope[0])
+                    question, selected = prepare(entry.message, students)
+                    if agent_mode:
+                        ambiguous = agent_clarification_subjects(entry.message, students)
+        if question and agent_mode:
             return self._agent_turn(actor, conversation_id, record, version, scope[1], previous, selected, ambiguous, question)
         trace = {"mode": "direct", "action": "direct"}
         if entry.mode == "structured_spec":
             action, label = ReplaceSpecAction(spec=entry.spec), "结构化查询"
         elif entry.mode == "drilldown_patch":
             action, label = PatchSpecAction(patch=entry.patch), "筛选查询"
-        elif domain != "paper" and self.planner.mode == "innoagent":
-            action, label = UnsupportedAction(requested_domain=domain, message="当前仅开放论文查询"), "未开放领域"
+        elif requested_domain or (domain != "paper" and self.planner.mode == "innoagent"):
+            action = UnsupportedAction(requested_domain=requested_domain or domain, message="当前仅开放论文查询")
+            label = "未开放领域"
         elif question:
             today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
             plan = self.planner.plan(PlanRequest(question, planner_view(previous), today))
@@ -418,7 +424,7 @@ class TeacherQueryEngine:
             if conversation.status != "active" or conversation.lock_version != version:
                 raise ConcurrencyConflictError("对话已变化，请刷新后重试")
             current_scope = _scope(session, user)
-            current = previous
+            current = None if isinstance(action, UnsupportedAction) else previous
             if parent_run_id:
                 parent = _owned(session, user, QueryRun, parent_run_id)
                 current = _stored_view(parent.applied_query, current_scope, parent.scope_digest)

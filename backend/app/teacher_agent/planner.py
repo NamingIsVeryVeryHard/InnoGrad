@@ -96,6 +96,26 @@ def _unsupported(domain):
     return UnsupportedAction(requested_domain=domain, message=UNSUPPORTED)
 
 
+_SEARCH_QUOTES = str.maketrans(dict.fromkeys("‘’“”「」『』《》'", '"'))
+_PAPER_SEARCH_TEXT = re.compile(
+    r'(?:论文)?(?:标题|题目|主题)(?:中)?(?:包含|含有|为|是)'
+    r'(?:"[^"]*"|[^，。！？；,.!?;]+?(?=的论文|[，。！？；,.!?;]|并|且|以及|同时|$))'
+    r'|(?:关于|有关)(?:"[^"]*"|[\u4e00-\u9fff]{0,8}奖学金'
+    r'(?:申请|申报|评审|评选|发放|政策|制度|流程|研究)*)(?=的论文)'
+)
+_AWARD_DATA = re.compile(
+    r"(?:学生|同学)的?获奖|论文(?:曾|是否)?获奖"
+    r"|获奖的?(?:学生|同学|论文|名单|人数|记录|情况)"
+)
+
+
+def requests_scholarship(message: str) -> bool:
+    """Recognize common Chinese requests that require scholarship data."""
+    text = "".join(message.split()).rstrip("。！？.!?").translate(_SEARCH_QUOTES)
+    question = _PAPER_SEARCH_TEXT.sub("。", text)
+    return "奖学金" in question or bool(_AWARD_DATA.search(question))
+
+
 def _period(message, today):
     year_match = re.search(r"((?:19|20)\d{2})年(?!级)", message)
     if year_match or any(term in message for term in ("今年", "本年", "去年", "上一年")):
@@ -119,7 +139,7 @@ def _rule_action(request):
     message = "".join(request.user_message.split())
     previous = _previous_view(request.previous_spec)
     clarify = ClarifyAction(message=CLARIFY)
-    if "奖学金" in message or "获奖" in message:
+    if requests_scholarship(message):
         return _unsupported("scholarship")
     if not safe_language(message) or re.search(r"学期|学年|还没|没有|清除|移除|取消|近一年", message):
         return clarify
