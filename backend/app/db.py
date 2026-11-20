@@ -310,3 +310,50 @@ class WarningAction(Base):
     note: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
+
+
+from sqlalchemy import Index, text
+
+
+class QueryConversation(Base):
+    __tablename__ = "query_conversation"
+    __table_args__ = (Index("ix_query_conversation_teacher_updated", "teacher_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(200), default="新对话", server_default="新对话")
+    active_domain: Mapped[str] = mapped_column(String(30), default="paper", server_default="paper")
+    active_query_spec: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    turns_json: Mapped[list[dict]] = mapped_column(JSON(none_as_null=True), default=list, server_default=text("'[]'"))
+    status: Mapped[str] = mapped_column(String(30), default="active", server_default="active")
+    scope_digest_snapshot: Mapped[str] = mapped_column(String(64))
+    scope_size_snapshot: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    turn_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    lock_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[str] = mapped_column(String(40), default=now)
+    updated_at: Mapped[str] = mapped_column(String(40), default=now)
+
+
+class QueryRun(Base):
+    __tablename__ = "query_run"
+    __table_args__ = (
+        Index("ix_query_run_teacher_created", "teacher_id", "created_at"),
+        Index("ix_query_run_turn_id", "turn_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    conversation_id: Mapped[str | None] = mapped_column(ForeignKey("query_conversation.id"))
+    turn_id: Mapped[str | None] = mapped_column(String(36))
+    parent_run_id: Mapped[str | None] = mapped_column(ForeignKey("query_run.id"))
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    domain: Mapped[str] = mapped_column(String(30))
+    operation: Mapped[str] = mapped_column(String(30))
+    basis: Mapped[str] = mapped_column(String(40))
+    applied_query: Mapped[dict] = mapped_column(JSON)
+    scope_digest: Mapped[str] = mapped_column(String(64))
+    scope_size: Mapped[int] = mapped_column(Integer)
+    data_as_of: Mapped[str] = mapped_column(String(40))
+    result_version: Mapped[str] = mapped_column(String(40))
+    metric_receipt: Mapped[dict[str, int]] = mapped_column(JSON)
+    source_refs: Mapped[list[dict[str, str | None]]] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40), default=now)
