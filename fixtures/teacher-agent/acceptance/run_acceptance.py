@@ -3,6 +3,7 @@
 import argparse
 from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -57,7 +58,7 @@ def unpack_and_build(home, commit):
 
 
 @contextmanager
-def innoagent(home, source, runtime, provider_config, api_url):
+def innoagent(home, source, runtime, provider_config, api_url, trace_path):
     supplied = json.loads(provider_config.read_text(encoding="utf-8"))
     provider_name = supplied["defaultProvider"]
     provider = supplied["providers"][provider_name]
@@ -81,6 +82,7 @@ def innoagent(home, source, runtime, provider_config, api_url):
     skill = source / "backend/skills/teacher-query-planner"
     shutil.copytree(skill, home / "skills/teacher-query-planner")
     shutil.copytree(skill / "extensions", config / "extensions")
+    shutil.copyfile(HERE / "provider-trace.ts", config / "extensions/provider-trace.ts")
     (home / "node_modules").symlink_to(runtime / "node_modules", target_is_directory=True)
     (config / "config.json").touch(mode=0o600)
     save(config / "config.json", settings)
@@ -109,6 +111,7 @@ def innoagent(home, source, runtime, provider_config, api_url):
         "PATH": os.environ["PATH"], "HOME": str(home), "TMPDIR": str(home),
         "PI_OFFLINE": "1", "TEACHER_QUERY_PLANNER_ONLY": "1",
         "TEACHER_AGENT_GRANT_DIR": str(grants), "TEACHER_AGENT_MCP_URL": api_url + MCP_PATH,
+        "ACCEPTANCE_TRACE_PATH": str(trace_path),
         "TEACHER_AGENT_MCP_ADAPTER": str(adapter), "ACCEPTANCE_PORT_FILE": str(port_file),
     }
     command = ["node", "--require", str(hook), str(server), "--home", str(home),
@@ -139,7 +142,7 @@ def innoagent(home, source, runtime, provider_config, api_url):
 
 
 @contextmanager
-def api_runtime(home, db_path, listener, agent_url, grants, callbacks):
+def api_runtime(home, db_path, listener, agent_url, grants, callbacks, *, invalid_receipt=False):
     for key in tuple(os.environ):
         if key.startswith(("TEACHER_AGENT_", "AI_")):
             del os.environ[key]
@@ -151,7 +154,8 @@ def api_runtime(home, db_path, listener, agent_url, grants, callbacks):
     )
     sys.path.insert(0, str(home / "backend"))
     from app import db, main
-    from app.teacher_agent import engine
+    from app.teacher_agent import engine, planner
+    from receipt_trace import BoundaryCapture, PiTransport, observe_outcome
 
     app = main.app
     @app.middleware("http")
@@ -162,8 +166,11 @@ def api_runtime(home, db_path, listener, agent_url, grants, callbacks):
                 callbacks.append(payload.get("params", {}).get("name") == "query_papers")
         return await call_next(request)
 
+    app.add_middleware(BoundaryCapture, invalid_receipt=invalid_receipt)
     with patch.object(db, "datetime", FixedDatetime), patch.object(main, "datetime", FixedDatetime), \
-            patch.object(engine, "datetime", FixedDatetime):
+            patch.object(engine, "datetime", FixedDatetime), \
+            patch.object(planner, "InnoAgentQueryPlanner", partial(planner.InnoAgentQueryPlanner, transport=PiTransport())), \
+            patch.object(planner, "_tool_outcome", partial(observe_outcome, planner._tool_outcome)):
         db.Base.metadata.create_all(app.state.engine)
         query_tables = {name for name in inspect(app.state.engine).get_table_names() if name.startswith("query_")}
         assert query_tables == {"query_conversation", "query_run"}, query_tables
@@ -319,7 +326,11 @@ def seed(stack, sessions, db_path, url):
 
 
 def main():
+    from receipt_trace import evidence, trace_output
+
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--invalid-receipt", action="store_true",
+                        help="Inject one empty paper receipt and verify the first turn returns the expected 502.")
     parser.add_argument("--commit", default="HEAD")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--runtime", type=Path, default=REPO.parent / "inno-agent-audit-20261015")
@@ -331,6 +342,21 @@ def main():
     if args.output:
         output.mkdir(mode=0o700, parents=True)
     print(f"Testing commit {commit}. Evidence: {output}", flush=True)
+    trace_output(output / "trace.jsonl")
+    try:
+        summary = run(args, commit, output)
+    finally:
+        traced = evidence(output, args.invalid_receipt)
+    passed = summary["browser_returncode"] == 0 and summary["browser_checks"] > 0 and traced and summary["valid_calls"]
+    save(output / "run-summary.json", {
+        "commit": commit, "status": "passed" if passed else "failed",
+        "test_clock": TEST_CLOCK.isoformat(), "invalid_receipt": args.invalid_receipt, **summary,
+    })
+    print(f"Real MCP paper calls: {summary['mcp_paper_calls']}. Summary: {output / 'run-summary.json'}", flush=True)
+    return 0 if passed else summary["browser_returncode"] or 1
+
+
+def run(args, commit, output):
     callbacks = []
     with TemporaryDirectory(prefix="innograd-paper-runtime-") as workdir, ExitStack() as stack:
         home = Path(workdir)
@@ -340,9 +366,10 @@ def main():
         listener.bind(("127.0.0.1", 0))
         url = f"http://127.0.0.1:{listener.getsockname()[1]}"
         agent, grants = stack.enter_context(innoagent(
-            home / "agent", home, args.runtime.resolve(), args.provider_config.resolve(), url,
+            home / "agent", home, args.runtime.resolve(), args.provider_config.resolve(), url, output / "trace.jsonl",
         ))
-        sessions = stack.enter_context(api_runtime(home, db_path, listener, agent, grants, callbacks))
+        sessions = stack.enter_context(api_runtime(home, db_path, listener, agent, grants, callbacks,
+                                                  invalid_receipt=args.invalid_receipt))
         teacher_id, inputs = seed(stack, sessions, db_path, url)
         print("Independent archived roster ready. Starting Chromium.", flush=True)
         browser = subprocess.run(
@@ -350,7 +377,8 @@ def main():
             env={**os.environ, "NODE_PATH": os.environ.get(
                 "PLAYWRIGHT_NODE_PATH", str(Path.home() / ".bun/install/global/node_modules")),
                 "TEST_WORKSPACE_URL": url, "TEST_FIXTURE_DB": str(db_path),
-                "TEST_TEACHER_ID": teacher_id, "EVIDENCE_DIR": str(output)},
+                "TEST_TEACHER_ID": teacher_id, "EVIDENCE_DIR": str(output),
+                "TEST_INVALID_RECEIPT": "1" if args.invalid_receipt else "0"},
             text=True, input=json.dumps(inputs, ensure_ascii=False), capture_output=True,
         )
         for stream, text in (("stdout", browser.stdout), ("stderr", browser.stderr)):
@@ -359,16 +387,11 @@ def main():
             print(sanitized, end="", file=getattr(sys, stream), flush=True)
         observations = output / "browser-observations.json"
         checks = json.loads(observations.read_text(encoding="utf-8"))["checks"] if observations.exists() else []
-        live = len(callbacks) >= 4 and all(callbacks)
-        status = browser.returncode or int(not (live and checks))
-        save(output / "run-summary.json", {
-            "commit": commit, "status": "passed" if status == 0 else "failed",
-            "test_clock": TEST_CLOCK.isoformat(), "browser_checks": len(checks),
+        return {
+            "valid_calls": bool(callbacks) and all(callbacks), "browser_checks": len(checks),
             "browser_passed": sum(check["pass"] for check in checks), "browser_returncode": browser.returncode,
             "published_drill_rows": len(inputs["fixture"]["drill"]), "mcp_paper_calls": sum(callbacks),
-        })
-        print(f"Real MCP paper calls: {sum(callbacks)}. Summary: {output / 'run-summary.json'}", flush=True)
-    return status
+        }
 
 
 if __name__ == "__main__":

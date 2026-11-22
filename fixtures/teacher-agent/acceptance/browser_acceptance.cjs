@@ -6,6 +6,7 @@ const {chromium} = require("playwright");
 const {accounts, fixture, studentLogin} = JSON.parse(fs.readFileSync(0, "utf8"));
 const root = process.env.TEST_WORKSPACE_URL;
 const output = process.env.EVIDENCE_DIR;
+const invalidReceipt = process.env.TEST_INVALID_RECEIPT === "1";
 const observations = {checks: [], phases: {}, console: [], pageErrors: [], failedRequests: [], httpErrors: []};
 const paths = {
   turns: /\/api\/v1\/teacher-agent\/conversations\/[^/?]+\/turns$/,
@@ -164,7 +165,7 @@ async function send(page, panel, message, followup = false) {
   const response = await turn;
   await panel.locator("fieldset:enabled").waitFor();
   const result = await capture(response, panel);
-  check(`${message} HTTP`, result.status, 200);
+  check(`${message} HTTP`, result.status, invalidReceipt ? 502 : 200);
   check(`${message} request`, result.request.input, {mode: "natural_language", message});
   return result;
 }
@@ -302,6 +303,11 @@ async function run() {
 
     const first = await send(page, panel, "今年论文发表情况");
     observations.phases.overview = first;
+    if (invalidReceipt) {
+      check("injected receipt returns planner error", first.body.code, "INVALID_PLANNER_OUTPUT");
+      return;
+    }
+    if (first.status !== 200) return;
     inspectAggregate("annual overview", first, overview, dates, clock);
     await screenshot("01-overview", panel, true);
 
