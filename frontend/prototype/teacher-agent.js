@@ -131,6 +131,7 @@ export function mountConversation(root, api) {
   const status = root.querySelector('[role=status]');
   let conversation = null, turns = [], cards = new Map(), summaries = [];
   let createKey = crypto.randomUUID(), lastWrite = null;
+  let refreshPending = false;
 
   function options(selected) {
     picker.replaceChildren(new Option('新对话', ''));
@@ -182,6 +183,7 @@ export function mountConversation(root, api) {
       status.textContent = error.message;
     } finally {
       panel.disabled = false;
+      if (refreshPending) refreshConversation();
     }
   }
 
@@ -194,15 +196,17 @@ export function mountConversation(root, api) {
 
   async function loadDetail(selected) {
     clearDetail();
-    if (!selected) return;
-    const detail = await api(`${conversations}/${encodeURIComponent(selected)}`);
-    conversation = detail.conversation;
-    turns = detail.turns;
-    const last = turns.at(-1);
-    if (last && !last.access_revoked) {
-      cards.set(last.id, envelopes(detail.latest_results, detail.latest_result));
+    if (selected) {
+      const detail = await api(`${conversations}/${encodeURIComponent(selected)}`);
+      conversation = detail.conversation;
+      turns = detail.turns;
+      const last = turns.at(-1);
+      if (last && !last.access_revoked) {
+        cards.set(last.id, envelopes(detail.latest_results, detail.latest_result));
+      }
+      draw();
     }
-    draw();
+    if (!refreshPending) timeline.hidden = false;
   }
 
   async function refresh(initial = false) {
@@ -215,6 +219,12 @@ export function mountConversation(root, api) {
     options(next);
     if (selected && !picker.value) question.value = '';
     await loadDetail(picker.value);
+  }
+
+  function refreshConversation() {
+    timeline.hidden = true;
+    refreshPending = panel.disabled;
+    if (!refreshPending) return busy('正在刷新对话…', refresh);
   }
 
   function readHistory(turnId) {
@@ -289,11 +299,12 @@ export function mountConversation(root, api) {
     lastWrite = null;
     busy('正在读取对话…', () => loadDetail(picker.value));
   };
-  root.querySelector('[name=refresh]').onclick = () => busy('正在刷新对话…', refresh);
+  root.querySelector('[name=refresh]').onclick = refreshConversation;
   form.onsubmit = event => {
     event.preventDefault();
     const message = question.value.trim();
     if (message) submit({mode: 'natural_language', message});
   };
   busy('正在读取最近对话…', () => refresh(true));
+  return refreshConversation;
 }
