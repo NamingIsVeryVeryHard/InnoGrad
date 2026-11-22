@@ -80,6 +80,24 @@ def test_rules_grouping_by_publication_status_does_not_filter_to_published():
     assert result.output.spec.group_by == ["publication_status"]
 
 
+def test_rules_all_publication_statuses_do_not_filter_to_published():
+    planner = RuleQueryPlanner()
+
+    result = planner.plan(request("按发表状态分组统计所有论文"))
+
+    assert result.output.action == "replace"
+    assert result.output.spec.filters == []
+
+
+def test_rules_explicit_published_filter_survives_publication_status_grouping():
+    planner = RuleQueryPlanner()
+
+    result = planner.plan(request("按发表状态分组统计已发表论文"))
+
+    assert result.output.spec.group_by == ["publication_status"]
+    assert result.output.spec.filters[0].value == "published"
+
+
 def test_rules_followup_degree_filter_preserves_publication_status_grouping():
     planner = RuleQueryPlanner()
     previous = planner.plan(request("今年论文发表情况")).output.spec
