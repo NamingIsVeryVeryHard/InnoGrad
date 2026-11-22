@@ -168,6 +168,7 @@ def _rule_action(request):
 
     filters = [subject] if selected else []
     summary = "发表情况" in message
+    publication_status_grouping = re.search(r"按(?:照)?发表状态|发表状态(?:分组|分布)", message)
     for field_type, terms in (
         (PublicationStatusFilter, (("发表", "published"), ("录用", "accepted"), ("投稿", "submitted"))),
         (ReviewStatusFilter, (("待审", "pending_review"), ("待补正", "returned"), ("退回", "returned"),
@@ -175,7 +176,9 @@ def _rule_action(request):
         (DegreeFilter, (("硕士", "硕士"), ("博士", "博士"), ("未标注", "未标注"))),
     ):
         values = list(dict.fromkeys(value for term, value in terms
-                                    if term in message and not (term == "发表" and summary)))
+                                    if term in message and not (
+                                        term == "发表" and (summary or publication_status_grouping)
+                                    )))
         if values:
             filters.append(field_type(value=values[0]) if len(values) == 1
                            else field_type(operator="in", value=values))

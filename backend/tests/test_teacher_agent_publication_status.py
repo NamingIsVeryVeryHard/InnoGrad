@@ -1,6 +1,7 @@
 import pytest
 
 from app.db import Archive, Decision, QueryRun, StudentProfile, Submission, Supervision, User, Version, now, uid
+from app.teacher_agent.api import _ConfiguredPlanner
 from app.teacher_agent.contract import PAPER_STATUS_DATE_FIELD
 from test_teacher_agent_conversations import ROOT
 from test_teacher_agent_tools import agent, assert_persisted, clock, tool_result
@@ -134,6 +135,39 @@ def test_publication_controls_keep_the_tool_scope(mixed_papers, message, spec, r
     view, = views
     check_query(agent, view, card, filters=spec.get("filters", []), records=records,
                 students=students, breakdown=breakdown)
+
+
+def test_rules_teacher_dialogue_groups_all_publication_statuses(mixed_papers, monkeypatch):
+    agent = mixed_papers
+    monkeypatch.setattr(_ConfiguredPlanner, "mode", property(lambda self: "rules"))
+
+    grouped = agent.ask(lambda _: pytest.fail("rules mode must execute directly"),
+                        message="按发表状态分组统计论文")
+    published = agent.ask(lambda _: pytest.fail("rules mode must execute directly"),
+                          key="published", message="只看已发表的论文", version=1)
+
+    grouped_body = grouped.json()
+    grouped_card = grouped_body["results"][0]
+    assert grouped.status_code == published.status_code == 200
+    assert grouped_card["applied_query"]["filters"] == []
+    assert grouped_card["applied_query"]["group_by"] == ["publication_status"]
+    grouped_metrics = {item["key"]: item["value"] for item in grouped_card["summary"]["metrics"]}
+    assert grouped_metrics["paper_record_count"] == 5
+    assert grouped_metrics["paper_student_count"] == 4
+    assert [
+        {key: item[key] for key in ("group_key", "record_count", "student_count")}
+        for item in grouped_card["summary"]["breakdown"]
+    ] == [
+        group("publication_status", "accepted", 1, 1),
+        group("publication_status", "published", 3, 2),
+        group("publication_status", "submitted", 1, 1),
+    ]
+
+    published_card = published.json()["results"][0]
+    assert published_card["applied_query"]["filters"] == [PUBLISHED]
+    published_metrics = {item["key"]: item["value"] for item in published_card["summary"]["metrics"]}
+    assert published_metrics["paper_record_count"] == 3
+    assert published_metrics["paper_student_count"] == 2
 
 
 def test_mixed_intent_keeps_independent_cards(mixed_papers):

@@ -103,6 +103,19 @@ def test_same_key_race_and_conflicting_turns(env):
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(lambda key: post(teacher, url, body, key), ["second", "third"]))
     assert sorted(response.status_code for response in responses) == [200, 409]
+    followup = next(response for response in responses if response.status_code == 200).json()
+    followup_query = followup["result"]["applied_query"]
+    assert followup_query["time_range"] == {
+        "from": "2026-01-01",
+        "to": "2026-12-31",
+        "field": "status_date",
+    }
+    assert followup_query["group_by"] == ["publication_status"]
+    assert followup_query["filters"] == [{
+        "field": "degree",
+        "operator": "eq",
+        "value": "博士",
+    }]
     with app.state.sessions() as session:
         stored = session.get(QueryConversation, cid)
         assert stored.turn_count == stored.lock_version == len(stored.turns_json) == 2
