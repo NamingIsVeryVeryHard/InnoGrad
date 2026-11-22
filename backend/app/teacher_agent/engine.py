@@ -2,7 +2,7 @@ import hashlib
 import json
 import secrets
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -148,7 +148,7 @@ def _record_run(session, user, spec, scope, *, conversation_id=None, turn_id=Non
     ident, stamp = run_id or uid(), now()
     result = (materialize(session, user, spec, run_id=ident, data_as_of=stamp)
               if spec.domain == "paper" else _notice("unsupported_domain"))
-    if result.status == "clarification_needed":
+    if result.status != "ok":
         return result.model_copy(update={"turn_id": turn_id, "conversation_id": conversation_id, "applied_query": None})
     session.add(QueryRun(id=ident, conversation_id=conversation_id, turn_id=turn_id,
                          parent_run_id=parent_run_id, teacher_id=user.id, domain=spec.domain,
@@ -287,7 +287,7 @@ class TeacherQueryEngine:
             turns, latest, results = [], None, []
             for index, turn in enumerate(rows):
                 try:
-                    runs = self._turn_runs(turn, runs_by_id)
+                    turn, runs = self._turn_with_runs(turn, runs_by_id)
                     specs = [_stored_view(item.applied_query, scope, item.scope_digest) for item in runs]
                     spec = specs[-1] if specs else None
                     clarification = _notice(turn.status).clarification if not runs else None
@@ -329,11 +329,13 @@ class TeacherQueryEngine:
         return {run.id: run for run in session.scalars(query)}
 
     @staticmethod
-    def _turn_runs(turn, runs_by_id):
+    def _turn_with_runs(turn, runs_by_id):
         runs = [runs_by_id.get(ident) for ident in turn.run_ids]
         if any(run is None or run.turn_id != turn.id for run in runs):
             raise ResourceNotFoundError("记录不存在或无权访问")
-        return runs
+        if turn.status == "unsupported_domain" and runs:
+            return replace(turn, run_ids=[]), []
+        return turn, runs
 
     @staticmethod
     def _replay_turn(session, user, conversation_id, receipt):
@@ -342,7 +344,7 @@ class TeacherQueryEngine:
         if raw is None:
             raise ResourceNotFoundError("记录不存在或无权访问")
         turn = StoredTurn(**raw)
-        runs = TeacherQueryEngine._turn_runs(
+        turn, runs = TeacherQueryEngine._turn_with_runs(
             turn, TeacherQueryEngine._conversation_runs(session, conversation, turn.run_ids),
         )
         scope = _scope(session, user)
