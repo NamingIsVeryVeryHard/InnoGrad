@@ -29,10 +29,11 @@ if ! "$PYTHON" -c 'import uvicorn, fastapi, sqlalchemy, alembic, pydantic_settin
   echo '依赖不完整，请执行：bash code/start.sh --setup' >&2
   exit 1
 fi
-if [[ ! -x "$ROOT/frontend/node_modules/.bin/vite" || "${1:-}" == '--setup' ]]; then
-  npm --prefix "$ROOT/frontend" ci
+cd "$ROOT/frontend"
+if [[ ! -x node_modules/.bin/vite || "${1:-}" == '--setup' ]]; then
+  npm ci
 fi
-npm --prefix "$ROOT/frontend" run build
+npm run build
 cd "$ROOT/backend"
 echo '正在启动当前仓库的前端、API 与 Worker。'
 echo '前端：http://127.0.0.1:8000/prototype/'

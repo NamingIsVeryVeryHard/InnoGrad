@@ -13,12 +13,26 @@ from pathlib import Path
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    workbench = root.parent / "frontend" / "dist" / "prototype" / "index.html"
+    if not workbench.is_file():
+        raise SystemExit("缺少工作台构建产物。请在仓库根目录执行 bash code/start.sh。")
+
     url = "http://127.0.0.1:8000/prototype/"
     try:
         with urllib.request.urlopen(
             "http://127.0.0.1:8000/health", timeout=2
         ) as response:
             if response.status == 200 and json.load(response).get("status") == "ok":
+                try:
+                    with urllib.request.urlopen(url, timeout=2) as workbench_response:
+                        workbench_ready = workbench_response.status == 200
+                except OSError:
+                    workbench_ready = False
+                if not workbench_ready:
+                    raise SystemExit(
+                        "端口 8000 上的 API 无法提供 /prototype/。"
+                        "请在原终端停止该 API，再从仓库根目录执行 bash code/start.sh。"
+                    )
                 webbrowser.open(url)
                 from .db import connect, WorkerHeartbeat
 
