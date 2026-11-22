@@ -60,7 +60,6 @@ function resultCard(result, submit) {
     card.id = 'agent-run-' + result.query_run_id;
     card.tabIndex = -1;
   }
-  if (result.clarification) card.append(clarification(result.clarification));
   const summary = result.summary;
   if (!summary) return card;
   card.append(element('h4', summary.headline), element('p', [
@@ -110,10 +109,6 @@ function resultCard(result, submit) {
   return card;
 }
 
-function envelopes(results, legacy) {
-  return results?.length ? results : legacy ? [legacy] : [];
-}
-
 export function mountConversation(root, api) {
   root.innerHTML = `<fieldset class="agent-panel" aria-label="论文查询对话">
     <div class="card toolbar"><label>最近对话 <select name="conversation"></select></label>
@@ -132,6 +127,17 @@ export function mountConversation(root, api) {
   let conversation = null, turns = [], cards = new Map(), summaries = [];
   let createKey = crypto.randomUUID(), lastWrite = null;
   let refreshPending = false;
+
+  function saveResults(turn, results, legacy) {
+    if (legacy?.clarification && !legacy.query_run_id) turn.clarification ??= legacy.clarification;
+    const seen = new Set();
+    cards.set(turn.id, (results ?? (legacy?.query_run_id ? [legacy] : [])).filter(result => {
+      const id = result.query_run_id;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }));
+  }
 
   function options(selected) {
     picker.replaceChildren(new Option('新对话', ''));
@@ -154,20 +160,24 @@ export function mountConversation(root, api) {
       section.append(element('h3', turn.user_message));
       const results = cards.get(turn.id) || [];
       const targets = new Map();
+      const serializedTurnPrompt = JSON.stringify(turn.clarification);
       const resultNodes = results.map(result => {
         const card = resultCard(result, submit);
+        if (result.clarification && JSON.stringify(result.clarification) !== serializedTurnPrompt) {
+          card.prepend(clarification(result.clarification));
+        }
         if (result.query_run_id) targets.set(result.query_run_id, card);
         return card;
       });
       if (turn.analysis) section.append(element('h4', 'Pi 分析'), analysisParagraph(turn.analysis, targets));
       if (turn.analysisNotice) section.append(element('h4', '系统说明'), element('p', turn.analysisNotice, 'callout'));
       section.append(...resultNodes);
-      if (!results.length) {
+      if (turn.clarification) section.append(clarification(turn.clarification));
+      if (!cards.has(turn.id)) {
         const runIds = turn.run_ids ?? (turn.run_id ? [turn.run_id] : []);
-        if (turn.clarification) section.append(clarification(turn.clarification));
         if (runIds.length) section.append(button('查看本轮结果', () => readHistory(turn.id)));
-        if (turn.status === 'failed') section.append(element('p', '本轮查询失败。'));
       }
+      if (!results.length && turn.status === 'failed') section.append(element('p', '本轮查询失败。'));
     }
     form.querySelector('button').textContent = turns.length ? '发送追问' : '发送问题';
   }
@@ -202,7 +212,7 @@ export function mountConversation(root, api) {
       turns = detail.turns;
       const last = turns.at(-1);
       if (last && !last.access_revoked) {
-        cards.set(last.id, envelopes(detail.latest_results, detail.latest_result));
+        saveResults(last, detail.latest_results, detail.latest_result);
       }
       draw();
     }
@@ -231,11 +241,11 @@ export function mountConversation(root, api) {
     return busy('正在按当前授权范围读取历史结果…', async () => {
       await loadDetail(picker.value);
       const turn = turns.find(item => item.id === turnId);
-      if (!turn || turn.access_revoked || cards.get(turnId)?.length) return;
+      if (!turn || turn.access_revoked || cards.has(turnId)) return;
       const ids = turn.run_ids ?? (turn.run_id ? [turn.run_id] : []);
       try {
-        const results = await Promise.all(ids.map(run => api(`/teacher-agent/runs/${encodeURIComponent(run)}`)));
-        cards.set(turnId, results);
+        const results = await Promise.all([...new Set(ids)].map(run => api(`/teacher-agent/runs/${encodeURIComponent(run)}`)));
+        saveResults(turn, results);
         draw();
       } catch (error) {
         clearDetail();
@@ -283,7 +293,7 @@ export function mountConversation(root, api) {
         analysisNotice: reply.analysis_notice,
         user_message: input.mode === 'natural_language' ? input.message : reply.turn.user_message};
       turns.push(turn);
-      cards.set(turn.id, envelopes(reply.results, reply.result));
+      saveResults(turn, reply.results, reply.result);
       conversation.lock_version = reply.conversation_lock_version;
       summaries = [{...conversation, turn_count: turn.turn_index, updated_at: turn.created_at},
         ...summaries.filter(item => item.id !== conversation.id)];

@@ -33,7 +33,7 @@ const patch = {operation: 'list', group_by: [], include: ['items', 'sources']};
 const csrfToken = 'fixture-csrf';
 const conversationDetail = '/teacher-agent/conversations/c1';
 
-async function openWorkspace(testContext, role, entry) {
+async function openWorkspace(testContext, role, entry, payloads = {}) {
   const context = await browser.newContext({serviceWorkers: 'block'});
   testContext.after(() => context.close());
   const page = await context.newPage();
@@ -72,9 +72,10 @@ async function openWorkspace(testContext, role, entry) {
       if (faults.failRead) return route.fulfill({status: 404, json: {detail: '记录不可访问'}});
       if (endpoint.includes('/runs/')) return route.fulfill({json: results.flat().find(item => endpoint.endsWith('/' + item.query_run_id))});
       if (endpoint === conversationDetail && faults.detailGate) await faults.detailGate;
-      return route.fulfill({json: {conversation: summary(), turns: turns.map(turn => ({...turn, analysis: null,
+      const detail = {conversation: summary(), turns: turns.map(turn => ({...turn, analysis: null,
         access_revoked: faults.revoked, run_ids: faults.revoked ? [] : turn.run_ids})),
-        latest_result: faults.revoked ? null : results.at(-1)?.at(-1), latest_results: faults.revoked ? [] : results.at(-1)}});
+        latest_result: faults.revoked ? null : results.at(-1)?.at(-1), latest_results: faults.revoked ? [] : results.at(-1)};
+      return route.fulfill({json: payloads.detail?.(detail, results.at(-1)) ?? detail});
     }
     const body = request.postDataJSON();
     writes.push({endpoint, body, headers: request.headers()});
@@ -93,8 +94,9 @@ async function openWorkspace(testContext, role, entry) {
     const reply = {turn, conversation_lock_version: turns.length,
       analysis: turns.length === 1 ? analysis : null, result: batch.at(-1),
       ...(turns.length === 2 ? {analysis_notice: notice} : {results: batch})};
-    receipts.set(key, reply);
-    return faults.loseReply ? route.abort() : route.fulfill({json: reply});
+    const response = payloads.turn?.(reply) ?? reply;
+    receipts.set(key, response);
+    return faults.loseReply ? route.abort() : route.fulfill({json: response});
   });
 
   const panel = page.getByRole('dialog', {name: 'InnoGrad Agent 对话'});
@@ -110,6 +112,139 @@ async function openWorkspace(testContext, role, entry) {
   await waitForWorkspace();
   return {page, panel, openAgent, send, errors, reads, writes, turns, results, faults};
 }
+
+for (const [scenario, resultList, olderRunIds, expected, expectedRuns] of [
+  ['missing result lists fall back to the legacy result', () => undefined, undefined, ['已发表统计'], [secondRun]],
+  ['explicit empty result lists override the legacy result', () => [], [], [], []],
+  ['duplicate runs keep their first card in backend order',
+    ([overview, published]) => [published, overview,
+      {...published, summary: {...published.summary, headline: '重复结果'}}],
+    [secondRun, firstRun, secondRun], ['已发表统计', '总体统计'], [secondRun, firstRun]]
+]) {
+  test(`#39 ${scenario} on submission, reload and older replay`, async testContext => {
+    const {page, panel, openAgent, send, reads, errors} = await openWorkspace(testContext, 'teacher', '/', {
+      turn: reply => reply.turn.turn_index === 1 ? {...reply, results: resultList(reply.results),
+        turn: {...reply.turn, run_id: secondRun, run_ids: undefined}} : reply,
+      detail: detail => {
+        const firstIsLatest = detail.turns.length === 1;
+        return {...detail,
+          latest_results: firstIsLatest ? resultList(detail.latest_results) : detail.latest_results,
+          turns: detail.turns.map(turn => turn.turn_index === 1 ?
+            {...turn, run_id: secondRun, run_ids: firstIsLatest ? undefined : olderRunIds} : turn)};
+      }
+    });
+    const firstTurn = panel.locator('article').first();
+    const secondTurn = panel.getByRole('heading', {name: '第 2 轮', exact: true});
+    const headlines = firstTurn.locator('.agent-result h4');
+    const replay = firstTurn.getByRole('button', {name: '查看本轮结果', exact: true});
+    const visible = async () => ({cards: await headlines.allTextContents(), replay: await replay.count()});
+    await openAgent();
+    await panel.getByLabel('你的问题').fill('查看论文结果');
+    await send('发送问题');
+    await firstTurn.waitFor();
+    const submitted = await visible();
+    await page.reload();
+    await openAgent();
+    await firstTurn.waitFor();
+    const reloaded = await visible();
+    await panel.getByLabel('你的问题').fill('再看后续论文');
+    await send('发送追问');
+    await secondTurn.waitFor();
+    await page.reload();
+    await openAgent();
+    await secondTurn.waitFor();
+    const older = await visible();
+    if (expectedRuns.length) {
+      await replay.click();
+      await firstTurn.getByRole('heading', {name: expected[0], exact: true}).waitFor();
+    }
+    const replayed = await visible();
+    const loaded = {cards: expected, replay: 0};
+    assert.deepEqual({submitted, reloaded, older, replayed}, {
+      submitted: loaded, reloaded: loaded, older: {cards: [], replay: Number(expectedRuns.length > 0)}, replayed: loaded
+    });
+    assert.deepEqual(reads.filter(endpoint => endpoint.includes('/runs/')).sort(),
+      expectedRuns.map(id => '/teacher-agent/runs/' + id).sort());
+    assert.deepEqual(errors, []);
+  });
+}
+
+test('#39 card prompts and authorized turn choices survive reload and disappear on revocation', async testContext => {
+  const studentName = '示例学生';
+  const prompt = {
+    message: '有两位同名学生，请明确选择。',
+    suggestions: ['请补充年级或专业。'],
+    student_candidates: [
+      {student_id: 'stu-1', student_name: studentName, year: '2024', major: '软件工程', degree: 'master'},
+      {student_id: 'stu-2', student_name: studentName, year: '2025', major: '计算机科学', degree: 'doctoral'}
+    ]
+  };
+  const cardPrompt = {message: '论文统计需要补充发表状态。'};
+  const withPrompts = ([overview, published]) => [
+    {...overview, clarification: prompt},
+    {...published, clarification: cardPrompt}
+  ];
+  const {page, panel, openAgent, send, errors, reads, faults} = await openWorkspace(testContext, 'teacher', '/', {
+    turn: reply => ({...reply, turn: {...reply.turn, clarification: prompt}, results: withPrompts(reply.results)}),
+    detail: (detail, batch) => ({...detail,
+      turns: detail.turns.map(turn => ({...turn, clarification: prompt, run_id: secondRun})),
+      latest_result: batch.at(-1), latest_results: withPrompts(batch)})
+  });
+  const expected = [
+    '总体统计', '已发表统计', cardPrompt.message, prompt.message, ...prompt.suggestions,
+    `${studentName} · 2024 · 软件工程`, `${studentName} · 2025 · 计算机科学`
+  ];
+  const visibleCounts = () => Promise.all(expected.map(text => panel.getByText(text).count()));
+  await openAgent();
+  await panel.getByLabel('你的问题').fill(`先统计已发表论文，再看${studentName}的论文`);
+  await send('发送问题');
+  await panel.getByRole('heading', {name: '已发表统计', exact: true}).waitFor();
+  const submitted = await visibleCounts();
+  await page.reload();
+  await openAgent();
+  await panel.getByRole('heading', {name: '已发表统计', exact: true}).waitFor();
+  const reloaded = await visibleCounts();
+
+  faults.revoked = true;
+  await page.reload();
+  await openAgent();
+  await panel.getByText('查询范围已变更，本轮内容不可查看。', {exact: true}).waitFor();
+  assert.deepEqual(await visibleCounts(), expected.map(() => 0));
+  assert.equal(await panel.getByRole('heading', {level: 3}).count(), 0);
+  assert.equal(await panel.getByRole('link').count(), 0);
+  assert.equal(await panel.getByRole('button', {name: '查看本轮结果'}).count(), 0);
+  assert.deepEqual(reads.filter(endpoint => endpoint.includes('/runs/')), []);
+
+  const visibleOnce = expected.map(() => 1);
+  assert.deepEqual({submitted, reloaded}, {submitted: visibleOnce, reloaded: visibleOnce});
+  assert.deepEqual(errors, []);
+});
+
+test('#39 clarification-only legacy envelopes show one prompt and no result cards', async testContext => {
+  const prompt = {message: '请补充要查询的年份。'};
+  const result = {status: 'clarification_needed', query_run_id: null, clarification: prompt};
+  const {page, panel, openAgent, send, errors} = await openWorkspace(testContext, 'teacher', '/', {
+    turn: reply => ({...reply, turn: {...reply.turn, run_ids: []}, result, results: []}),
+    detail: detail => ({...detail, turns: detail.turns.map(turn => ({...turn, run_ids: [], clarification: prompt})),
+      latest_result: result, latest_results: []})
+  });
+  const firstTurn = panel.getByRole('heading', {name: '第 1 轮', exact: true});
+  const counts = async () => [
+    await panel.getByText(prompt.message, {exact: true}).count(),
+    await panel.locator('.agent-result').count()
+  ];
+  await openAgent();
+  await panel.getByLabel('你的问题').fill('查询论文');
+  await send('发送问题');
+  await firstTurn.waitFor();
+  const submitted = await counts();
+  await page.reload();
+  await openAgent();
+  await firstTurn.waitFor();
+  const reloaded = await counts();
+  assert.deepEqual({submitted, reloaded}, {submitted: [1, 0], reloaded: [1, 0]});
+  assert.deepEqual(errors, []);
+});
 
 test('teacher uses the floating workspace Agent for questions, drills, evidence and scope-checked history', async testContext => {
   const {page, panel, openAgent, send, errors, reads, writes, turns, faults} =
