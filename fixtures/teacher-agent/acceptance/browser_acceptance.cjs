@@ -1,0 +1,465 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const {execFileSync} = require("node:child_process");
+const {chromium} = require("playwright");
+
+const {accounts, fixture, studentLogin} = JSON.parse(fs.readFileSync(0, "utf8"));
+const root = process.env.TEST_WORKSPACE_URL;
+const output = process.env.EVIDENCE_DIR;
+const observations = {checks: [], phases: {}, console: [], pageErrors: [], failedRequests: [], httpErrors: []};
+const paths = {
+  turns: /\/api\/v1\/teacher-agent\/conversations\/[^/?]+\/turns$/,
+  detail: /\/api\/v1\/teacher-agent\/conversations\/[^/?]+$/,
+  conversations: /\/api\/v1\/teacher-agent\/conversations$/,
+  runs: /\/api\/v1\/teacher-agent\/runs\/[^/?]+$/,
+};
+const aliases = new Map();
+const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/ig;
+const dateField = {accepted: "acceptance_date", published: "publication_date", submitted: "submission_date"};
+
+function check(name, actual, expected) {
+  try {
+    assert.deepEqual(actual, expected);
+    observations.checks.push({name, pass: true});
+  } catch {
+    observations.checks.push({name, pass: false, actual, expected});
+    console.log(`FAIL ${name}`);
+  }
+}
+
+function save() {
+  const serialized = JSON.stringify(observations, null, 2)
+    .replace(uuid, (id) => {
+      if (!aliases.has(id)) aliases.set(id, `<id-${aliases.size + 1}>`);
+      return aliases.get(id);
+    })
+    .replace(/http:\/\/127\.0\.0\.1:\d+/g, "<local-origin>");
+  fs.writeFileSync(`${output}/browser-observations.json`, `${serialized}\n`);
+}
+
+function responseFor(page, pattern, method = "GET") {
+  return page.waitForResponse((response) => pattern.test(new URL(response.url()).pathname)
+    && response.request().method() === method, {timeout: 150000});
+}
+
+function sorted(values) {
+  return [...values].sort();
+}
+
+function roster(rows) {
+  return sorted(rows.map((row) => JSON.stringify(row)));
+}
+
+function apiRow(item) {
+  return {
+    id: item.submission_id, owner: item.student_id, name: item.student_name, degree: item.degree,
+    title: item.title, status: item.publication_status, date: item.status_date,
+  };
+}
+
+function uiRow({id, owner, name, title}) {
+  return {id, owner, title, name};
+}
+
+function expectedSource(row) {
+  const {id, owner, title, status, date} = row;
+  return {id, owner, title, status, date};
+}
+
+function sourceRow(cardSource) {
+  const {title, publication_status: status, ...fields} =
+    Object.fromEntries(cardSource.field_pointers.map(({field, value}) => [field, value]));
+  return {id: cardSource.submission_id, owner: cardSource.student_id, title, status, date: fields[dateField[status]]};
+}
+
+function filters(spec) {
+  return spec?.filters?.map((item) => `${item.field}:${item.operator}:${item.value}`).sort();
+}
+
+function metrics(card) {
+  return Object.fromEntries((card?.summary?.metrics ?? []).map((item) => [item.key, item.value]));
+}
+
+function groups(card) {
+  return Object.fromEntries((card?.summary?.breakdown ?? []).map((row) => [
+    row.group_key.publication_status, [row.record_count, row.student_count],
+  ]));
+}
+
+async function snapshot(panel) {
+  return {
+    status: await panel.locator('[role="status"]').allTextContents(),
+    turns: await panel.locator(".agent-timeline article").evaluateAll((articles, dateField) => {
+      const linkId = (row, prefix) => row.querySelector(`a[href^="${prefix}"]`)
+        ?.getAttribute("href").slice(prefix.length).split("/")[0];
+      return articles.map((article) => ({
+        heading: article.querySelector("h2")?.textContent,
+        prompt: article.querySelector("h3")?.textContent,
+        text: article.innerText,
+        cards: Array.from(article.querySelectorAll(".agent-result"), (card) => ({
+          id: card.id,
+          heading: card.querySelector("h4")?.textContent,
+          scope: card.querySelector("p")?.textContent,
+          buttons: Array.from(card.querySelectorAll(".actions button"), (node) => node.textContent),
+          metrics: Array.from(card.querySelectorAll(".actions > *"), (node) => node.textContent),
+          rows: Array.from(card.querySelectorAll(":scope > .agent-row"), (row) => ({
+            id: linkId(row, "/api/v1/submissions/"),
+            owner: linkId(row, "/api/v1/students/"),
+            title: row.querySelector("strong")?.textContent,
+            name: row.querySelector("span")?.textContent,
+          })),
+          sources: Array.from(card.querySelectorAll("details"), (row) => {
+            const entries = Array.from(row.querySelectorAll("p"), (field) => field.textContent.split(" · "));
+            const {title, publication_status: status, ...fields} = Object.fromEntries(entries);
+            return {id: linkId(row, "/api/v1/submissions/"), owner: linkId(row, "/api/v1/students/"),
+              title, status, date: fields[dateField[status]]};
+          }),
+          source_titles: Array.from(card.querySelectorAll("details > summary"), (node) => node.textContent),
+        })),
+      }));
+    }, dateField),
+  };
+}
+
+async function capture(response, panel) {
+  return {
+    status: response.status(),
+    request: response.request().postDataJSON(),
+    body: await response.json(),
+    ui: await snapshot(panel),
+  };
+}
+
+async function login(page, username) {
+  const form = page.locator("#auth-form");
+  await form.locator('input[name="username"]').fill(username);
+  await form.locator('input[name="password"]').fill(accounts[username]);
+  const auth = responseFor(page, /\/api\/v1\/auth\/login$/, "POST");
+  await form.getByRole("button", {name: /登录工作台/}).click();
+  const response = await auth;
+  assert.equal(response.status(), 200);
+  const {user} = await response.json();
+  await page.locator(".campus-shell").waitFor();
+  return user.role;
+}
+
+async function logout(page) {
+  await page.getByRole("button", {name: "退出登录", exact: true}).first().click();
+  await page.locator("#auth-form").waitFor();
+}
+
+async function openAgent(page, paperQuery = true) {
+  const launcher = page.getByRole("button", {name: "打开 Agent 助手", exact: true});
+  if (await launcher.count()) await launcher.click();
+  const panel = page.getByRole("dialog", {name: "InnoGrad Agent 对话"});
+  await panel.waitFor();
+  if (paperQuery) await panel.locator("fieldset:enabled").waitFor();
+  return panel;
+}
+
+async function send(page, panel, message, followup = false) {
+  await panel.getByLabel("你的问题").fill(message);
+  const turn = responseFor(page, paths.turns, "POST");
+  await panel.getByRole("button", {name: followup ? "发送追问" : "发送问题", exact: true}).click();
+  const response = await turn;
+  await panel.locator("fieldset:enabled").waitFor();
+  const result = await capture(response, panel);
+  check(`${message} HTTP`, result.status, 200);
+  check(`${message} request`, result.request.input, {mode: "natural_language", message});
+  return result;
+}
+
+async function refresh(page, panel) {
+  const detail = responseFor(page, paths.detail);
+  await panel.getByRole("button", {name: "刷新对话", exact: true}).click();
+  const response = await detail;
+  await panel.locator("fieldset:enabled").waitFor();
+  return capture(response, panel);
+}
+
+async function selectConversation(page, panel, id) {
+  const detail = id ? responseFor(page, paths.detail) : null;
+  await panel.getByLabel("最近对话").selectOption(id);
+  await panel.locator("fieldset:enabled").waitFor();
+  if (detail) return capture(await detail, panel);
+}
+
+function revoke() {
+  const script = `
+import os, sqlite3
+with sqlite3.connect(os.environ["TEST_FIXTURE_DB"]) as conn:
+    rows = conn.execute(
+        "update supervisions set valid_to='2000-01-01T00:00:00+00:00' where teacher_id=?",
+        (os.environ["TEST_TEACHER_ID"],),
+    )
+    assert rows.rowcount == 2, rows.rowcount
+`;
+  execFileSync("python3", ["-c", script], {stdio: "pipe"});
+}
+
+function inspectAggregate(phase, captured, expected, dates, clock) {
+  const cards = captured.body.results ?? [];
+  const card = cards[0];
+  const spec = card?.applied_query;
+  const ui = captured.ui.turns.at(-1)?.cards ?? [];
+  check(`${phase} HTTP card count`, cards.length, 1);
+  check(`${phase} applied spec`, {
+    basis: spec?.basis, operation: spec?.operation, dates: spec?.time_range,
+    group: spec?.group_by, subject: spec?.distinct_subject, filters: filters(spec),
+  }, {
+    basis: "current_effective_archives", operation: "aggregate", dates,
+    group: ["publication_status"], subject: "paper_record", filters: expected.filters,
+  });
+  check(`${phase} group counts (records, students)`, groups(card), expected.groups);
+  check(`${phase} overall record count`, metrics(card).paper_record_count, expected.total);
+  check(`${phase} overall student count`, metrics(card).paper_student_count, expected.students);
+  check(`${phase} API data time`, card?.summary?.data_as_of, clock);
+  check(`${phase} UI cards bind to HTTP runs`, ui.map((entry) => entry.id),
+    cards.map((entry) => `agent-run-${entry.query_run_id}`));
+  check(`${phase} UI data time`, ui[0]?.scope?.includes(`数据时间 ${clock}`), true);
+  check(`${phase} UI overall counts`, ui[0]?.metrics?.filter((label) =>
+    /^(论文申报记录数|涉及学生人数) /.test(label)), [
+    `论文申报记录数 ${expected.total} 条`, `涉及学生人数 ${expected.students} 人`,
+  ]);
+  check(`${phase} UI group rows`, sorted(ui.flatMap((entry) => entry.buttons)
+    .filter((label) => label.includes("条记录 /"))), sorted(Object.entries(expected.groups).map(
+    ([status, [count, students]]) => `${status} · ${count} 条记录 / ${students} 人`,
+  )));
+  const expectedItems = spec?.include?.includes("items") ? expected.rows : [];
+  check(`${phase} UI item rows equal HTTP items`, ui.flatMap((entry) => entry.rows.map(uiRow)),
+    cards.flatMap((entry) => (entry.items ?? []).map((item) => uiRow(apiRow(item)))));
+  check(`${phase} HTTP items match the requested projection`, roster((card?.items ?? []).map(apiRow)),
+    roster(expectedItems.map(apiRowFromFixture)));
+  check(`${phase} UI items match the requested projection`, roster(ui.flatMap((entry) => entry.rows.map(uiRow))),
+    roster(expectedItems.map(uiRow)));
+  const sources = spec?.include?.includes("sources") || expectedItems.length ? expected.rows.map(expectedSource) : [];
+  check(`${phase} HTTP evidence identity, status and date`, roster((card?.sources ?? []).map(sourceRow)), roster(sources));
+  check(`${phase} UI evidence identity, status and date`, roster(ui.flatMap((entry) => entry.sources)), roster(sources));
+  return card;
+}
+
+function apiRowFromFixture({id, owner, name, degree, title, status, date}) {
+  return {id, owner, name, degree, title, status, date};
+}
+
+function inspectDrill(phase, card, ui, expected, dates) {
+  const spec = card?.applied_query;
+  check(`${phase} applied spec`, {
+    basis: spec?.basis, operation: spec?.operation, dates: spec?.time_range,
+    group: spec?.group_by, subject: spec?.distinct_subject, filters: filters(spec),
+  }, {
+    basis: "current_effective_archives", operation: "list", dates,
+    group: [], subject: "paper_record", filters: ["degree:eq:博士", "publication_status:eq:published"],
+  });
+  check(`${phase} explicitly requests items`, spec?.include?.includes("items"), true);
+  check(`${phase} API full roster count`, card?.pagination?.total, expected.length);
+  check(`${phase} API full roster fits on the page`, card?.pagination?.has_more, false);
+  check(`${phase} UI card binds to the drill run`, ui?.id, `agent-run-${card?.query_run_id}`);
+  check(`${phase} API list matches every archived submission`, roster((card?.items ?? []).map(apiRow)),
+    roster(expected.map(apiRowFromFixture)));
+  check(`${phase} API publication date matches every row`, roster((card?.items ?? []).map((item) =>
+    [item.submission_id, item.publication_date])), roster(expected.map(({id, date}) => [id, date])));
+  check(`${phase} UI list matches every archived submission`, roster((ui?.rows ?? []).map(uiRow)),
+    roster(expected.map(uiRow)));
+  check(`${phase} UI entries retain API order`, (ui?.rows ?? []).map(uiRow),
+    (card?.items ?? []).map((item) => uiRow(apiRow(item))));
+}
+
+async function run() {
+  let browser;
+  try {
+    browser = await chromium.launch({headless: true});
+    const context = await browser.newContext({viewport: {width: 1440, height: 1000}, serviceWorkers: "block"});
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    page.on("console", (message) => {
+      if (["error", "warning"].includes(message.type())) observations.console.push({
+        type: message.type(), text: message.text(), url: message.location().url,
+      });
+    });
+    page.on("pageerror", (error) => observations.pageErrors.push(error.message));
+    page.on("requestfailed", (request) => observations.failedRequests.push({
+      url: request.url(), method: request.method(), error: request.failure()?.errorText,
+    }));
+    page.on("response", (response) => {
+      if (response.status() >= 400) observations.httpErrors.push({
+        url: response.url(), status: response.status(), method: response.request().method(),
+      });
+    });
+    const screenshot = async (name, panel, showRows = false) => {
+      const rows = panel.locator(".agent-timeline article").last().locator(".agent-result > .agent-row");
+      if (showRows && await rows.count()) await rows.last().scrollIntoViewIfNeeded();
+      await panel.screenshot({
+        path: `${output}/${name}.png`, mask: [panel.locator(".agent-analysis a")], maskColor: "#6b7280",
+      });
+      save();
+    };
+
+    await page.goto(`${root}/prototype/`);
+    check("teacher login role", await login(page, "teacher"), "teacher");
+    let panel = await openAgent(page);
+    const {dates, clock, overview, doctoral, drill: drillRoster, studentName, namedPapers, published} = fixture;
+
+    const first = await send(page, panel, "今年论文发表情况");
+    observations.phases.overview = first;
+    inspectAggregate("annual overview", first, overview, dates, clock);
+    await screenshot("01-overview", panel, true);
+
+    const followup = await send(page, panel, "只看博士", Boolean(first.body.turn));
+    observations.phases.followup = followup;
+    check("follow-up uses same conversation", followup.body.conversation_id, first.body.conversation_id);
+    check("follow-up uses previous lock version", followup.request.expected_lock_version, first.body.conversation_lock_version);
+    const doctoralCard = inspectAggregate("doctoral follow-up", followup, doctoral, dates, clock);
+    await screenshot("02-doctoral-followup", panel, true);
+
+    const followupCard = doctoralCard
+      ? panel.locator(`#agent-run-${doctoralCard.query_run_id}`)
+      : panel.locator(".agent-result").last();
+    const groupButton = followupCard.getByRole("button", {name: /^published · /});
+    let drill;
+    if (await groupButton.count()) {
+      const drillPending = responseFor(page, paths.turns, "POST");
+      await groupButton.click();
+      const drillResponse = await drillPending;
+      await panel.locator("fieldset:enabled").waitFor();
+      drill = await capture(drillResponse, panel);
+      observations.phases.drill = drill;
+      check("drill HTTP", drill.status, 200);
+      check("drill request mode", drill.request.input.mode, "drilldown_patch");
+      check("drill targets follow-up card", drill.request.input.parent_run_id, doctoralCard?.query_run_id);
+      check("drill uses follow-up lock version", drill.request.expected_lock_version, followup.body.conversation_lock_version);
+      check("drill stays in the conversation", drill.body.conversation_id, first.body.conversation_id);
+      inspectDrill("drill", drill.body.result, drill.ui.turns.at(-1)?.cards[0], drillRoster, dates);
+      await screenshot("03-drill", panel, true);
+    } else {
+      check("doctoral published group has drill button", false, true);
+    }
+
+    const conversationId = await panel.getByLabel("最近对话").inputValue();
+    const reloadPending = responseFor(page, paths.detail);
+    await page.reload();
+    await page.locator(".campus-shell").waitFor();
+    panel = await openAgent(page);
+    const reloaded = await capture(await reloadPending, panel);
+    observations.phases.reload = reloaded;
+    check("browser reload detail HTTP", reloaded.status, 200);
+    check("browser reload restored conversation", reloaded.body.conversation.id, conversationId);
+    check("browser reload restored all three turns", reloaded.body.turns.map((item) => item.turn_index), [1, 2, 3]);
+    if (drill) {
+      check("browser reload restores drill run", reloaded.body.latest_result?.query_run_id, drill.body.result?.query_run_id);
+      inspectDrill("browser reload", reloaded.body.latest_result, reloaded.ui.turns.at(-1)?.cards[0], drillRoster, dates);
+      const refreshed = await refresh(page, panel);
+      observations.phases.refresh = refreshed;
+      check("conversation refresh detail HTTP", refreshed.status, 200);
+      check("conversation refresh keeps the same selection", await panel.getByLabel("最近对话").inputValue(), conversationId);
+      check("conversation refresh returns the same conversation", refreshed.body.conversation?.id, conversationId);
+      check("conversation refresh restores all three turns", refreshed.body.turns.map((item) => item.turn_index), [1, 2, 3]);
+      check("conversation refresh preserves drill run", refreshed.body.latest_result?.query_run_id, drill.body.result?.query_run_id);
+      inspectDrill("conversation refresh", refreshed.body.latest_result, refreshed.ui.turns.at(-1)?.cards[0], drillRoster, dates);
+    }
+    await screenshot("04-browser-reload", panel, true);
+
+    await selectConversation(page, panel, "");
+    const named = await send(page, panel, `请列出${studentName}已发表的论文。`);
+    observations.phases.named = named;
+    const namedCard = named.body.result;
+    const namedId = named.body.conversation_id;
+    check("named query resolves to one synthetic student ID", filters(namedCard?.applied_query), [
+      "publication_status:eq:published", `student_id:eq:${fixture.studentId}`,
+    ]);
+    check("named API records", sorted((namedCard?.items ?? []).map((item) => item.title)), sorted(namedPapers));
+    check("named UI rows", sorted((named.ui.turns.at(-1)?.cards[0]?.rows ?? []).map((row) =>
+      `${row.title}:${row.name}`)), sorted(namedPapers.map((title) => `${title}:${studentName}`)));
+    await screenshot("05-named-query", panel, true);
+
+    revoke();
+    const revoked = await refresh(page, panel);
+    observations.phases.namedAfterRevocation = revoked;
+    check("revoked named detail HTTP", revoked.status, 200);
+    check("named history is revoked", revoked.body.turns.at(-1)?.access_revoked, true);
+    check("revoked named detail has no latest cards", revoked.body.latest_results, []);
+    check("revoked named UI hides cards", revoked.ui.turns.flatMap((turn) => turn.cards), []);
+    check("revoked named UI notice", revoked.ui.turns.at(-1)?.text.includes("查询范围已变更，本轮内容不可查看。"), true);
+    check("revoked named UI hides prompt text", revoked.ui.turns.at(-1)?.text.includes(studentName), false);
+    if (namedCard?.query_run_id) {
+      const reply = await context.request.get(`${root}/api/v1/teacher-agent/runs/${namedCard.query_run_id}`);
+      observations.phases.revokedNamedRun = {status: reply.status(), body: await reply.json()};
+      check("revoked named run HTTP", reply.status(), 404);
+    }
+    await screenshot("06-named-revoked", panel);
+
+    const recomputed = await selectConversation(page, panel, conversationId);
+    observations.phases.aggregateAfterRevocation = recomputed;
+    check("aggregate conversation detail after revocation HTTP", recomputed.status, 200);
+    check("aggregate history remains readable", recomputed.body.turns.map((turn) => turn.access_revoked),
+      recomputed.body.turns.map(() => false));
+    check("aggregate latest result recomputed", recomputed.body.latest_result?.summary.scope_recomputed, true);
+    check("aggregate latest result scope is empty", recomputed.body.latest_result?.summary.scope_student_count, 0);
+    check("aggregate latest result has zero matches", metrics(recomputed.body.latest_result).paper_record_count, 0);
+    check("scope-checked UI has no paper rows", recomputed.ui.turns.flatMap((turn) => turn.cards.flatMap((card) => card.rows)), []);
+    check("scope-checked UI shows recomputation", recomputed.ui.turns.at(-1)?.cards[0]?.scope.includes("已按当前授权范围重新计算"), true);
+    if (doctoralCard?.query_run_id) {
+      const reply = await context.request.get(`${root}/api/v1/teacher-agent/runs/${doctoralCard.query_run_id}`);
+      const body = await reply.json();
+      observations.phases.recomputedGroupRun = {status: reply.status(), body};
+      check("aggregate group run after revocation HTTP", reply.status(), 200);
+      check("aggregate group run recomputed", body.summary?.scope_recomputed, true);
+      check("aggregate group run has no groups", body.summary?.breakdown, []);
+      check("aggregate group run has zero matches", metrics(body).paper_record_count, 0);
+    }
+    await screenshot("07-aggregate-recomputed", panel);
+
+    await logout(page);
+    check("manager login role", await login(page, "manager"), "manager");
+    panel = await openAgent(page);
+    check("manager starts without teacher history", await panel.getByLabel("最近对话").locator("option").count(), 1);
+    const manager = await send(page, panel, "请列出今年已发表的论文。");
+    observations.phases.manager = manager;
+    const managerCard = manager.body.result;
+    check("manager applied publication-date range", managerCard?.applied_query?.time_range, {...dates, field: "publication_date"});
+    check("manager API visible publications", sorted((managerCard?.items ?? []).map((item) => item.title)), sorted(published));
+    check("manager UI visible publications", sorted((manager.ui.turns.at(-1)?.cards[0]?.rows ?? []).map((row) => row.title)),
+      sorted(published));
+    check("manager has distinct conversation", [conversationId, namedId].includes(manager.body.conversation_id), false);
+    await screenshot("08-manager", panel, true);
+
+    await logout(page);
+    check("student login role", await login(page, studentLogin), "student");
+    const studentAgentRequests = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith("/api/v1/teacher-agent/")) studentAgentRequests.push({method: request.method(), pathname});
+    });
+    panel = await openAgent(page, false);
+    const guide = panel.getByText("使用指引模式 · AI 对话服务暂未接入", {exact: true});
+    await guide.waitFor();
+    await panel.getByLabel("输入消息").fill("查询我的个人数据");
+    await panel.getByRole("button", {name: "发送消息", exact: true}).click();
+    const reply = panel.getByText(/无法查询个人数据或执行操作/);
+    await reply.waitFor();
+    observations.phases.student = {
+      guide: await guide.innerText(),
+      reply: await reply.innerText(),
+      teacherPanelCount: await panel.locator("fieldset.agent-panel").count(),
+      teacherNavCount: await page.getByRole("button", {name: "Agent 论文问答", exact: true}).count(),
+      agentRequests: studentAgentRequests,
+    };
+    check("student teacher panel count", observations.phases.student.teacherPanelCount, 0);
+    check("student teacher navigation count", observations.phases.student.teacherNavCount, 0);
+    check("student guide sends no teacher-agent requests", studentAgentRequests, []);
+    check("no uncaught page errors", observations.pageErrors, []);
+    await screenshot("09-student-guide", panel);
+  } catch (error) {
+    observations.harness_error = {name: error.name, message: error.message.replace(/\x1b\[[\d;]*m/g, "")};
+    console.error(`${error.name}: ${observations.harness_error.message}`);
+    process.exitCode = 2;
+  } finally {
+    save();
+    await browser?.close();
+    const failed = observations.checks.filter((item) => !item.pass).length;
+    console.log(`${observations.checks.length} browser checks, ${failed} failed`);
+    if (failed && !process.exitCode) process.exitCode = 1;
+  }
+}
+
+run();
