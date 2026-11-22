@@ -134,7 +134,11 @@ async function capture(response, panel) {
 async function login(page, username) {
   const form = page.locator("#auth-form");
   await form.locator('input[name="username"]').fill(username);
-  await form.locator('input[name="password"]').fill(accounts[username]);
+  try {
+    await form.locator('input[name="password"]').fill(accounts[username]);
+  } catch {
+    throw new Error("Could not fill the login password field");
+  }
   const auth = responseFor(page, /\/api\/v1\/auth\/login$/, "POST");
   await form.getByRole("button", {name: /登录工作台/}).click();
   const response = await auth;
@@ -305,6 +309,7 @@ async function run() {
     observations.phases.overview = first;
     if (invalidReceipt) {
       check("injected receipt returns planner error", first.body.code, "INVALID_PLANNER_OUTPUT");
+      check("no uncaught page errors", observations.pageErrors, []);
       return;
     }
     if (first.status !== 200) return;

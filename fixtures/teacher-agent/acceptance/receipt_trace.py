@@ -414,11 +414,16 @@ def evidence(output, invalid_receipt):
     if failures:
         (output / "failure.json").write_text(json.dumps(failures, indent=2) + "\n")
 
+    query_turns = {outcome["turn_tag"] for _, _, outcome in correlated if outcome["branch"] == "query"}
+    responses = by_event.get("turn_http", [])
+    successful_turns = {row["turn_tag"] for row in responses if row["status"] == 200}
     verification = {
         "ingress": len(by_event.get("mcp_ingress", [])),
         "mcp_responses": len(by_event.get("mcp_response", [])),
         "correlated_receipts": len(correlated),
         "query": sum(outcome["branch"] == "query" for _, _, outcome in correlated),
+        "query_turns": len(query_turns),
+        "provider_requests": len(by_event.get("provider_request", [])),
         "http_200": sum(row["status"] == 200 for row in by_event.get("turn_http", [])),
         "http_502": len(failures),
     }
@@ -439,6 +444,8 @@ def evidence(output, invalid_receipt):
     if invalid_receipt:
         return verification["expected_failure_observed"]
     return (
-        verification["query"] >= 4
+        len(query_turns) == 4 and query_turns <= successful_turns
+        and len(successful_turns) == len(responses) == 5
+        and verification["provider_requests"] > 0
         and verification["correlated_receipts"] == verification["mcp_responses"] == verification["ingress"]
     )
