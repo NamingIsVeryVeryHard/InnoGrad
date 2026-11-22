@@ -117,9 +117,22 @@ def requests_scholarship(message: str) -> bool:
 
 
 def requests_only_published(message: str) -> bool:
+    return _requests_published(message)
+
+
+def _requests_published(message: str, *, allow_combined_statuses: bool = False) -> bool:
     text = re.sub(r"[^\S\n]+", "", message).translate(_SEARCH_QUOTES)
     question = re.sub(r'"[^"]*"', "", _PAPER_SEARCH_TEXT.sub("", text)).strip("。！？.!?；;\n")
-    return bool(re.search(r"已(?:经)?发表|发表[过了]", question)) and not re.search(
+    published = r"已(?:经)?发表|发表[过了]"
+    if allow_combined_statuses:
+        other_status = r"(?<![未没不])(?:已(?:经)?)?(?:录用|投稿)"
+        conjunction = r"(?:和|与|以及|及|、|或者?)"
+        question = re.sub(
+            rf"(?:{other_status}{conjunction})*({published})(?:{conjunction}{other_status})*",
+            r"\1",
+            question,
+        )
+    return bool(re.search(published, question)) and not re.search(
         r"[。！？!?；;\n]|(?<!\d)\.(?!\d)"
         r"|发表状态|发表情况|录用|投稿|未发表|未曾|从未|尚未|还未|没有|并未|还没|没发表|不曾|不含|不包括|排除"
         r"|(?:再|另|同时|并且?)(?:看|列|查|统计|汇总|对比|比较)",
@@ -169,10 +182,10 @@ def _rule_action(request):
     filters = [subject] if selected else []
     summary = "发表情况" in message
     publication_status_grouping = bool(re.search(r"按(?:照)?发表状态|发表状态(?:分组|分布)", message))
-    published_only = requests_only_published(message)
+    includes_published = _requests_published(message, allow_combined_statuses=True)
     if publication_status_grouping:
-        published_only = published_only or requests_only_published(
-            re.sub(r"按(?:照)?发表状态(?:分组|分布)?", "", message)
+        includes_published = includes_published or _requests_published(
+            re.sub(r"按(?:照)?发表状态(?:分组|分布)?", "", message), allow_combined_statuses=True,
         )
     for field_type, terms in (
         (PublicationStatusFilter, (("发表", "published"), ("录用", "accepted"), ("投稿", "submitted"))),
@@ -181,7 +194,7 @@ def _rule_action(request):
         (DegreeFilter, (("硕士", "硕士"), ("博士", "博士"), ("未标注", "未标注"))),
     ):
         values = list(dict.fromkeys(value for term, value in terms
-                                    if term in message and not (term == "发表" and not published_only)))
+                                    if term in message and not (term == "发表" and not includes_published)))
         if values:
             filters.append(field_type(value=values[0]) if len(values) == 1
                            else field_type(operator="in", value=values))
@@ -199,7 +212,7 @@ def _rule_action(request):
     if re.search("人数|多少人|几个人|每人|去重", message):
         changes["distinct_subject"] = "student"
     for term, field in (("学位", "degree"), ("年级", "year"), ("专业", "major"),
-                        ("阶段", "stage"), ("审核状态", "review_status"), ("状态", "publication_status")):
+                        ("阶段", "stage"), ("审核状态", "review_status"), ("(?:发表)?状态", "publication_status")):
         if re.search(f"按(?:照)?{term}|{term}(?:分组|分布)", message):
             changes["group_by"] = [field]
             break

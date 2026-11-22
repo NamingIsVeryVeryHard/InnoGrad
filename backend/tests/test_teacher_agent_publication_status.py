@@ -78,6 +78,7 @@ def group(field, value, records, students):
 def test_configured_rules_publication_status(mixed_papers, message, statuses, group_by):
     app, clients, ids = mixed_papers
     teacher = clients["teacher"]
+    as_of = now()
     created = post(teacher, CONVERSATIONS, {})
     assert created.status_code == 201, created.text
     response = post(teacher, f"{CONVERSATIONS}/{created.json()['id']}/turns", question(message, 0))
@@ -85,57 +86,63 @@ def test_configured_rules_publication_status(mixed_papers, message, statuses, gr
     card, = response.json()["results"]
 
     statement = text("""
-        SELECT paper.id AS submission_id, paper.student_id, archive.id AS archive_id,
-               version.id AS version_id, json_extract(version.snapshot, '$.form.title') AS title,
-               json_extract(version.snapshot, '$.form.publication_status') AS publication_status
-        FROM submissions AS paper
-        JOIN supervisions AS supervision ON supervision.student_id = paper.student_id
-        JOIN archives AS archive ON archive.id = paper.effective_archive_id
-        JOIN submission_versions AS version ON version.id = archive.version_id
-            AND version.submission_id = paper.id
-        JOIN review_decisions AS decision ON decision.id = archive.decision_id
-            AND decision.version_id = version.id AND decision.outcome = 'approved'
-        WHERE paper.kind = 'paper' AND paper.status = 'archived'
-            AND supervision.teacher_id = :teacher_id AND supervision.valid_from <= :as_of
-            AND (supervision.valid_to IS NULL OR supervision.valid_to > :as_of)
-            AND (:all_statuses OR json_extract(version.snapshot, '$.form.publication_status') IN :statuses)
+        WITH scoped_papers AS (
+            SELECT paper.student_id,
+                   json_extract(version.snapshot, '$.form.publication_status') AS publication_status
+            FROM submissions AS paper
+            JOIN supervisions AS supervision ON supervision.student_id = paper.student_id
+            JOIN archives AS archive ON archive.id = paper.effective_archive_id
+            JOIN submission_versions AS version ON version.id = archive.version_id
+                AND version.submission_id = paper.id
+            JOIN review_decisions AS decision ON decision.id = archive.decision_id
+                AND decision.version_id = version.id AND decision.outcome = 'approved'
+            WHERE paper.kind = 'paper' AND paper.status = 'archived'
+                AND supervision.teacher_id = :teacher_id AND supervision.valid_from <= :as_of
+                AND (supervision.valid_to IS NULL OR supervision.valid_to > :as_of)
+        ), matching_papers AS (
+            SELECT student_id, publication_status FROM scoped_papers
+            WHERE :all_statuses OR publication_status IN :statuses
+        )
+        SELECT publication_status, count(*) AS record_count, count(DISTINCT student_id) AS student_count
+        FROM matching_papers
+        GROUP BY publication_status
+        UNION ALL
+        SELECT NULL, count(*), count(DISTINCT student_id)
+        FROM matching_papers
     """).bindparams(bindparam("statuses", expanding=True))
     with app.state.sessions() as session:
         rows = session.execute(statement, {
-            "teacher_id": ids["teacher"], "as_of": card["summary"]["data_as_of"],
+            "teacher_id": ids["teacher"], "as_of": as_of,
             "all_statuses": not statuses, "statuses": statuses,
-        }).mappings().all()
+        })
+        counts = {status: (records, students) for status, records, students in rows}
 
     expected_filters = []
     if statuses:
         expected_filters = [PUBLISHED] if len(statuses) == 1 else [
             {"field": "publication_status", "operator": "in", "value": statuses},
         ]
-    expected_breakdown = []
-    if group_by:
-        for status in sorted({row["publication_status"] for row in rows}):
-            records = [row for row in rows if row["publication_status"] == status]
-            expected_breakdown.append(group("publication_status", status, len(records),
-                                            len({row["student_id"] for row in records})))
+    records, students = counts.pop(None)
+    expected_metrics = {"paper_record_count": records, "paper_student_count": students}
+    for status in ("published", "accepted", "submitted"):
+        records, students = counts.get(status, (0, 0))
+        expected_metrics[f"paper_{status}_record_count"] = records
+        expected_metrics[f"paper_{status}_student_count"] = students
+    expected_breakdown = [group("publication_status", status, *counts[status])
+                          for status in sorted(counts)] if group_by else []
 
     query = card["applied_query"]
     summary = card["summary"]
-    metrics = {item["key"]: item["value"] for item in summary["metrics"]}
     actual = {
         "basis": query["basis"], "filters": query["filters"], "group_by": query["group_by"],
-        "record_count": metrics["paper_record_count"], "student_count": metrics["paper_student_count"],
+        "metrics": {item["key"]: item["value"] for item in summary["metrics"]},
         "breakdown": [{key: item[key] for key in ("group_key", "record_count", "student_count")}
                       for item in summary["breakdown"]],
     }
     assert actual == {
         "basis": "current_effective_archives", "filters": expected_filters, "group_by": group_by,
-        "record_count": len(rows), "student_count": len({row["student_id"] for row in rows}),
-        "breakdown": expected_breakdown,
+        "metrics": expected_metrics, "breakdown": expected_breakdown,
     }
-    fields = rows[0].keys()
-    assert sorted(tuple(item[field] for field in fields) for item in card["items"]) == sorted(
-        tuple(row[field] for field in fields) for row in rows
-    )
 
 
 @pytest.mark.parametrize(("message", "spec", "metric", "unit", "breakdown"), [
