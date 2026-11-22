@@ -70,6 +70,29 @@ def test_rules_keep_previous_personal_filter_as_sentinel_in_planner_input():
     assert result.output.patch.group_by == []
 
 
+def test_rules_grouping_by_publication_status_does_not_filter_to_published():
+    planner = RuleQueryPlanner()
+
+    result = planner.plan(request("按发表状态分组统计论文"))
+
+    assert result.output.action == "replace"
+    assert result.output.spec.filters == []
+    assert result.output.spec.group_by == ["publication_status"]
+
+
+def test_rules_followup_degree_filter_preserves_publication_status_grouping():
+    planner = RuleQueryPlanner()
+    previous = planner.plan(request("今年论文发表情况")).output.spec
+
+    result = planner.plan(request("只看博士", previous))
+
+    assert result.output.action == "patch"
+    assert result.output.patch.set_filters[0].field == "degree"
+    assert result.output.patch.set_filters[0].value == "博士"
+    assert result.output.patch.time_range is None
+    assert result.output.patch.group_by is None
+
+
 def test_rules_emit_only_fixed_unsupported_and_clarification_sentences():
     planner = RuleQueryPlanner()
 
