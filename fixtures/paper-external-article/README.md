@@ -2,6 +2,42 @@
 
 本目录只包含合成演示数据，不能作为真实论文、录用或发表证明。验收时使用隔离数据库和隔离附件目录，避免影响 `D:\InnoGrad` 现有开发数据。
 
+## 隔离启动
+
+在 PowerShell 中打开两个终端。下面的环境变量只对当前终端有效：
+
+```powershell
+cd D:\InnoGrad-integration\frontend
+npm ci
+npm run build
+```
+
+API 终端执行：
+
+```powershell
+cd D:\InnoGrad-integration\backend
+$env:DATABASE_URL = "sqlite:///D:/InnoGrad-integration/backend/runtime/paper-acceptance.db"
+$env:FILE_ROOT = "D:/InnoGrad-integration/backend/runtime/paper-acceptance-files"
+$env:AI_MODE = "rules"
+$env:REVIEW_WORKFLOW = "manual"
+& "D:\InnoGrad\.venv\Scripts\python.exe" -m alembic upgrade head
+& "D:\InnoGrad\.venv\Scripts\python.exe" -m app.seed | Out-File -Encoding utf8 runtime/paper-acceptance-accounts.txt
+& "D:\InnoGrad\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Worker 终端使用相同的四个环境变量：
+
+```powershell
+cd D:\InnoGrad-integration\backend
+$env:DATABASE_URL = "sqlite:///D:/InnoGrad-integration/backend/runtime/paper-acceptance.db"
+$env:FILE_ROOT = "D:/InnoGrad-integration/backend/runtime/paper-acceptance-files"
+$env:AI_MODE = "rules"
+$env:REVIEW_WORKFLOW = "manual"
+& "D:\InnoGrad\.venv\Scripts\python.exe" -m app.worker
+```
+
+服务启动后打开 `http://127.0.0.1:8000/prototype/`。账号密码在 `backend/runtime/paper-acceptance-accounts.txt`，不要使用原开发库中的运行数据验收。
+
 ## 材料
 
 - `valid-submission.json`：完整的论文工作稿表单，包含作者顺序、本人身份、状态、DOI、文章链接和本人贡献。
