@@ -181,10 +181,10 @@ InnoGrad 用于把研究生的培养任务、年度报告、论文成果、证�
 
 完整名单、账号位置和演示步骤见 [模拟学生数据与演示指南](docs/模拟学生数据与演示指南.md)。
 
-生成器是显式执行的开发工具，不会随 API 启动自动运行。在 `backend` 目录执行：
+生成器是显式执行的开发工具，不会随 API 启动自动运行。按第 9.3 节激活 Python 环境，然后在 `backend` 目录执行：
 
 ```bash
-../.venv/bin/python -m app.seed_scenarios --as-of 2026-11-02
+python -m app.seed_scenarios --as-of 2026-11-02
 ```
 
 同一批次再次执行会返回 `already_loaded`，不会覆盖现有材料、重置密码或恢复已操作过的演示状态。日期预警使用真实时钟，因此临近截止案例会随时间自然变为逾期。
@@ -235,7 +235,7 @@ InnoGrad 用于把研究生的培养任务、年度报告、论文成果、证�
 └── deploy/                        部署预留目录，非完整生产部署交付
 ```
 
-前端目前是原生 HTML、CSS 和 JavaScript，不需要 npm 安装或打包即可由后端提供静态资源。`prototype` 是沿用的目录名称，其中页面已经接入真实接口，并非只显示浏览器假数据。
+前端使用 Vite 构建，FastAPI 从 `frontend/dist` 提供静态资源。工作台入口 `/prototype/` 使用真实后端接口。
 
 后端使用 FastAPI、Pydantic、SQLAlchemy 和 Alembic。本地默认采用 SQLite 和文件系统。Worker 是独立 Python 进程；AI 调用在数据库事务外进行，结果写入使用执行令牌与状态检查。当前尚未切换为正式 Redis/Celery 分布式任务系统。
 
@@ -247,13 +247,12 @@ InnoGrad 用于把研究生的培养任务、年度报告、论文成果、证�
 
 [frontend/prototype/启动原型.command](frontend/prototype/启动原型.command)
 
-启动器会检查已有本地服务；需要新启动时执行数据库升级，并启动 API 和 Worker。如果 API 已运行、Worker 无近期心跳，会尝试补启动 Worker。
+启动器调用 `code/start.sh` 构建前端并检查已有本地服务。需要新启动时会升级数据库，再启动 API 和 Worker。如果 API 已运行、Worker 无近期心跳，会尝试补启动 Worker。
 
 也可以在仓库根目录打开终端，执行：
 
 ```bash
-cd backend
-../.venv/bin/python -m app.run_local
+bash code/start.sh
 ```
 
 使用期间保持启动终端开启。通过该终端新启动的进程可用 `Ctrl+C` 停止；已有独立运行的服务不属于该终端时，需要在其原终端停止。
@@ -265,31 +264,41 @@ cd backend
 ### 9.1 环境要求
 
 - Python：项目声明最低为 3.11；现有锁定依赖在 **Python 3.14 / macOS** 上验证过。
-- Node.js：运行前端测试时需要支持 `node --test` 的版本及测试使用的标准 API；日常打开网页不依赖 Node.js 服务。
+- Node.js 20.19 或更高的 20.x 版本，或 22.12 及以上版本。启动脚本使用 npm 安装和构建前端。
 - 一个可用的浏览器。
 
 其他系统或 Python 版本需要自行确认锁定依赖的兼容性。首次下载依赖需要网络。
 
-### 9.2 安装依赖与建立数据库
+### 9.2 首次启动服务
 
 以下命令从仓库根目录开始：
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r backend/requirements.lock.txt
-cd backend
-../.venv/bin/alembic upgrade head
+bash code/start.sh --setup
 ```
+
+脚本安装锁定的 Python 和前端依赖，构建前端，升级数据库，并启动 API 和 Worker。保持终端开启。后续启动执行 `bash code/start.sh`。
 
 ### 9.3 仅在空开发库初始化账号一次
 
-以下命令仍在 `backend` 目录执行。使用不可覆盖重定向，避免误清空已有密码文件：
+首次启动后打开另一个终端。从仓库根目录激活启动脚本使用的 Python 环境：
 
 ```bash
+if [ -x .venv/bin/python ]; then
+  source .venv/bin/activate
+else
+  source backend/.venv/bin/activate
+fi
+```
+
+初始化账号时使用不可覆盖重定向，避免误清空已有密码文件：
+
+```bash
+cd backend
 (
   umask 077
   set -o noclobber
-  ../.venv/bin/python -m app.seed > runtime/demo-accounts.txt
+  python -m app.seed > runtime/demo-accounts.txt
 )
 ```
 
@@ -297,24 +306,24 @@ cd backend
 
 需要完整演示数据时，再运行第 6 节的 `app.seed_scenarios`。
 
-### 9.4 启动服务
+在浏览器打开 `http://127.0.0.1:8000/prototype/`，使用生成的导师账号 `teacher` 登录。
 
-继续在 `backend` 目录执行：
+### 9.4 手动运行 API 和 Worker
+
+安装依赖并升级数据库后，可以分别运行 API 和 Worker。如果启动脚本仍在运行，先按 `Ctrl+C` 停止服务。在两个终端中分别从仓库根目录激活第 9.3 节的 Python 环境，再执行以下命令：
 
 ```bash
-../.venv/bin/python -m app.run_local
+# 终端一：从仓库根目录构建前端，再启动 API
+cd frontend
+npm run build
+cd ../backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-如需分别观察 API 和 Worker 日志，可在两个终端中手动运行：
-
 ```bash
-# 终端一：工作目录为 backend
-../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-```bash
-# 终端二：工作目录同样为 backend
-../.venv/bin/python -m app.worker
+# 终端二：从仓库根目录启动 Worker
+cd backend
+python -m app.worker
 ```
 
 ## 10. Agent 与环境配置
@@ -428,7 +437,7 @@ node --test frontend/prototype/tests/model.test.cjs
 
 | 问题 | 核对方法 |
 | --- | --- |
-| 打不开网页 | 先运行启动器，确认 API 终端没有退出，访问地址为 `http://127.0.0.1:8000/prototype/` |
+| `/prototype/` 返回 404 | 如果 API 已运行，先在原终端停止它。回到仓库根目录执行 `bash code/start.sh`。首次安装使用 `bash code/start.sh --setup` |
 | 只看到学生入口 | 当前登录的是学生账号；退出后用 `teacher` 或 `manager` 登录同一入口 |
 | 学生管理没有新增／导入按钮 | 普通导师只有查看权限，需要使用 `manager` |
 | Agent 显示待配置 | 核对 `.env` 中的模式、服务地址及必要模型名，配置后重启两个进程 |

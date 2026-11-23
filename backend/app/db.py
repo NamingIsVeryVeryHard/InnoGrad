@@ -2,7 +2,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 import os
-from sqlalchemy import create_engine, event, String, Text, Integer, ForeignKey, UniqueConstraint, JSON
+from sqlalchemy import (
+    create_engine,
+    event,
+    String,
+    Text,
+    Integer,
+    ForeignKey,
+    UniqueConstraint,
+    JSON,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -71,7 +80,9 @@ class Submission(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     student_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     kind: Mapped[str] = mapped_column(String(30))
-    task_id: Mapped[str | None] = mapped_column(ForeignKey("cultivation_tasks.id"), nullable=True)
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cultivation_tasks.id"), nullable=True
+    )
     reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(30), default="draft")
     draft: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -107,10 +118,16 @@ class File(Base):
 class Decision(Base):
     __tablename__ = "review_decisions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    version_id: Mapped[str] = mapped_column(ForeignKey("submission_versions.id"), unique=True)
+    version_id: Mapped[str] = mapped_column(
+        ForeignKey("submission_versions.id"), unique=True
+    )
     reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    actor_type: Mapped[str] = mapped_column(String(20), default="human", server_default="human")
-    ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("ai_jobs.id"), nullable=True)
+    actor_type: Mapped[str] = mapped_column(
+        String(20), default="human", server_default="human"
+    )
+    ai_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("ai_jobs.id"), nullable=True
+    )
     outcome: Mapped[str] = mapped_column(String(30))
     opinion: Mapped[str] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
@@ -119,8 +136,12 @@ class Decision(Base):
 class Archive(Base):
     __tablename__ = "archives"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    version_id: Mapped[str] = mapped_column(ForeignKey("submission_versions.id"), unique=True)
-    decision_id: Mapped[str] = mapped_column(ForeignKey("review_decisions.id"), unique=True)
+    version_id: Mapped[str] = mapped_column(
+        ForeignKey("submission_versions.id"), unique=True
+    )
+    decision_id: Mapped[str] = mapped_column(
+        ForeignKey("review_decisions.id"), unique=True
+    )
     created_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
@@ -157,12 +178,19 @@ class Audit(Base):
 def connect(url=None):
     Path("runtime").mkdir(exist_ok=True)
     url = url or os.getenv("DATABASE_URL", "sqlite:///runtime/development.db")
-    engine = create_engine(url, connect_args={"check_same_thread": False, "timeout": 20} if url.startswith("sqlite") else {})
+    engine = create_engine(
+        url,
+        connect_args={"check_same_thread": False, "timeout": 20}
+        if url.startswith("sqlite")
+        else {},
+    )
     if url.startswith("sqlite"):
+
         @event.listens_for(engine, "connect")
         def sqlite_setup(conn, _):
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute("PRAGMA journal_mode=WAL")
+
     return engine, sessionmaker(engine, expire_on_commit=False)
 
 
@@ -175,7 +203,9 @@ class Correction(Base):
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="pending")
     opinion: Mapped[str | None] = mapped_column(Text, nullable=True)
-    handled_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    handled_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
@@ -230,69 +260,75 @@ class PortraitSnapshot(Base):
 
 
 class StudentProfile(Base):
-    __tablename__ = 'student_profiles'
-    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    __tablename__ = "student_profiles"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
     number: Mapped[str] = mapped_column(String(100), unique=True)
     year: Mapped[str] = mapped_column(String(30))
-    degree: Mapped[str] = mapped_column(String(20), default='未标注', server_default='未标注')
+    degree: Mapped[str] = mapped_column(
+        String(20), default="未标注", server_default="未标注"
+    )
     major: Mapped[str] = mapped_column(String(100))
     direction: Mapped[str] = mapped_column(String(200))
-    stage: Mapped[str] = mapped_column(String(60), default='课程学习')
+    stage: Mapped[str] = mapped_column(String(60), default="课程学习")
 
 
 class RuleTemplate(Base):
-    __tablename__ = 'rule_templates'
+    __tablename__ = "rule_templates"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
     requirements: Mapped[dict] = mapped_column(JSON)
-    created_by: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
 class StudentImport(Base):
-    __tablename__ = 'student_imports'
+    __tablename__ = "student_imports"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    created_by: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     rows: Mapped[list] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(30), default='preview')
+    status: Mapped[str] = mapped_column(String(30), default="preview")
     created_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
 class FollowUp(Base):
-    __tablename__ = 'follow_ups'
+    __tablename__ = "follow_ups"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    student_id: Mapped[str] = mapped_column(ForeignKey('users.id'))
-    task_id: Mapped[str | None] = mapped_column(ForeignKey('cultivation_tasks.id'), nullable=True)
-    created_by: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    student_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cultivation_tasks.id"), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     title: Mapped[str] = mapped_column(String(200))
     text: Mapped[str] = mapped_column(Text)
-    note: Mapped[str] = mapped_column(Text, default='')
-    status: Mapped[str] = mapped_column(String(30), default='open')
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(30), default="open")
     lock_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
     updated_at: Mapped[str] = mapped_column(String(40), default=now)
 
 
 class WorkerHeartbeat(Base):
-    __tablename__ = 'worker_heartbeats'
+    __tablename__ = "worker_heartbeats"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     last_seen: Mapped[str] = mapped_column(String(40))
 
 
 class GrowthEntry(Base):
-    __tablename__ = 'growth_entries'
+    __tablename__ = "growth_entries"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
-    student_id: Mapped[str] = mapped_column(ForeignKey('users.id'))
-    created_by: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    student_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     kind: Mapped[str] = mapped_column(String(30))
     title: Mapped[str] = mapped_column(String(200))
     body: Mapped[str] = mapped_column(Text)
     period: Mapped[str] = mapped_column(String(80))
     dimension: Mapped[str | None] = mapped_column(String(30), nullable=True)
     due_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    status: Mapped[str] = mapped_column(String(30), default='planned')
-    source_version_id: Mapped[str | None] = mapped_column(ForeignKey('submission_versions.id'), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="planned")
+    source_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_versions.id"), nullable=True
+    )
     source_field: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
     lock_version: Mapped[int] = mapped_column(Integer, default=0)
@@ -301,12 +337,59 @@ class GrowthEntry(Base):
 
 
 class WarningAction(Base):
-    __tablename__ = 'warning_actions'
+    __tablename__ = "warning_actions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     warning_key: Mapped[str] = mapped_column(String(64), index=True)
-    student_id: Mapped[str] = mapped_column(ForeignKey('users.id'))
-    actor_id: Mapped[str] = mapped_column(ForeignKey('users.id'))
+    student_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(30))
     note: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String(40), default=now)
+
+
+from sqlalchemy import Index, text
+
+
+class QueryConversation(Base):
+    __tablename__ = "query_conversation"
+    __table_args__ = (Index("ix_query_conversation_teacher_updated", "teacher_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(200), default="新对话", server_default="新对话")
+    active_domain: Mapped[str] = mapped_column(String(30), default="paper", server_default="paper")
+    active_query_spec: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    turns_json: Mapped[list[dict]] = mapped_column(JSON(none_as_null=True), default=list, server_default=text("'[]'"))
+    status: Mapped[str] = mapped_column(String(30), default="active", server_default="active")
+    scope_digest_snapshot: Mapped[str] = mapped_column(String(64))
+    scope_size_snapshot: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    turn_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    lock_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[str] = mapped_column(String(40), default=now)
+    updated_at: Mapped[str] = mapped_column(String(40), default=now)
+
+
+class QueryRun(Base):
+    __tablename__ = "query_run"
+    __table_args__ = (
+        Index("ix_query_run_teacher_created", "teacher_id", "created_at"),
+        Index("ix_query_run_turn_id", "turn_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    conversation_id: Mapped[str | None] = mapped_column(ForeignKey("query_conversation.id"))
+    turn_id: Mapped[str | None] = mapped_column(String(36))
+    parent_run_id: Mapped[str | None] = mapped_column(ForeignKey("query_run.id"))
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    domain: Mapped[str] = mapped_column(String(30))
+    operation: Mapped[str] = mapped_column(String(30))
+    basis: Mapped[str] = mapped_column(String(40))
+    applied_query: Mapped[dict] = mapped_column(JSON)
+    scope_digest: Mapped[str] = mapped_column(String(64))
+    scope_size: Mapped[int] = mapped_column(Integer)
+    data_as_of: Mapped[str] = mapped_column(String(40))
+    result_version: Mapped[str] = mapped_column(String(40))
+    metric_receipt: Mapped[dict[str, int]] = mapped_column(JSON)
+    source_refs: Mapped[list[dict[str, str | None]]] = mapped_column(JSON)
     created_at: Mapped[str] = mapped_column(String(40), default=now)
