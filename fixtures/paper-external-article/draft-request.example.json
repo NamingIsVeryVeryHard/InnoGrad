@@ -1,0 +1,24 @@
+{
+  "expected_lock_version": 0,
+  "form": {
+    "paper_metadata_version": 2,
+    "title": "合成论文：研究生培养材料追溯方法",
+    "authors": [
+      {"name": "演示学生一", "order": 1},
+      {"name": "合成作者二", "order": 2},
+      {"name": "合成作者三", "order": 3}
+    ],
+    "author_order": 1,
+    "author_identity": "first_author",
+    "publication_status": "accepted",
+    "submission_date": "2026-10-01",
+    "acceptance_date": "2026-11-12",
+    "publication_date": "",
+    "journal": "合成学术交流期刊",
+    "doi": "10.1234/innograd.synthetic.2026.001",
+    "article_url": "https://example.org/innograd/synthetic-2026-001",
+    "contribution": "负责实验设计、数据分析和论文初稿撰写。"
+  },
+  "file_ids": ["这里填第一个文件 ID", "这里填第二个文件 ID"],
+  "reference_ids": []
+}

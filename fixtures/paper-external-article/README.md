@@ -41,6 +41,8 @@ $env:REVIEW_WORKFLOW = "manual"
 ## 材料
 
 - `valid-submission.json`：完整的论文工作稿表单，包含作者顺序、本人身份、状态、DOI、文章链接和本人贡献。
+- `create-submission.json`：新建论文工作稿接口的请求体，只包含 `kind` 和 `reviewer_id`。
+- `draft-request.example.json`：保存论文草稿接口的请求体，论文字段必须放在 `form` 内。
 - `invalid-forms.json`：缺少 DOI/链接、作者顺序不存在和无效 DOI 的负例。
 - `legacy-submission.json`：旧版本论文表单，用于确认历史数据仍能读取。
 - `proof-author-order.pdf`：合成作者列表与本人位次证明。
@@ -49,7 +51,7 @@ $env:REVIEW_WORKFLOW = "manual"
 ## 推荐验收顺序
 
 1. 使用新的临时数据库初始化账号，登录 `student1`。
-2. 创建论文成果，按 `valid-submission.json` 填写表单。
+2. 点击“新建论文成果”，先只选择复核教师并创建工作稿，再进入“继续填写”。不要把 `valid-submission.json` 直接提交到新建工作稿接口。
 3. 同时上传两个 PDF 作为证明附件，保存草稿后刷新页面，确认字段和附件仍在。
 4. 正式提交，确认状态变为“待 Agent 审核”，生成一个新的版本号。
 5. 用教师账号打开论文详情，确认题名、作者顺序、本人身份、DOI、文章链接和两个证明附件可追溯。
@@ -67,6 +69,13 @@ $env:REVIEW_WORKFLOW = "manual"
 - 教师 Agent 结果包含作者、本人身份、DOI、文章链接和来源指针。
 - 任一负例不会创建提交版本，附件和草稿不被错误删除。
 - 学生之间不能读取对方的提交或证明附件。
+
+如果使用 Swagger 或脚本验收，接口顺序是：
+
+1. `POST /api/v1/submissions` 使用 `create-submission.json`。
+2. 上传两个附件，记录返回的 `file_id`。
+3. `PATCH /api/v1/submissions/{id}/draft` 使用 `draft-request.example.json`，把 `reviewer_id` 替换成实际用户 ID，把 `file_ids` 替换成两个上传结果。
+4. `POST /api/v1/submissions/{id}/submit` 只发送 `{ "expected_lock_version": 1 }`。
 
 自动回归命令：
 
