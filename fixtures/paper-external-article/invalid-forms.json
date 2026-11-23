@@ -1,0 +1,43 @@
+[
+  {
+    "case": "missing_external_reference",
+    "form": {
+      "paper_metadata_version": 2,
+      "title": "合成论文负例一",
+      "authors": [{"name": "演示学生一", "order": 1}],
+      "author_order": 1,
+      "author_identity": "first_author",
+      "publication_status": "submitted",
+      "submission_date": "2026-11-20",
+      "contribution": "合成数据"
+    }
+  },
+  {
+    "case": "author_order_not_found",
+    "form": {
+      "paper_metadata_version": 2,
+      "title": "合成论文负例二",
+      "authors": [{"name": "演示学生一", "order": 1}],
+      "author_order": 2,
+      "author_identity": "first_author",
+      "publication_status": "submitted",
+      "submission_date": "2026-11-20",
+      "doi": "10.1234/innograd.synthetic.2026.002",
+      "contribution": "合成数据"
+    }
+  },
+  {
+    "case": "invalid_doi",
+    "form": {
+      "paper_metadata_version": 2,
+      "title": "合成论文负例三",
+      "authors": [{"name": "演示学生一", "order": 1}],
+      "author_order": 1,
+      "author_identity": "first_author",
+      "publication_status": "submitted",
+      "submission_date": "2026-11-20",
+      "doi": "doi-is-invalid",
+      "contribution": "合成数据"
+    }
+  }
+]
