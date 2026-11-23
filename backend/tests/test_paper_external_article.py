@@ -38,6 +38,7 @@ def test_paper_submission_freezes_external_article_metadata(env):
                 "contribution": "实验与分析",
             },
             "file_ids": [uploaded.json()["id"]],
+            "file_roles": {uploaded.json()["id"]: "author_order_proof"},
         },
     )
     assert draft.status_code == 200, draft.text
@@ -51,6 +52,8 @@ def test_paper_submission_freezes_external_article_metadata(env):
     assert snapshot["form"]["authors"][1]["is_self"] is True
     assert snapshot["form"]["doi"] == "10.1234/example"
     assert len(snapshot["form"]["external_article_key"]) == 64
+    assert snapshot["file_roles"][uploaded.json()["id"]] == "author_order_proof"
+    assert clients["student1"].get(f"/api/v1/submissions/{ident}").json()["files"][0]["role"] == "author_order_proof"
 
 
 def test_canonicalize_external_article_metadata():

@@ -68,6 +68,16 @@ const statusLabels = {
   },
   badge = (s) =>
     `<span class="badge ${{ pending: "amber", returned: "red", draft: "gray", archived: "" }[s] || ""}">${statusLabels[s] || esc(s)}</span>`;
+const paperFileRoleLabels = {
+  paper_fulltext: "论文全文",
+  submission_proof: "投稿证明",
+  author_order_proof: "作者顺位证明",
+  acceptance_proof: "录用证明",
+  publication_proof: "发表证明",
+  article_page: "文章页面或 DOI 证明",
+  contribution_proof: "本人贡献证明",
+  other_proof: "其他证明材料",
+};
 let me = null,
   role = "",
   csrf = "",
@@ -972,13 +982,13 @@ async function showRecord(record) {
     };
   modal(
     r.kind === "paper" ? "论文成果 · 材料详情" : "年度培养 · 材料详情",
-    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${r.kind === "paper" ? "论文成果" : "年度报告"}</dd></div><div><dt>当前状态</dt><dd>${r.kind === "paper" ? { submitted: "已投稿", accepted: "已录用", published: "已发表" }[r.publication] : esc(state.tasks.find((t) => t.id === r.task)?.period || "—")}</dd></div></dl><h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(ref.form.title)} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
+    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${r.kind === "paper" ? "论文成果" : "年度报告"}</dd></div><div><dt>当前状态</dt><dd>${r.kind === "paper" ? { submitted: "已投稿", accepted: "已录用", published: "已发表" }[r.publication] : esc(state.tasks.find((t) => t.id === r.task)?.period || "—")}</dd></div></dl><h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(ref.form.title)} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
       ...r.versions,
     ]
       .reverse()
       .map(
         (v) =>
-          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary><pre>${esc(JSON.stringify(v.snapshot.form, null, 2))}</pre>${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)}</button><br>`).join("")}</details>`,
+          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary><pre>${esc(JSON.stringify(v.snapshot.form, null, 2))}</pre>${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)} · ${esc(paperFileRoleLabels[raw.files.find((f) => f.id === fid)?.role] || "其他证明材料")}</button><br>`).join("")}</details>`,
       )
       .join("")}</div>`,
     `${editable ? btn("编辑材料", "edit:" + r.id, true) : ""}${mine && r.status === "archived" && r.kind === "paper" ? btn("更新论文进展", "update:" + r.id) : ""}${r.effective ? btn("生成归档导出", "export-record:" + r.id) : ""}${r.status === "archived" ? btn("申请更正", "correct:" + r.id) : ""}${role === "manager" && ["pending", "returned"].includes(r.status) ? btn("调整复核教师", "reassign:" + r.id) : ""}<button class="btn" data-close>关闭</button>`,
@@ -1001,6 +1011,7 @@ async function editRecord(record) {
     files = [
       ...(raw.files || []).filter((f) => raw.draft.file_ids.includes(f.id)),
     ],
+    fileRoles = { ...(raw.draft.file_roles || {}) },
     uploading = false;
   modal(
     "编辑" + (isPaper ? "论文成果" : "年度报告"),
@@ -1044,9 +1055,16 @@ async function editRecord(record) {
     $("#attached").innerHTML = files
       .map(
         (f) =>
-          `<div class="file"><span>${esc(f.name)}</span><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
+          `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(paperFileRoleLabels).map(([value, label]) => `<option value="${value}" ${fileRoles[f.id] === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
       )
       .join("");
+    $("#attached")
+      .querySelectorAll("[data-role]")
+      .forEach((select) => {
+        select.onchange = () => {
+          fileRoles[select.dataset.role] = select.value;
+        };
+      });
     $("#attached")
       .querySelectorAll("[data-remove]")
       .forEach(
@@ -1105,6 +1123,9 @@ async function editRecord(record) {
         expected_lock_version: lock,
         form: values,
         file_ids: files.map((f) => f.id),
+        file_roles: Object.fromEntries(
+          files.map((f) => [f.id, fileRoles[f.id] || "other_proof"]),
+        ),
         reference_ids: data.getAll("reference_ids"),
       });
       lock = result.lock_version;
