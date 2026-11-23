@@ -12,6 +12,8 @@ const $ = (s) => document.querySelector(s),
           "'": "&#39;",
         })[c],
     );
+const authorNames = (authors) =>
+  Array.isArray(authors) ? authors.sort((a, b) => a.order - b.order).map((a) => a.name).join("\n") : String(authors || "");
 const icons = {
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   users:
@@ -753,9 +755,13 @@ function normalize(r) {
     summary: form.summary || "",
     plan: form.plan || "",
     contribution: form.contribution || "",
+    authors: form.authors || [],
+    authorOrder: form.author_order || "",
+    authorIdentity: form.author_identity || "",
     publication: form.publication_status || "submitted",
     journal: form.journal || "",
     doi: form.doi || "",
+    articleUrl: form.article_url || "",
     reviewer: personName(r.reviewer_id),
     effective,
     updated: v?.created_at || r.created_at,
@@ -1022,7 +1028,7 @@ async function editRecord(record) {
             )
             .join(
               "",
-            )}<label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}"></label>${area("本人贡献", "contribution", form.contribution || "")}`
+            )}<label class="full">作者列表（按作者顺序，每行一名）<textarea name="authors" required rows="3" placeholder="张三\n李四">${esc(authorNames(form.authors))}</textarea></label><label>本人作者顺序<input name="author_order" type="number" min="1" required value="${esc(form.author_order || "")}"></label><label>本人身份<select name="author_identity" required><option value="">请选择</option>${[["first_author", "第一作者"], ["co_first_author", "共同第一作者"], ["corresponding_author", "通讯作者"], ["other_author", "其他作者"]].map(([v, t]) => `<option value="${v}" ${form.author_identity === v ? "selected" : ""}>${t}</option>`).join("")}</select></label><label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}" placeholder="10.xxxx/xxxxx"></label><label>文章链接（DOI 或链接至少填一项）<input name="article_url" type="url" value="${esc(form.article_url || "")}" placeholder="https://..."></label>${area("本人贡献", "contribution", form.contribution || "")}`
         : `${task?.requirements.instructions ? `<div class="full callout">${esc(task.requirements.instructions)}</div>` : ""}${area("研究进展与总结", "summary", form.summary || "")}${area("下一阶段计划" + (required.includes("plan") ? "（必填）" : "（选填）"), "plan", form.plan || "", required.includes("plan"))}<div class="full"><p>引用本人已提交论文（待核验成果会明确标记）</p><div class="checklist">${
             records()
               .filter((p) => p.kind === "paper" && p.raw.current_version_id)
@@ -1086,6 +1092,15 @@ async function editRecord(record) {
       const data = new FormData(e.target),
         values = Object.fromEntries(data);
       delete values.reference_ids;
+      if (isPaper) {
+        values.paper_metadata_version = 2;
+        values.authors = String(values.authors || "")
+          .split(/[\r\n,，、]+/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name, index) => ({ name, order: index + 1 }));
+        values.author_order = Number(values.author_order);
+      }
       const result = await patch("/submissions/" + raw.id + "/draft", {
         expected_lock_version: lock,
         form: values,

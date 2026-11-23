@@ -5,6 +5,7 @@ from datetime import datetime
 from itertools import groupby
 from operator import attrgetter
 from typing import get_args
+import json
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, aliased, load_only
@@ -133,10 +134,13 @@ def _paper(row, student, basis):
         return None
     dates = {field: _form_date(form.get(field)) for field in PAPER_STATUS_DATE_FIELD.values()}
     text = {field: form[field] if isinstance(form.get(field), str) else ""
-            for field in ("title", "journal", "doi", "contribution")}
+            for field in ("title", "journal", "doi", "article_url", "author_identity", "external_article_key", "contribution")}
+    authors = form.get("authors") if isinstance(form.get("authors"), list) else []
+    author_order = form.get("author_order") if isinstance(form.get("author_order"), int) else None
     sub = row.Submission
     item = PaperRecordItem(
-        **student, **text, **dates, publication_status=status, status_date=dates[PAPER_STATUS_DATE_FIELD[status]],
+        **student, **text, **dates, authors=authors, author_order=author_order,
+        publication_status=status, status_date=dates[PAPER_STATUS_DATE_FIELD[status]],
         submission_id=sub.id, version_id=row.version_id, version_number=row.number, archive_id=row.archive_id,
         review_status="archived" if basis == "current_effective_archives" else sub.status,
         review_actor_type=row.actor_type, archived_at=row.archived_at, simulation=bool(row.simulation),
@@ -288,10 +292,17 @@ def _sources(session, papers):
                 verification = "agent_approved_submission"
             else:
                 verification = "human_approved_submission"
-        pointers = [FieldPointer(field=field, pointer=f"/form/{field}", value=paper.form[field],
-                                 verification=verification)
-                    for field in (*FIELDS["paper"], "journal", "doi")
-                    if isinstance(paper.form.get(field), str) and paper.form[field].strip()]
+        pointers = []
+        for field in (*FIELDS["paper"], "journal", "doi", "article_url", "authors", "author_order", "author_identity", "external_article_key"):
+            value = paper.form.get(field)
+            if isinstance(value, str) and value.strip():
+                rendered = value
+            elif isinstance(value, (list, dict)) and value:
+                rendered = json.dumps(value, ensure_ascii=False, sort_keys=True)
+            else:
+                continue
+            pointers.append(FieldPointer(field=field, pointer=f"/form/{field}", value=rendered,
+                                         verification=verification))
         sources[item.version_id] = EvidenceSource(
             source_id=item.version_id, kind="paper", student_id=item.student_id, version_id=item.version_id,
             submission_id=item.submission_id, version_number=item.version_number, archive_id=item.archive_id,
@@ -337,7 +348,8 @@ def _portrait(session, student, papers, sources, annual, pending):
         records.append(PortraitPaperRecord(
             **source.model_dump(include=set(PortraitPaperRecord.model_fields)),
             **paper.item.model_dump(include={"title", "publication_status", "status_date", "journal",
-                                             "doi", "contribution"}),
+                                             "doi", "article_url", "authors", "author_order", "author_identity",
+                                             "external_article_key", "contribution"}),
         ))
     return StudentPortraitPanel(**student, teachers=[TeacherRef(id=row.id, name=row.name) for row in teachers],
                                 counts=PortraitCounts(paper_records=len(records), annual_records=annual),

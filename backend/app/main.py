@@ -46,6 +46,7 @@ from .db import (
     uid,
     now,
 )
+from .paper_form import canonicalize_paper_form
 
 
 def password_hash(password, salt=None):
@@ -737,6 +738,10 @@ def create_app(database_url=None, storage=None):
         ):
             error(422, "缺少必填信息：" + "、".join(required))
         if sub.kind == "paper":
+            try:
+                form = canonicalize_paper_form(form)
+            except ValueError as exc:
+                error(422, str(exc))
             state = form["publication_status"]
             if state not in ("submitted", "accepted", "published"):
                 error(422, "论文状态无效")

@@ -762,6 +762,12 @@ class ResultSummary(_StrictModel):
     notice: str
 
 
+class PaperAuthor(_StrictModel):
+    name: str
+    order: int = Field(ge=1)
+    is_self: bool = False
+
+
 class PaperRecordItem(_StrictModel):
     item_kind: Literal["paper_record"] = "paper_record"
     submission_id: str
@@ -784,6 +790,11 @@ class PaperRecordItem(_StrictModel):
     publication_date: str | None = Field(default=None, pattern=ISO_DATE_PATTERN)
     journal: str = ""
     doi: str = ""
+    article_url: str = ""
+    authors: list[PaperAuthor] = Field(default_factory=list)
+    author_order: int | None = Field(default=None, ge=1)
+    author_identity: str = ""
+    external_article_key: str = ""
     contribution: str = ""
     review_status: VisibleReviewStatus
     review_actor_type: ReviewActorType | None = None
@@ -849,6 +860,11 @@ class PortraitPaperRecord(_StrictModel):
     status_date: str | None = Field(default=None, pattern=ISO_DATE_PATTERN)
     journal: str = ""
     doi: str = ""
+    article_url: str = ""
+    authors: list[PaperAuthor] = Field(default_factory=list)
+    author_order: int | None = Field(default=None, ge=1)
+    author_identity: str = ""
+    external_article_key: str = ""
     contribution: str = ""
     simulation: bool = False
     field_pointers: list[FieldPointer] = Field(default_factory=list)
