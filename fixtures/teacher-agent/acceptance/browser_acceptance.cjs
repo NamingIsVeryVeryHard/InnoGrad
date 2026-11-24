@@ -397,7 +397,12 @@ async function run() {
     await screenshot("02-doctoral-followup", panel, true);
 
     const doctoralGuest = await visualGuest(panel.locator(".teacher-turn").last());
-    const groupButton = doctoralGuest.getByRole("button", {name: /已发表/}).first();
+    let groupButton = doctoralGuest.getByRole("button", {name: /已发表/}).first();
+    if (!await groupButton.count()) {
+      const publishedLabel = doctoralGuest.getByText("已发表", {exact: true}).first();
+      const publishedRow = publishedLabel.locator("xpath=ancestor::*[.//button][1]");
+      groupButton = publishedRow.getByRole("button", {name: /查看|明细|论文/}).first();
+    }
     let drill;
     if (await groupButton.count()) {
       const drillPending = responseFor(page, paths.turns, "POST");
