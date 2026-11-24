@@ -601,8 +601,8 @@ def score_rules(
                 {"code": "practice_dependency", "message": "实践阶段前置条件未满足"}
             )
             practice = [
-                (None, ids) if index >= first_missing else item
-                for index, item in enumerate(practice)
+                (None if index >= first_missing else value, fact_ids)
+                for index, (value, fact_ids) in enumerate(practice)
             ]
     d6 = combine(practice, [20, 20, 20, 20, 20])
     parts = [d1, d2, d3, d4, d5, d6]

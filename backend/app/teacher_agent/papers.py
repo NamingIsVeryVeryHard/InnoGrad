@@ -156,6 +156,18 @@ def _matches(value, predicate):
     return value == predicate.value
 
 
+def _matches_paper(item, time_range, predicates):
+    if time_range:
+        value = getattr(item, time_range.field)
+        if not value or not time_range.date_from <= value[:10] <= time_range.date_to:
+            return False
+    for predicate in predicates:
+        value = bool(item.doi) if predicate.field == "has_doi" else getattr(item, predicate.field)
+        if not _matches(value, predicate):
+            return False
+    return True
+
+
 def _papers(session, user, roster, spec):
     review = next((predicate for predicate in spec.filters if predicate.field == "review_status"), None)
     predicates = [predicate for predicate in spec.filters
@@ -163,15 +175,7 @@ def _papers(session, user, roster, spec):
     papers = []
     for row in _versions(session, user, roster, spec.basis, ["paper"], review):
         paper = _paper(row, roster[row.Submission.student_id], spec.basis)
-        if paper is None:
-            continue
-        item = paper.item
-        if spec.time_range:
-            value = getattr(item, spec.time_range.field)
-            if not value or not spec.time_range.date_from <= value[:10] <= spec.time_range.date_to:
-                continue
-        if all(_matches(bool(item.doi) if predicate.field == "has_doi" else getattr(item, predicate.field),
-                        predicate) for predicate in predicates):
+        if paper and _matches_paper(paper.item, spec.time_range, predicates):
             papers.append(paper)
     return papers
 
@@ -183,43 +187,51 @@ def _drilldown(subject, filters):
                                    for field, value in filters.items()])
 
 
-def _summary(papers, spec, data_as_of, scope_size, recomputed):
-    students = {paper.item.student_id for paper in papers}
+def _student_count(papers):
+    return len({paper.item.student_id for paper in papers})
+
+
+def _metrics(papers):
     metrics = []
-    if "metrics" in spec.include:
-        by_status = defaultdict(list)
-        for paper in papers:
-            by_status[paper.item.publication_status].append(paper)
-        for status in (None, *PAPER_STATUS_DATE_FIELD):
-            records = by_status[status] if status else papers
-            student_count = len({record.item.student_id for record in records})
-            prefix = f"paper_{status}_" if status else "paper_"
-            filters = {"publication_status": status} if status else {}
-            for key, count in ((prefix + "record_count", len(records)), (prefix + "student_count", student_count)):
-                definition = METRIC_CATALOG[key]
-                metrics.append(MetricCard(key=key, label=definition.label, unit=definition.unit, value=count,
-                                          subject=definition.subject,
-                                          drilldown_patch=_drilldown(definition.subject, filters) if count else None))
+    by_status = defaultdict(list)
+    for paper in papers:
+        by_status[paper.item.publication_status].append(paper)
+    for status in (None, *PAPER_STATUS_DATE_FIELD):
+        records = by_status[status] if status else papers
+        prefix = f"paper_{status}_" if status else "paper_"
+        filters = {"publication_status": status} if status else {}
+        for key, count in ((prefix + "record_count", len(records)), (prefix + "student_count", _student_count(records))):
+            definition = METRIC_CATALOG[key]
+            metrics.append(MetricCard(key=key, label=definition.label, unit=definition.unit, value=count,
+                                      subject=definition.subject,
+                                      drilldown_patch=_drilldown(definition.subject, filters) if count else None))
+    return metrics
+
+
+def _breakdown(papers, spec):
     groups = defaultdict(list)
-    if spec.group_by:
-        for paper in papers:
-            groups[tuple(getattr(paper.item, field) for field in spec.group_by)].append(paper)
+    for paper in papers:
+        groups[tuple(getattr(paper.item, field) for field in spec.group_by)].append(paper)
     breakdown = []
     for values, records in sorted(groups.items()):
         key = dict(zip(spec.group_by, values))
         breakdown.append(BreakdownRow(group_key=key, label=" / ".join(values), record_count=len(records),
-                                      student_count=len({record.item.student_id for record in records}),
+                                      student_count=_student_count(records),
                                       drilldown_patch=_drilldown(spec.distinct_subject, key)))
+    return breakdown
+
+
+def _summary(papers, spec, data_as_of, scope_size, recomputed):
     basis_label = "当前有效归档" if spec.basis == "current_effective_archives" else "最新提交版本"
     return ResultSummary(
-        headline=f"{basis_label}中有 {len(papers)} 条符合条件的论文申报记录，涉及 {len(students)} 名学生。",
-        metrics=metrics, breakdown=breakdown, data_as_of=data_as_of, basis=spec.basis,
+        headline=f"{basis_label}中有 {len(papers)} 条符合条件的论文申报记录，涉及 {_student_count(papers)} 名学生。",
+        metrics=_metrics(papers) if "metrics" in spec.include else [],
+        breakdown=_breakdown(papers, spec) if spec.group_by else [], data_as_of=data_as_of, basis=spec.basis,
         scope_student_count=scope_size, scope_recomputed=recomputed, notice=_NOTICE,
     )
 
 
-def _page(papers, spec, roster):
-    students = spec.distinct_subject == "student" or "students" in spec.include
+def _ordered_groups(papers, students, sort):
     if students:
         grouped = defaultdict(list)
         for paper in papers:
@@ -229,7 +241,7 @@ def _page(papers, spec, roster):
         groups = sorted((paper.item.submission_id, [paper]) for paper in papers)
 
     def sort_value(group):
-        values = (getattr(paper.item, spec.sort.field) for paper in group[1])
+        values = (getattr(paper.item, sort.field) for paper in group[1])
         return max((value for value in values if value is not None), default=None)
 
     dated, undated = [], []
@@ -239,32 +251,39 @@ def _page(papers, spec, roster):
             undated.append(group)
         else:
             dated.append((value, group))
-    dated.sort(key=lambda entry: entry[0], reverse=spec.sort.direction == "desc")
-    ordered = [group for _, group in dated] + undated
+    dated.sort(key=lambda entry: entry[0], reverse=sort.direction == "desc")
+    return [group for _, group in dated] + undated
+
+
+def _student_item(student, records):
+    return StudentSummaryItem(
+        **student, matched_record_count=len(records),
+        status_counts=Counter(record.item.publication_status for record in records),
+        latest_status_date=max((record.item.status_date for record in records if record.item.status_date),
+                               default=None),
+        source_ids=[record.item.version_id for record in records],
+        links=EvidenceLinks(portrait_url=records[0].item.links.portrait_url),
+    )
+
+
+def _page(papers, spec, roster):
+    students = spec.distinct_subject == "student" or "students" in spec.include
+    groups = _ordered_groups(papers, students, spec.sort)
     start = (spec.page - 1) * spec.page_size
     end = start + spec.page_size
     page_papers, items = [], []
-    for ident, records in ordered[start:end]:
-        if set(spec.include).intersection(("items", "students", "sources")):
+    include_items = bool({"items", "students"}.intersection(spec.include))
+    include_papers = include_items or "sources" in spec.include
+    for ident, records in groups[start:end]:
+        if include_papers:
             page_papers.extend(records)
-        if "items" not in spec.include and "students" not in spec.include:
-            continue
-        if students:
-            items.append(StudentSummaryItem(
-                **roster[ident], matched_record_count=len(records),
-                status_counts=Counter(record.item.publication_status for record in records),
-                latest_status_date=max((record.item.status_date for record in records if record.item.status_date),
-                                       default=None),
-                source_ids=[record.item.version_id for record in records],
-                links=EvidenceLinks(portrait_url=records[0].item.links.portrait_url),
-            ))
-        else:
-            items.append(records[0].item)
+        if include_items:
+            items.append(_student_item(roster[ident], records) if students else records[0].item)
     return items, page_papers, Pagination(page=spec.page, page_size=spec.page_size,
                                          total=len(groups), has_more=end < len(groups))
 
 
-def _sources(session, papers):
+def _evidence_files(session, papers):
     files_by_submission = {}
     file_ids = {fid for paper in papers for fid in paper.file_ids}
     if file_ids:
@@ -277,17 +296,25 @@ def _sources(session, papers):
                 file_id=row.id, name=row.name, media_type=row.media_type, size=row.size, sha256=row.sha256,
                 download_url=f"/api/v1/files/{row.id}/download",
             )
+    return files_by_submission
+
+
+def _verification(item):
+    if not item.archive_id:
+        return "submitted_unarchived_version"
+    if item.simulation or item.review_actor_type == "simulation":
+        return "simulated_approved_submission"
+    if item.review_actor_type == "agent":
+        return "agent_approved_submission"
+    return "human_approved_submission"
+
+
+def _sources(session, papers):
+    files_by_submission = _evidence_files(session, papers)
     sources = {}
     for paper in papers:
         item = paper.item
-        verification = "submitted_unarchived_version"
-        if item.archive_id:
-            if item.simulation or item.review_actor_type == "simulation":
-                verification = "simulated_approved_submission"
-            elif item.review_actor_type == "agent":
-                verification = "agent_approved_submission"
-            else:
-                verification = "human_approved_submission"
+        verification = _verification(item)
         pointers = [FieldPointer(field=field, pointer=f"/form/{field}", value=paper.form[field],
                                  verification=verification)
                     for field in (*FIELDS["paper"], "journal", "doi")
@@ -345,41 +372,49 @@ def _portrait(session, student, papers, sources, annual, pending):
                                 portrait_url=f"/api/v1/students/{student_id}/portrait", notice=_NOTICE)
 
 
-def materialize(session: Session, user: User, spec: PaperQuerySpec, *, run_id: str, data_as_of: str,
-                scope_recomputed: bool = False) -> ResultEnvelope:
-    if not user or not user.enabled or user.role not in ("teacher", "manager"):
-        raise ForbiddenRoleError("仅导师或管理教师可查询论文")
-    scope = scope_ids(session, user)
+def _query_roster(session, scope, filters, want_portrait):
     visible_ids = set(scope)
-    for predicate in spec.filters:
+    for predicate in filters:
         if predicate.field != "student_id":
             continue
         requested_ids = set(predicate.value if isinstance(predicate.value, list) else [predicate.value])
         if not requested_ids <= visible_ids:
             raise ResourceNotFoundError("学生不存在或无权访问")
-    roster = _roster(session, scope, spec.filters)
+    roster = _roster(session, scope, filters)
+    if not roster:
+        selectors = [predicate for predicate in filters if predicate.field in _STUDENT_SELECTORS]
+        if selectors and (want_portrait or not _roster(session, scope, selectors)):
+            raise ResourceNotFoundError("学生不存在或无权访问")
+    return roster
+
+
+def _result_evidence(session, user, page_papers, student):
+    evidence = {paper.item.version_id: paper for paper in page_papers}
+    if student is None:
+        return _sources(session, evidence.values()), None
+    papers, annual, pending = _portrait_papers(session, user, student)
+    evidence.update((paper.item.version_id, paper) for paper in papers)
+    sources = _sources(session, evidence.values())
+    return sources, _portrait(session, student, papers, sources, annual, pending)
+
+
+def materialize(session: Session, user: User, spec: PaperQuerySpec, *, run_id: str, data_as_of: str,
+                scope_recomputed: bool = False) -> ResultEnvelope:
+    if not user or not user.enabled or user.role not in ("teacher", "manager"):
+        raise ForbiddenRoleError("仅导师或管理教师可查询论文")
+    scope = scope_ids(session, user)
     want_portrait = spec.operation == "portrait" or "portrait" in spec.include
-    selectors = [predicate for predicate in spec.filters if predicate.field in _STUDENT_SELECTORS]
-    if not roster and selectors and not _roster(session, scope, selectors):
-        raise ResourceNotFoundError("学生不存在或无权访问")
-    if want_portrait and not roster and selectors:
-        raise ResourceNotFoundError("学生不存在或无权访问")
+    roster = _query_roster(session, scope, spec.filters, want_portrait)
     if want_portrait and len(roster) != 1:
-        candidates = [DisambiguationCandidate(**{field: student[field] for field in DisambiguationCandidate.model_fields})
+        candidates = [DisambiguationCandidate(student_id=student["student_id"], student_name=student["student_name"],
+                                              year=student["year"], degree=student["degree"], major=student["major"])
                       for student in roster.values()]
         return ResultEnvelope(status="clarification_needed", applied_query=spec, clarification=ClarificationPrompt(
             message="请选择一位学生查看画像。", student_candidates=candidates))
     papers = _papers(session, user, roster, spec)
     summary = _summary(papers, spec, data_as_of, len(scope), scope_recomputed)
     items, page_papers, pagination = _page(papers, spec, roster)
-    portrait = None
-    evidence = {paper.item.version_id: paper for paper in page_papers}
-    if want_portrait:
-        student = next(iter(roster.values()))
-        portrait_papers, annual, pending = _portrait_papers(session, user, student)
-        evidence.update((paper.item.version_id, paper) for paper in portrait_papers)
-    sources = _sources(session, evidence.values())
-    if want_portrait:
-        portrait = _portrait(session, student, portrait_papers, sources, annual, pending)
+    student = next(iter(roster.values())) if want_portrait else None
+    sources, portrait = _result_evidence(session, user, page_papers, student)
     return ResultEnvelope(query_run_id=run_id, applied_query=spec, summary=summary, items=items,
                           pagination=pagination, sources=list(sources.values()), portrait=portrait)

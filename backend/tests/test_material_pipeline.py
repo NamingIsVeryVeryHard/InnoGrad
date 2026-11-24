@@ -1,6 +1,21 @@
 from app.material_pipeline import score_rules, to_bundle
 
 
+def test_practice_evidence_survives_missing_prerequisite():
+    evidence = {"pageId": "report:1", "quote": "S001 完成了实践测试"}
+    pages = [{"id": "report:1", "text": evidence["quote"], "quality": "accepted"}]
+    facts = {
+        "studentId": "S001",
+        "identityEvidence": [evidence],
+        "observations": [{"id": "test-proof", "metric": "practice_test", "eventId": "practice-1",
+                          "value": True, "date": "2026-01-20", "evidence": [evidence]}],
+    }
+    result = score_rules(facts, {"student_id": "S001", "academic_year": 2025, "practice_id": "practice-1"}, pages)
+    assert result["dimensions"]["D6"]["score"] is None
+    assert result["dimensions"]["D6"]["factIds"] == ["test-proof"]
+    assert "practice_dependency" in {issue["code"] for issue in result["issues"]}
+
+
 def test_material_pipeline_score_and_bundle_contract():
     pages = [
         {

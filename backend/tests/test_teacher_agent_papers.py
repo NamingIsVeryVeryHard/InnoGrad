@@ -46,6 +46,36 @@ def predicate(field, value, operator="eq"):
     return {"field": field, "operator": operator, "value": value}
 
 
+def test_visible_student_excluded_by_roster_filter(session):
+    filters = [predicate("student_id", ident("s01")), predicate("degree", "硕士")]
+    assert run(session, filters=filters).pagination.total == 0
+    with pytest.raises(ResourceNotFoundError):
+        run(session, operation="portrait", filters=filters)
+
+
+def test_group_totals_survive_an_empty_sources_page(session):
+    filters = [predicate("student_id", ident("s01")), predicate("has_doi", False)]
+    result = run(session, filters=filters, time_range=YEAR, group_by=["publication_status"],
+                 include=["sources"], page=20, page_size=1)
+    assert result.pagination.total == 2 and not result.pagination.has_more
+    assert not result.sources and not result.items and not result.summary.metrics
+    assert [(row.group_key, row.record_count, row.student_count) for row in result.summary.breakdown] == [
+        ({"publication_status": "accepted"}, 1, 1), ({"publication_status": "published"}, 1, 1)]
+
+
+@pytest.mark.parametrize(("reviewer", "verification"), [
+    ("human", "human_approved_submission"), ("agent", "agent_approved_submission")])
+def test_archived_evidence_uses_actual_review_actor(session, reviewer, verification):
+    sub = session.get(Submission, ident("submission/s01/paper0"))
+    version = session.get(Version, sub.current_version_id)
+    version.snapshot = {**version.snapshot, "simulation": False}
+    archive = session.get(Archive, sub.effective_archive_id)
+    session.get(Decision, archive.decision_id).actor_type = reviewer
+    result = run(session, filters=[predicate("student_id", sub.student_id)])
+    source = next(source for source in result.sources if source.version_id == version.id)
+    assert {pointer.verification for pointer in source.field_pointers} == {verification}
+
+
 def test_real_seed_2026_metrics_and_executable_drilldowns(session):
     spec = PaperQuerySpec(time_range=YEAR, group_by=["publication_status", "degree"], page=2, page_size=2)
     result = run(session, spec)
