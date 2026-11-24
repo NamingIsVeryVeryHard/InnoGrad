@@ -170,7 +170,7 @@ def test_innoagent_prompt_references_optional_visual_html_guidance(pi_runtime, i
 
     create(events).analyze(request("今年论文发表情况"), issue_token)
 
-    assert "Optional visual HTML" in prompts[0]
+    assert "可选可视化 HTML" in prompts[0]
     assert "visual-html" in prompts[0]
 
 

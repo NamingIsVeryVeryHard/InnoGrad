@@ -58,7 +58,7 @@ def test_extracts_valid_visual_block_and_strips_it_from_prose():
 
 def test_extracts_realistic_deepseek_visual_html_after_cited_conclusion():
     skill = Path(__file__).resolve().parents[1] / "skills/teacher-query-planner/SKILL.md"
-    guidance = skill.read_text().split("## Optional visual HTML", 1)[1]
+    guidance = skill.read_text().split("## 可选可视化 HTML", 1)[1]
     example = guidance[guidance.index("```visual-html"):].split("\n```", 1)[0]
     raw = f"今年共有 [run-1:paper_record_count] 篇论文申报。\n\n{example}\n```"
     extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
