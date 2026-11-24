@@ -455,6 +455,22 @@ async function run() {
     await screenshot("04-browser-reload", panel, true);
 
     await selectConversation(page, panel, "");
+    const summary = await send(page, panel, "今年论文发表情况怎么样？");
+    const listed = await send(page, panel, "已发表的是哪几篇？", true);
+    check("publication list follows the overview", listed.body.conversation_id, summary.body.conversation_id);
+    const listedRows = panel.locator(".teacher-turn").last().locator(".agent-result .paper-item");
+    check("teacher sees the published titles", sorted(listed.ui.turns.at(-1)?.cards.flatMap(card => card.rows.map(row => row.title)) ?? []),
+      sorted(overview.rows.filter(row => row.status === "published").map(row => row.title)));
+    if (await listedRows.count()) {
+      await screenshot("teacher-published-list", panel, true);
+      await listedRows.first().getByRole("button", {name: "材料详情", exact: true}).click();
+      await page.getByRole("heading", {name: "论文成果 · 材料详情", exact: true}).waitFor();
+      await page.screenshot({path: `${output}/teacher-material.png`, animations: "disabled"});
+      await page.getByLabel("关闭").click();
+      panel = await openAgent(page);
+    }
+
+    await selectConversation(page, panel, "");
     const named = await send(page, panel, `请列出${studentName}已发表的论文。`);
     observations.phases.named = named;
     const namedCard = named.body.result;
