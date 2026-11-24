@@ -378,6 +378,7 @@ async function run() {
     check("overview has a generated HTML answer", Boolean(first.body.visual?.html), true);
     const overviewGuest = await visualGuest(overviewTurn);
     await overviewGuest.getByText(/已发表/).first().waitFor();
+    check("overview uses everyday teacher language", (await overviewGuest.locator("body").innerText()).includes("下钻"), false);
     await overviewTurn.locator("iframe").first().scrollIntoViewIfNeeded();
     await page.screenshot({path: `${output}/teacher-chart.png`, animations: "disabled"});
     await liveTurnShot("01-live-turn1-overview");
@@ -397,6 +398,7 @@ async function run() {
     await screenshot("02-doctoral-followup", panel, true);
 
     const doctoralGuest = await visualGuest(panel.locator(".teacher-turn").last());
+    check("follow-up uses everyday teacher language", (await doctoralGuest.locator("body").innerText()).includes("下钻"), false);
     let groupButton = doctoralGuest.getByRole("button", {name: /已发表/}).first();
     if (!await groupButton.count()) {
       const publishedLabel = doctoralGuest.getByText("已发表", {exact: true}).first();
