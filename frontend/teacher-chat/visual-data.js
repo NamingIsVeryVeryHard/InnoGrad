@@ -73,7 +73,15 @@ export function visualRuns(visual, results) {
       .filter((result) => result.status === "ok")
       .map((result) => [result.query_run_id, result]),
   );
-  const sources = [...new Set(visual.source_run_ids)].map((id) => byId.get(id));
+  const sources = [...new Set(visual.source_run_ids)]
+    .map((id) => byId.get(id))
+    .sort((left, right) => {
+      const paperRecordCount = (result) =>
+        (result.items ?? []).filter(
+          ({ item_kind }) => item_kind === "paper_record",
+        ).length;
+      return paperRecordCount(right) - paperRecordCount(left);
+    });
   return sources.every(Boolean) ? sources : [];
 }
 

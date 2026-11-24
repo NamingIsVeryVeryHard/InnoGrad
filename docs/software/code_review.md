@@ -1,10 +1,10 @@
 # 教师工作台分支代码评审记录
 
-**可视化数据隔离 P1 已修复，另有七条 P2 讨论待处理。** 教师可以要求模型选图、布局并生成可点击的分组。工作台从教师本轮有权查看的查询结果取数绘制图表。[真实浏览器验收及截图](teacher_visual_acceptance.md)
+**教师可以直接提问，由模型为这一轮编写交互界面。** 教师可以比较各组的论文数量，点“已发表”查看论文清单，再打开某篇论文的材料。原评审指出的 iframe 自身导航问题已有 Chromium 回归覆盖。[真实浏览器验收及截图](teacher_visual_acceptance.md)
 
 ## 评审范围与状态
 
-2026 年 11 月 24 日复核了 `integration/xyt-teacher-agent` 向 `main` 提交的 [PR #44](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44)。复核时 PR 开放，八条讨论中 P1 已解决。最终真实浏览器验收版本为 `f3e83de`。
+2026 年 11 月 24 日复核了 `integration/xyt-teacher-agent` 向 `main` 提交的 [PR #44](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44)。复核时 PR 开放，原 P1 已解决，七条 P2 仍开放。本次复核对应提交为 `289cb41`，并验证了生成页面在重试结果同时包含学生汇总和论文记录时，优先展示逐篇论文记录。
 
 下列意见均指向本分支新增的教师查询或教师聊天代码。已对照提交中的实现核查，最后一列列出每项仍需执行的验收。
 
@@ -12,7 +12,7 @@
 
 | 优先级 | 位置与发现 | 用户影响 | 处理建议与验收条件 |
 | --- | --- | --- | --- |
-| P1（已修复） | 原可视化 iframe 把教师查询数据交给了模型生成的脚本。 | 生成的页面可通过自身导航带出查询数据。 | 后端验证 `visual_spec` 引用本轮成功查询，旧 `visual` 保持为空。React 读取授权结果绘图，点击分组时使用结果自带的下钻条件。旧响应的 HTML 不执行。[原评审](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44#discussion_r4676717078) |
+| P1（已修复） | 旧版允许生成的页面在自身 iframe 中导航。 | 导航请求可能携带查询数据。 | 模型界面在独立的内层 iframe 运行，受外层文档的内容安全策略约束。Chromium 测试中，页面尝试跳转后显示结果卡，目标服务器收到零次请求。教师点击分组或材料时，工作台只打开本轮有权查看的记录。[原评审](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44#discussion_r4676717078) |
 | P2 | `ResultBlocks.jsx` 的追问按钮把“查看论文申报明细”等标签作为自然语言发送。 | 在规则模式下点击确定性的界面操作，可能收到澄清，或保留本应清除的条件。 | 为明细和清除筛选按钮发送已有的 `drilldown_patch`。分别在规则与聊天模式点击，检查返回查询的操作和筛选字段。[原评审](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44#discussion_r4675522885) |
 | P2 | `privacy.roster` 将缺少学生档案的学号处理为空串，论文查询和工作台则显示 `User.username`。 | 教师按界面显示的学号查找已授权的老学生时，可能得到 404。 | 统一名单查询的学号回退规则。用无 `StudentProfile` 的可见学生验证显示值可查，再确认指导范围外的学生仍不可见。[原评审](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44#discussion_r4675522894) |
 | P2 | `ResultBlocks.jsx` 允许移除画像的 `student_id`；`PaperQuerySpec` 要求画像保留学生选择条件。 | 点击筛选标签的 × 后，请求可能因缺少必选条件返回 422。 | 禁用画像的必选学生标签移除操作，或先切换到允许清除该条件的列表。检查该操作产生的查询可以执行。[原评审](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44#discussion_r4675522900) |
