@@ -31,7 +31,7 @@ from .privacy import (
     prepare_question, render_agent_response, resolve_agent_spec, resolve_subjects,
     roster, safe_agent_clarification, safe_language, student_ids, subject_filter, with_subject,
 )
-from .visual import strip_visual_blocks
+from .visual import split_visual_response, verified_visual_spec
 
 
 @dataclass(frozen=True)
@@ -604,7 +604,7 @@ class TeacherQueryEngine:
         with self._grant(actor, conversation_id, version, digest, selected, ambiguous, request.budget,
                          only_published=requests_only_published(request.user_message)) as (issue_token, key):
             try:
-                text = strip_visual_blocks(self.planner.analyze(request, issue_token))
+                text, visual_body = split_visual_response(self.planner.analyze(request, issue_token))
             except TimeoutError:
                 raise PlannerUnavailableError("规划服务超时", retry_after_seconds=1) from None
 
@@ -644,7 +644,8 @@ class TeacherQueryEngine:
                 timeline = _timeline(turn, final.applied_query, clarification=clarification)
                 return TurnResponse(conversation_id=conversation_id, conversation_lock_version=version + 1,
                                     turn=timeline, result=final, results=results,
-                                    analysis=analysis, analysis_notice=notice), {"turn_id": turn.id}
+                                    analysis=analysis, analysis_notice=notice,
+                                    visual_spec=verified_visual_spec(visual_body, results)), {"turn_id": turn.id}
 
             with self.grants.finalize(key) as grant:
                 return self._write_once(actor, record, finish,

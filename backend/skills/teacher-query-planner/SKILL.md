@@ -45,3 +45,15 @@ description: 查询教师授权范围内的论文记录，并用纯文本给出�
 - 发表状态概览用 `paper_published_record_count`、`paper_accepted_record_count` 和 `paper_submitted_record_count`。论文总数用 `paper_record_count`，学生人数用 `paper_student_count`。`breakdown` 行提供分组标签，引用必须取自 `metric_refs`。找不到可引用的分组计数时，在预算内单独查询该组。
 - 回答名单类问题时引用名单查询的计数，并提示「详见结果卡」。名单和论文标题由结果卡展示。
 - 只请求学生画像时，直接写「详见学生画像 [query_run_id]。」并填入实际运行标识。学生资料由画像卡展示。
+
+## 设计结果视图
+
+成功查询后，可在带引用的结论末尾追加一个 `visual-spec` JSON 围栏。分组比较用 `bar`，展示论文篇数占比用 `donut`，汇总用 `metrics`，明细用 `records`，按时间阅读明细用 `timeline`。图表使用分组查询，明细使用含 `items` 的查询。连续阅读用 `stack`，并排比较用 `grid`。每个块的 `run_id` 都从本轮对应结果复制，多个块可以引用同一次查询。
+
+例如，按发表状态比较学生人数，并列查看汇总时，把示例中的两个 `RUN_ID` 都换成该分组查询返回的 `query_run_id`。
+
+```visual-spec
+{"layout":"grid","blocks":[{"type":"bar","run_id":"RUN_ID","title":"学生人数","measure":"student_count","interaction":"drilldown"},{"type":"metrics","run_id":"RUN_ID"}]}
+```
+
+最多放 12 个块。只有图表可选 `measure`，默认 `record_count`，统计组内学生人数时用 `student_count`。交互默认 `none`，图表和汇总可选 `drilldown`，明细和时间线可选 `open_record`。标题可省略，填写时用简短的中文查询词，如「发表状态」或「论文列表」。数值、行和操作目标均由系统读取，围栏内只写展示选项。澄清时只写问题。

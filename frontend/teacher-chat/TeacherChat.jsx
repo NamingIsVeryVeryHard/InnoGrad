@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { DynamicVisual } from "./DynamicVisual.jsx";
 import {
   Analysis,
   Clarification,
@@ -42,6 +43,13 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
 
   const runIds = runIdsFor(turn);
   const query = turn.resolved_query || results[0]?.applied_query;
+  const drilldown = (runId, patch, label) =>
+    submit({
+      mode: "drilldown_patch",
+      parent_run_id: runId,
+      patch,
+      label,
+    });
   const turnPrompt = JSON.stringify(turn.clarification);
   const message = ["", "筛选查询", "更新筛选条件"].includes(
     turn.user_message?.trim() ?? "",
@@ -59,12 +67,7 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
       }
       query={result.applied_query || turn.resolved_query}
       onDrilldown={(patch, label) =>
-        submit({
-          mode: "drilldown_patch",
-          parent_run_id: result.query_run_id,
-          patch,
-          label,
-        })
+        drilldown(result.query_run_id, patch, label)
       }
       onAction={submit}
       onOpen={openTarget}
@@ -93,6 +96,14 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
           {turn.clarification ? (
             <Clarification prompt={turn.clarification} onAction={submit} />
           ) : null}
+          {turn.visualSpec && (
+            <DynamicVisual
+              spec={turn.visualSpec}
+              results={results}
+              onDrilldown={drilldown}
+              onOpen={openTarget}
+            />
+          )}
           {resultCards}
           {canReplay && runIds.length ? (
             <button

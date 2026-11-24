@@ -353,7 +353,7 @@ async function run() {
     let panel = await openAgent(page);
     const {dates, clock, overview, doctoral, drill: drillRoster, studentName, namedPapers, published} = fixture;
 
-    const first = await send(page, panel, "今年论文发表情况");
+    const first = await send(page, panel, "今年论文发表情况怎么样？请按发表状态画一张条形图，方便我对比各组。");
     observations.phases.overview = first;
     if (invalidReceipt) {
       check("injected receipt returns planner error", first.body.code, "INVALID_PLANNER_OUTPUT");
@@ -362,6 +362,12 @@ async function run() {
     }
     if (first.status !== 200) return;
     inspectAggregate("annual overview", first, overview, dates, clock);
+    const overviewVisual = panel.locator(".teacher-turn").last().locator(".dynamic-visual");
+    check("teacher sees a grouped chart", await overviewVisual.locator(".dv-chart li").count() > 0, true);
+    if (await overviewVisual.count()) {
+      await overviewVisual.scrollIntoViewIfNeeded();
+      await page.screenshot({path: `${output}/teacher-chart.png`, animations: "disabled"});
+    }
     await liveTurnShot("01-live-turn1-overview");
     if (liveOutput) {
       await panel.getByRole("button", {name: "展开宽浮窗"}).click();
@@ -370,7 +376,7 @@ async function run() {
     }
     await screenshot("01-overview", panel, true);
 
-    const followup = await send(page, panel, "只看博士", Boolean(first.body.turn));
+    const followup = await send(page, panel, "只看博士，按发表状态画条形图，让我能点进各组看论文。", Boolean(first.body.turn));
     observations.phases.followup = followup;
     check("follow-up uses same conversation", followup.body.conversation_id, first.body.conversation_id);
     check("follow-up uses previous lock version", followup.request.expected_lock_version, first.body.conversation_lock_version);
@@ -378,10 +384,7 @@ async function run() {
     await liveTurnShot("02-live-turn2-doctor");
     await screenshot("02-doctoral-followup", panel, true);
 
-    const followupCard = doctoralCard
-      ? panel.locator(`#agent-run-${doctoralCard.query_run_id}`)
-      : panel.locator(".agent-result").last();
-    const groupButton = followupCard.getByRole("button", {name: /^已发表 \d+条 · /});
+    const groupButton = panel.locator(".teacher-turn").last().locator(".dynamic-visual").getByRole("button", {name: /^已发表 \d+条$/}).first();
     let drill;
     if (await groupButton.count()) {
       const drillPending = responseFor(page, paths.turns, "POST");

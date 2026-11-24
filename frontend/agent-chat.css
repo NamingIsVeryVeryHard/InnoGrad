@@ -841,3 +841,115 @@ form:focus-within {
   border-top: 1px solid #d9cdd1;
   margin: 14px 0;
 }
+
+.dynamic-visual {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  min-width: 0;
+}
+.dynamic-visual.dv-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.dynamic-visual section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid #dfd4d7;
+  border-radius: 8px;
+  background: #fff;
+}
+.dynamic-visual h4,
+.dynamic-visual dl,
+.dynamic-visual dd {
+  margin: 0;
+}
+.dynamic-visual h4 {
+  margin-bottom: 8px;
+}
+.dynamic-visual button {
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: #872139;
+  text-align: start;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.dynamic-visual ul,
+.dynamic-visual ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.dynamic-visual li + li {
+  margin-top: 8px;
+}
+.dynamic-visual .dv-track {
+  height: 6px;
+  background: #eee7e9;
+}
+.dynamic-visual .dv-track i {
+  display: block;
+  height: 100%;
+}
+.dynamic-visual .dv-distribution,
+.dynamic-visual .dv-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dynamic-visual .dv-ring {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.dynamic-visual .dv-ring::after {
+  content: "";
+  width: 62%;
+  aspect-ratio: 1;
+  background: #fff;
+  border-radius: 50%;
+}
+.dynamic-visual .dv-key {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline-end: 6px;
+}
+.dynamic-visual .dv-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  gap: 10px;
+}
+.dynamic-visual dd {
+  font-size: 1.35em;
+  font-weight: 700;
+}
+.dynamic-visual .dv-records li,
+.dynamic-visual .dv-timeline li {
+  display: grid;
+  border-top: 1px solid #eee7e9;
+  padding-block-start: 6px;
+}
+.dynamic-visual .dv-timeline {
+  border-inline-start: 2px solid #ceb6bd;
+  margin-inline-start: 5px;
+}
+.dynamic-visual .dv-timeline li {
+  position: relative;
+  padding-inline-start: 14px;
+  border: 0;
+}
+.dynamic-visual .dv-timeline li::before {
+  content: "";
+  position: absolute;
+  inset: 12px auto auto -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9e3048;
+}

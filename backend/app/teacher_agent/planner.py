@@ -622,7 +622,8 @@ class InnoAgentQueryPlanner(_ExternalTransport):
             f"最多 {budget.max_queries} 次成功查询，"
             f"同一轮最多纠错 {budget.max_tool_retries} 次。用中文直接给出结论，每句都带对应查询的引用。"
             "计数只用工具返回的 metric_refs 完整值，系统会填入数值。省略开场、过程和额外总结。"
-            "只输出纯文本。问题不明确时直接询问。"
+            "正文使用纯文本。成功查询后可按技能示例追加一个 visual-spec JSON 围栏，"
+            "每个块的 run_id 复制自本轮对应工具结果的 query_run_id。问题不明确时直接询问。"
             f"\n{MCP_SERVER}/{MCP_QUERY_TOOL} 的参数字段和可选值：\n{_compact_domain_schema()}"
             f"\n默认查询：{defaults}\n{_payload(request)}"
         )

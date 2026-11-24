@@ -171,6 +171,7 @@ def test_innoagent_prompt_requests_plain_text(pi_runtime, issue_token):
     create(events).analyze(request("今年论文发表情况"), issue_token)
 
     assert "纯文本" in prompts[0]
+    assert "visual-spec" in prompts[0] and "query_run_id" in prompts[0]
     assert "visual-html" not in prompts[0]
 
 

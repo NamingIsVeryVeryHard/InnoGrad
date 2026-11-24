@@ -272,6 +272,7 @@ export function useTeacherConversation(session, open) {
               user_message: displayText,
               analysis: reply.analysis ?? reply.turn.analysis,
               analysisNotice: reply.analysis_notice,
+              visualSpec: reply.visual_spec,
               clarification:
                 reply.turn.clarification ?? legacyPrompt(reply.result),
             };
