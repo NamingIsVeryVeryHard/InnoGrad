@@ -323,7 +323,7 @@ async function run() {
   let browser;
   try {
     browser = await chromium.launch({headless: true});
-    const context = await browser.newContext({viewport: {width: 1440, height: 1000}, serviceWorkers: "block"});
+    const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
     const page = await context.newPage();
     page.setDefaultTimeout(30000);
     page.on("console", (message) => {
@@ -431,6 +431,7 @@ async function run() {
       panel = await openAgent(page);
       const portrait = await send(page, panel, `看看${studentName}的成长画像`, true);
       observations.phases.portrait = portrait;
+      await revealEvidence(panel.locator(".teacher-turn").last());
       const portraitCard = panel.locator(".teacher-turn").last().locator(".agent-result").first();
       const button = portraitCard.getByRole("button", {name: "查看完整成长画像"});
       await button.waitFor();
