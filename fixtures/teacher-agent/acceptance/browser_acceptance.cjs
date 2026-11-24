@@ -139,6 +139,18 @@ async function waitForReady(panel) {
   if (await loading.count()) await loading.last().waitFor({state: "hidden"});
 }
 
+async function visualGuest(turn) {
+  const iframe = await turn.locator("iframe").first().elementHandle({timeout: 15000});
+  let frame = await iframe.contentFrame();
+  while (frame.childFrames().length === 1) frame = frame.childFrames()[0];
+  return frame;
+}
+
+async function revealEvidence(turn) {
+  const closed = turn.locator(".visual-evidence-toggle:not([open]) > summary");
+  if (await closed.count()) await closed.click();
+}
+
 async function capture(response, panel, started) {
   const body = await response.json();
   const latencyMs = started == null ? undefined : Math.round(performance.now() - started);
@@ -147,7 +159,7 @@ async function capture(response, panel, started) {
     const turn = panel.locator(`[data-turn-id="${latest.id}"]`);
     await turn.waitFor();
     await panel.locator('textarea[aria-label="你的问题"]:enabled').waitFor();
-    check(`turn ${latest.id} renders without an iframe`, await turn.locator("iframe").count(), 0);
+    if (body.visual) await turn.locator(".visual-sandbox-ready, .visual-fallback").waitFor();
   }
   return {
     latencyMs,
@@ -330,7 +342,7 @@ async function run() {
     });
     const screenshot = async (name, panel, showRows = false) => {
       const rows = panel.locator(".teacher-turn").last().locator(".agent-result .paper-item");
-      if (showRows && await rows.count()) await rows.last().scrollIntoViewIfNeeded();
+      if (showRows && await rows.count() && await rows.last().isVisible()) await rows.last().scrollIntoViewIfNeeded();
       await panel.screenshot({
         path: `${output}/${name}.png`, mask: [panel.locator(".agent-analysis a")], maskColor: "#6b7280",
       });
@@ -362,12 +374,12 @@ async function run() {
     }
     if (first.status !== 200) return;
     inspectAggregate("annual overview", first, overview, dates, clock);
-    const overviewVisual = panel.locator(".teacher-turn").last().locator(".dynamic-visual");
-    check("teacher sees a grouped chart", await overviewVisual.locator(".dv-chart li").count() > 0, true);
-    if (await overviewVisual.count()) {
-      await overviewVisual.scrollIntoViewIfNeeded();
-      await page.screenshot({path: `${output}/teacher-chart.png`, animations: "disabled"});
-    }
+    const overviewTurn = panel.locator(".teacher-turn").last();
+    check("overview has a generated HTML answer", Boolean(first.body.visual?.html), true);
+    const overviewGuest = await visualGuest(overviewTurn);
+    await overviewGuest.getByText(/已发表/).first().waitFor();
+    await overviewTurn.locator("iframe").first().scrollIntoViewIfNeeded();
+    await page.screenshot({path: `${output}/teacher-chart.png`, animations: "disabled"});
     await liveTurnShot("01-live-turn1-overview");
     if (liveOutput) {
       await panel.getByRole("button", {name: "展开宽浮窗"}).click();
@@ -384,7 +396,8 @@ async function run() {
     await liveTurnShot("02-live-turn2-doctor");
     await screenshot("02-doctoral-followup", panel, true);
 
-    const groupButton = panel.locator(".teacher-turn").last().locator(".dynamic-visual").getByRole("button", {name: /^已发表 \d+条$/}).first();
+    const doctoralGuest = await visualGuest(panel.locator(".teacher-turn").last());
+    const groupButton = doctoralGuest.getByRole("button", {name: /已发表/}).first();
     let drill;
     if (await groupButton.count()) {
       const drillPending = responseFor(page, paths.turns, "POST");
@@ -462,8 +475,13 @@ async function run() {
     check("teacher sees the published titles", sorted(listed.ui.turns.at(-1)?.cards.flatMap(card => card.rows.map(row => row.title)) ?? []),
       sorted(overview.rows.filter(row => row.status === "published").map(row => row.title)));
     if (await listedRows.count()) {
-      await screenshot("teacher-published-list", panel, true);
-      await listedRows.first().getByRole("button", {name: "材料详情", exact: true}).click();
+      const listTurn = panel.locator(".teacher-turn").last();
+      const listGuest = await visualGuest(listTurn);
+      const material = listGuest.getByRole("button", {name: /材料详情/}).first();
+      await material.waitFor();
+      await listTurn.locator("iframe").first().scrollIntoViewIfNeeded();
+      await page.screenshot({path: `${output}/teacher-published-list.png`, animations: "disabled"});
+      await material.click();
       await page.getByRole("heading", {name: "论文成果 · 材料详情", exact: true}).waitFor();
       await page.screenshot({path: `${output}/teacher-material.png`, animations: "disabled"});
       await page.getByLabel("关闭").click();
@@ -483,6 +501,7 @@ async function run() {
       `${row.title}:${row.name}`)), sorted(namedPapers.map((title) => `${title}:${studentName}`)));
     await screenshot("05-named-query", panel, true);
     const namedRows = panel.locator(".teacher-turn").last().locator(".paper-item");
+    await revealEvidence(panel.locator(".teacher-turn").last());
     const firstNamedRow = namedRows.first();
     await firstNamedRow.getByRole("button", {name: "材料详情", exact: true}).click();
     await page.getByRole("heading", {name: "论文成果 · 材料详情", exact: true}).waitFor();

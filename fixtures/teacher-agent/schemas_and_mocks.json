@@ -5841,63 +5841,6 @@
         "title": "CampaignYearFilter",
         "type": "object"
       },
-      "ChartBlock": {
-        "additionalProperties": false,
-        "properties": {
-          "run_id": {
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Run Id",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 60,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Title"
-          },
-          "type": {
-            "enum": [
-              "bar",
-              "donut"
-            ],
-            "title": "Type",
-            "type": "string"
-          },
-          "measure": {
-            "default": "record_count",
-            "enum": [
-              "record_count",
-              "student_count"
-            ],
-            "title": "Measure",
-            "type": "string"
-          },
-          "interaction": {
-            "default": "none",
-            "enum": [
-              "none",
-              "drilldown"
-            ],
-            "title": "Interaction",
-            "type": "string"
-          }
-        },
-        "required": [
-          "run_id",
-          "type"
-        ],
-        "title": "ChartBlock",
-        "type": "object"
-      },
       "ClarificationPrompt": {
         "additionalProperties": false,
         "properties": {
@@ -5973,54 +5916,6 @@
           "value"
         ],
         "title": "DegreeFilter",
-        "type": "object"
-      },
-      "DetailBlock": {
-        "additionalProperties": false,
-        "properties": {
-          "run_id": {
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Run Id",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 60,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Title"
-          },
-          "type": {
-            "enum": [
-              "records",
-              "timeline"
-            ],
-            "title": "Type",
-            "type": "string"
-          },
-          "interaction": {
-            "default": "none",
-            "enum": [
-              "none",
-              "open_record"
-            ],
-            "title": "Interaction",
-            "type": "string"
-          }
-        },
-        "required": [
-          "run_id",
-          "type"
-        ],
-        "title": "DetailBlock",
         "type": "object"
       },
       "DirectionFilter": {
@@ -6544,51 +6439,6 @@
           "subject"
         ],
         "title": "MetricCard",
-        "type": "object"
-      },
-      "MetricsBlock": {
-        "additionalProperties": false,
-        "properties": {
-          "run_id": {
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Run Id",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 60,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Title"
-          },
-          "type": {
-            "const": "metrics",
-            "title": "Type",
-            "type": "string"
-          },
-          "interaction": {
-            "default": "none",
-            "enum": [
-              "none",
-              "drilldown"
-            ],
-            "title": "Interaction",
-            "type": "string"
-          }
-        },
-        "required": [
-          "run_id",
-          "type"
-        ],
-        "title": "MetricsBlock",
         "type": "object"
       },
       "Pagination": {
@@ -8695,52 +8545,41 @@
         "title": "TurnTimelineItem",
         "type": "object"
       },
-      "VisualSpec": {
+      "VisualArtifact": {
         "additionalProperties": false,
         "properties": {
-          "layout": {
-            "enum": [
-              "stack",
-              "grid"
-            ],
-            "title": "Layout",
+          "kind": {
+            "const": "html_sandbox",
+            "default": "html_sandbox",
+            "title": "Kind",
             "type": "string"
           },
-          "blocks": {
+          "title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
+          },
+          "html": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Html",
+            "type": "string"
+          },
+          "source_run_ids": {
             "items": {
-              "discriminator": {
-                "mapping": {
-                  "bar": "#/$defs/ChartBlock",
-                  "donut": "#/$defs/ChartBlock",
-                  "metrics": "#/$defs/MetricsBlock",
-                  "records": "#/$defs/DetailBlock",
-                  "timeline": "#/$defs/DetailBlock"
-                },
-                "propertyName": "type"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/ChartBlock"
-                },
-                {
-                  "$ref": "#/$defs/MetricsBlock"
-                },
-                {
-                  "$ref": "#/$defs/DetailBlock"
-                }
-              ]
+              "type": "string"
             },
-            "maxItems": 12,
             "minItems": 1,
-            "title": "Blocks",
+            "title": "Source Run Ids",
             "type": "array"
           }
         },
         "required": [
-          "layout",
-          "blocks"
+          "html",
+          "source_run_ids"
         ],
-        "title": "VisualSpec",
+        "title": "VisualArtifact",
         "type": "object"
       },
       "YearFilter": {
@@ -8831,21 +8670,16 @@
         "title": "Analysis Notice"
       },
       "visual": {
-        "default": null,
-        "title": "Visual",
-        "type": "null"
-      },
-      "visual_spec": {
         "anyOf": [
           {
-            "$ref": "#/$defs/VisualSpec"
+            "$ref": "#/$defs/VisualArtifact"
           },
           {
             "type": "null"
           }
         ],
         "default": null,
-        "description": "Verified layout for the initial response only."
+        "description": "Initial-response sandboxed HTML visualization grounded in results."
       },
       "results": {
         "items": {
@@ -15718,7 +15552,6 @@
       "analysis": "本年度有效档案中共有 18 条论文申报记录 [run-demo-04]。其中博士生已发表的申报记录有 2 条 [run-demo-05]。",
       "analysis_notice": null,
       "visual": null,
-      "visual_spec": null,
       "results": [
         {
           "schema_version": "teacher-agent-result-1",
@@ -17193,7 +17026,6 @@
       "analysis": null,
       "analysis_notice": "本次分析未能核实，请以结果卡为准。",
       "visual": null,
-      "visual_spec": null,
       "results": [
         {
           "schema_version": "teacher-agent-result-1",

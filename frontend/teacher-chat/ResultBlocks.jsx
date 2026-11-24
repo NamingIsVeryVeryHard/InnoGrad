@@ -69,7 +69,9 @@ export function Analysis({ text, runIds }) {
     const root = ref.current;
     if (!root) return;
     const fragment = renderMarkdown(text, { controlled: true });
-    const anchors = new Set((runIds ?? []).map(runAnchor).filter(Boolean));
+    const anchors = new Map(
+      (runIds ?? []).map((runId, index) => [runAnchor(runId), index + 1]),
+    );
     const doc = root.ownerDocument;
     const walker = doc.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -87,11 +89,13 @@ export function Analysis({ text, runIds }) {
         const link = doc.createElement("a");
         link.className = "analysis-citation";
         link.href = `#${id}`;
-        link.textContent = match[0];
+        link.textContent = `依据 ${anchors.get(id)}`;
         link.addEventListener("click", (event) => {
           event.preventDefault();
           const turn = root.closest(".teacher-turn") ?? root.getRootNode();
           const card = turn.querySelector(`#${id}`);
+          const evidence = card?.closest("details.visual-evidence-toggle");
+          if (evidence) evidence.open = true;
           card?.focus({ preventScroll: true });
           card?.scrollIntoView({ block: "start" });
         });

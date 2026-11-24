@@ -164,15 +164,16 @@ def test_chat_repair_is_one_turn_and_sanitizes_fixed_text():
     assert INSTRUCTIONS in prompts[0][0]["content"]
 
 
-def test_innoagent_prompt_requests_plain_text(pi_runtime, issue_token):
+def test_innoagent_prompt_requests_bespoke_visual_html_for_plain_questions(pi_runtime, issue_token):
     create, _, _, prompts = pi_runtime
     events = [*successful_attempt("visual"), {"type": "text_delta", "delta": "结论。"}, {"type": "done"}]
 
     create(events).analyze(request("今年论文发表情况"), issue_token)
 
     assert "纯文本" in prompts[0]
-    assert "visual-spec" in prompts[0] and "query_run_id" in prompts[0]
-    assert "visual-html" not in prompts[0]
+    assert "visual-html" in prompts[0] and "window.__INNOGRAD_DATA__.runs" in prompts[0]
+    assert all(label in prompts[0] for label in ("博士生", "已发表", "row.drilldownPatch", "材料详情"))
+    assert "visual-spec" not in prompts[0]
 
 
 def test_chat_invalid_output_maps_to_502_error_after_repair():

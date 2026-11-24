@@ -1015,32 +1015,11 @@ class ConversationDetail(_StrictModel):
     ))
 
 
-class _VisualBlock(_StrictModel):
-    run_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")
-    title: str | None = Field(default=None, min_length=1, max_length=60)
-
-
-class ChartBlock(_VisualBlock):
-    type: Literal["bar", "donut"]
-    measure: Literal["record_count", "student_count"] = "record_count"
-    interaction: Literal["none", "drilldown"] = "none"
-
-
-class MetricsBlock(_VisualBlock):
-    type: Literal["metrics"]
-    interaction: Literal["none", "drilldown"] = "none"
-
-
-class DetailBlock(_VisualBlock):
-    type: Literal["records", "timeline"]
-    interaction: Literal["none", "open_record"] = "none"
-
-
-class VisualSpec(_StrictModel):
-    layout: Literal["stack", "grid"]
-    blocks: list[Annotated[ChartBlock | MetricsBlock | DetailBlock, Field(discriminator="type")]] = Field(
-        min_length=1, max_length=12,
-    )
+class VisualArtifact(_StrictModel):
+    kind: Literal["html_sandbox"] = "html_sandbox"
+    title: str = Field(default="", max_length=80)
+    html: str = Field(min_length=1, max_length=16384)
+    source_run_ids: list[str] = Field(min_length=1)
 
 
 class TurnResponse(_StrictModel):
@@ -1052,8 +1031,9 @@ class TurnResponse(_StrictModel):
     analysis_notice: str | None = Field(
         default=None, description="Initial-response notice when the analysis cannot be verified but the result cards are valid."
     )
-    visual: None = None
-    visual_spec: VisualSpec | None = Field(default=None, description="Verified layout for the initial response only.")
+    visual: VisualArtifact | None = Field(
+        default=None, description="Initial-response sandboxed HTML visualization grounded in results."
+    )
     results: list[ResultEnvelope] = Field(default_factory=lambda data: (
         [data["result"]] if data["result"].query_run_id else []
     ))

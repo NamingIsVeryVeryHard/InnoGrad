@@ -1,6 +1,6 @@
 ---
 name: teacher-query-planner
-description: 查询教师授权范围内的论文记录，并用纯文本给出带溯源引用的中文分析。
+description: 查询教师授权范围内的论文记录，给出带溯源引用的中文分析与交互可视化。
 ---
 
 # 教师论文分析
@@ -33,6 +33,7 @@ description: 查询教师授权范围内的论文记录，并用纯文本给出�
 - 按姓名查学生用 `student_name eq`，复用查询返回的学生编号用 `student_id eq`，明确提供学号时用 `student_number eq`，追问中保持该学生筛选。返回 `CLARIFICATION_NEEDED` 时请教师明确选择学生并结束本轮，由前端展示候选人列表。
 - 论文发表年份与学生入学年级相互独立。「今年已发表几篇论文」在 `publication_date` 上设自然年 `time_range`；「2026 级学生已发表几篇论文」设 `year eq 2026级` 且不设日期范围；两者同时提及则同时设置。仅在教师指定年级或延续已有年级范围时添加 `year` 筛选。
 - 年度发表状态概览用 `aggregate`、`current_effective_archives` 与 `group_by: ["publication_status"]`，在 `status_date` 上设当年 1 月 1 日至 12 月 31 日的 `time_range`（`status_date` 对应当前状态的投稿、录用或发表日期），且不加 `publication_status` 筛选以覆盖全部状态。
+- 年度概览后追问「只看博士生呢」时，用 `patch` 添加 `degree eq 博士`，保留年度、统计口径和发表状态分组，用新查询结果重画视图。
 - 明确问「发表过」「发表了」「已发表」时加 `publication_status eq published`（涵盖篇数、去重学生人数与层次分组）；统计学生人数用 `distinct_subject: "student"` 与 `paper_student_count`。问「先汇总所有发表状态，再看已发表」时，先不加状态筛选查总览，再用独立 `spec` 加 `publication_status eq published` 查已发表。标题关键词按字面匹配并保留明确排除条件。查询「从未发表过论文的学生名单」需要包含零记录学生在内的授权名册；若无完整名册数据，直接说明限制。
 - 归档论文用 `current_effective_archives`（已排除待审核）。按发表日期统计时设 `time_range.field` 为 `publication_date`，跨期对比保持相同的 `basis` 与状态筛选。保留 `degree eq 博士` 等培养层次条件。查待审核或退回补正材料用 `submitted_latest`。
 
@@ -46,16 +47,51 @@ description: 查询教师授权范围内的论文记录，并用纯文本给出�
 - 回答名单类问题时引用名单查询的计数，并提示「详见结果卡」。名单和论文标题由结果卡展示。
 - 只请求学生画像时，直接写「详见学生画像 [query_run_id]。」并填入实际运行标识。学生资料由画像卡展示。
 
-## 设计结果视图
+## 交互可视化 HTML
 
-教师问「今年论文发表情况怎么样」或接着问「只看博士生呢」时，先用本轮可引用的指标回答，再主动画发表状态分组图。分组有下钻条件时启用 `drilldown`，方便教师点进论文。教师只需表达想了解的情况，选图由模型完成。
+成功查询且有数据时，先写带引用的中文结论，然后追加一个 `visual-html title="简短中文标题"` 围栏，内含本轮设计的 HTML、CSS 和脚本。教师只需提问。根据问题和结果设计视觉层次、布局和交互，例如在篇数与学生人数之间切换、查看对比组明细，或在当前论文列表内排序与筛选。图表、表格和文字可以组合。视图须适应窄屏，长标题可换行，避免横向溢出。用清晰的单位、颜色与留白突出问题关心的内容，并保留键盘焦点样式。
 
-成功查询后，可在带引用的结论末尾追加一个 `visual-spec` JSON 围栏。分组比较用 `bar`，展示论文篇数占比用 `donut`，汇总用 `metrics`，明细用 `records`，按时间阅读明细用 `timeline`。图表使用分组查询，明细使用含 `items` 的查询。连续阅读用 `stack`，并排比较用 `grid`。每个块的 `run_id` 都从本轮对应结果复制，多个块可以引用同一次查询。
+### 数据和操作
 
-例如，按发表状态比较学生人数，并列查看汇总时，把示例中的两个 `RUN_ID` 都换成该分组查询返回的 `query_run_id`。
+沙箱注入 `window.__INNOGRAD_DATA__.runs`。单次查询用 `runs[0]`，多次查询用对应的本轮 `runId` 定位。展示的计数、标签、标题、姓名、日期和操作标识都从这里读取，用 `textContent` 插入数据。图表也直接用这些字段，不在代码里复制工具结果、填入示例数据或写死组名。
 
-```visual-spec
-{"layout":"grid","blocks":[{"type":"bar","run_id":"RUN_ID","title":"学生人数","measure":"student_count","interaction":"drilldown"},{"type":"metrics","run_id":"RUN_ID"}]}
+```js
+window.__INNOGRAD_DATA__ = {
+  runs: [{
+    runId, title, headline, basisLabel, asOfDate, scopeStudentCount,
+    filters: [string],
+    metrics: [{key, label, value, unit}],
+    breakdown: [{label, recordCount, studentCount, drilldownPatch}],
+    items: [{
+      statusLabel, dateLabel, submissionId, studentId, studentName, title,
+      versionNumber, degree, major, year, journal, contribution, duplicateTitle
+    }],
+    portrait: {
+      studentId, studentName, studentNumber, year, degree, major, direction,
+      stage, counts, notice, records: [item]
+    } | null
+  }]
+}
+window.innograd = {
+  openSubmission(id),
+  openPortrait(id),
+  ask(text),
+  drilldown(runId, patch, label)
+}
 ```
 
-最多放 12 个块。只有图表可选 `measure`，默认 `record_count`，统计组内学生人数时用 `student_count`。交互默认 `none`，图表和汇总可选 `drilldown`，明细和时间线可选 `open_record`。标题可省略，填写时用简短的中文查询词，如「发表状态」或「论文列表」。数值、行和操作目标均由系统读取，围栏内只写展示选项。澄清时只写问题。
+- 年度发表状态概览和博士生追问都要遍历 `run.breakdown`，为实际返回的每个状态渲染原生 `<button type="button">`。按钮可见文字和可访问名称用 `row.label`，例如「已发表」。计数单独展示。按钮始终可见，支持键盘操作。图表图例或仅鼠标可触发的画布区域不能代替按钮。
+- 只为 `row.drilldownPatch` 非空的分组提供下钻。点击时把系统提供的补丁原样传给 `window.innograd.drilldown`。父查询保留当前年度和博士生等筛选。以下片段只说明按钮的数据绑定和事件。
+
+```js
+const button = document.createElement("button");
+button.type = "button";
+button.textContent = row.label;
+button.addEventListener("click", () =>
+  window.innograd.drilldown(run.runId, row.drilldownPatch, row.label)
+);
+```
+
+- 展示论文明细时用 `run.items`。每条含 `submissionId` 的论文都要有可见的「材料详情」按钮，点击调用 `window.innograd.openSubmission(item.submissionId)`。把按钮放在对应标题所在行。画像补充视图可遍历 `run.portrait.records`。
+- 沙箱预载离线 `window.Chart`（Chart.js 4）和 `--ig-accent`、`--ig-bg`、`--ig-surface`、`--ig-border`、`--ig-text`、`--ig-muted`、`--ig-radius` 主题变量。用 Chart.js 时给图表容器设置有限高度，启用 `responsive: true` 和 `maintainAspectRatio: false`，数据集颜色使用十六进制。
+- 将 HTML 控制在 16 KiB 以内。使用内联样式和脚本。禁止外部链接与资源、`@import`、网络请求、存储、Cookie、访问父窗口以及 `<meta>`、`<base>`、`<form>`、`<iframe>`。没有成功查询时只输出正文。

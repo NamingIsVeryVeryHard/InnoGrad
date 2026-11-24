@@ -1,5 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
-import { DynamicVisual } from "./DynamicVisual.jsx";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Analysis,
   Clarification,
@@ -8,6 +7,8 @@ import {
   titleFromQuery,
 } from "./ResultBlocks.jsx";
 import { runIdsFor, useTeacherConversation } from "./useTeacherConversation.js";
+import { VisualSandbox } from "./VisualSandbox.jsx";
+import { visualRuns } from "./visual-data.js";
 
 const starterQuestions = [
   "今年论文发表情况",
@@ -31,6 +32,10 @@ function openTarget(type, id) {
 }
 
 function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
+  const visualSources = useMemo(
+    () => visualRuns(turn.visual, results),
+    [turn.visual, results],
+  );
   if (turn.access_revoked) {
     return (
       <article className="teacher-turn" data-turn-id={turn.id}>
@@ -96,15 +101,18 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
           {turn.clarification ? (
             <Clarification prompt={turn.clarification} onAction={submit} />
           ) : null}
-          {turn.visualSpec && (
-            <DynamicVisual
-              spec={turn.visualSpec}
-              results={results}
+          {visualSources.length ? (
+            <VisualSandbox
+              visual={turn.visual}
+              sources={visualSources}
               onDrilldown={drilldown}
               onOpen={openTarget}
+              onAsk={submit}
+              fallback={resultCards}
             />
+          ) : (
+            resultCards
           )}
-          {resultCards}
           {canReplay && runIds.length ? (
             <button
               type="button"
