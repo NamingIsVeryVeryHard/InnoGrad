@@ -8,7 +8,7 @@ import React, {
 import { createPortal } from "react-dom";
 import styles from "./agent-chat.css?inline";
 import { renderMarkdown } from "./chat-markdown.js";
-import { mountConversation } from "./prototype/teacher-agent.js";
+import { TeacherChat } from "./teacher-chat/TeacherChat.jsx";
 
 const guides = [
   [
@@ -32,7 +32,7 @@ function Bubble({ role, text }) {
       node.current.replaceChildren(renderMarkdown(text));
   }, [role, text]);
   return (
-    <div ref={node} className={"bubble " + role}>
+    <div ref={node} className={`bubble ${role}`}>
       {role === "user" ? text : null}
     </div>
   );
@@ -43,116 +43,76 @@ export function AgentChat() {
   const input = useRef(null);
   const launcher = useRef(null);
   const close = useRef(null);
-  const panel = useRef(null);
-  const scroll = useRef(null);
-  const conversationRoot = useRef(null);
-  const refreshConversation = useRef(null);
+  const guideContent = useRef(null);
   const [shadow, setShadow] = useState(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
   const [teacherSession, setTeacherSession] = useState(null);
-  const [started, setStarted] = useState(false);
-  const openTeacherConversation = useCallback((refresh = false) => {
-    if (refresh || panel.current?.hidden) refreshConversation.current?.();
-    setStarted(true);
-    setOpen(true);
-  }, []);
+  const [wide, setWide] = useState(false);
+
   useLayoutEffect(() => {
-    const el = host.current;
-    setShadow(el.shadowRoot || el.attachShadow({ mode: "open" }));
+    const element = host.current;
+    setShadow(element.shadowRoot || element.attachShadow({ mode: "open" }));
     const receive = (event) => {
       const text = event.detail?.content;
       if (typeof text === "string")
-        setMessages((prev) => [...prev, { role: "assistant", text }]);
+        setMessages((previous) => [...previous, { role: "assistant", text }]);
     };
     const sessionChanged = (event) => {
       const next = event.detail;
-      const canAsk = ["teacher", "manager"].includes(next?.user.role);
-      const openFromRoute = canAsk && location.hash === "#teacher-agent";
+      const canAsk = ["teacher", "manager"].includes(next?.user?.role);
       setTeacherSession(canAsk ? next : null);
-      setOpen(openFromRoute);
-      setStarted(openFromRoute);
       setDraft("");
       setMessages([]);
+      setOpen(false);
+      setWide(false);
     };
-    el.addEventListener("agent:reply", receive);
+    element.addEventListener("agent:reply", receive);
     window.addEventListener("innograd:session", sessionChanged);
     return () => {
-      el.removeEventListener("agent:reply", receive);
+      element.removeEventListener("agent:reply", receive);
       window.removeEventListener("innograd:session", sessionChanged);
     };
   }, []);
+
   useLayoutEffect(() => {
-    if (!teacherSession) return;
-    const openFromNavigation = () => openTeacherConversation();
-    const refreshFromNavigation = () => openTeacherConversation(true);
-    const routeChanged = (event) => {
-      if (location.hash === "#teacher-agent") openFromNavigation();
-      else if (new URL(event.oldURL).hash === "#teacher-agent") setOpen(false);
-    };
-    window.addEventListener("hashchange", routeChanged);
-    window.addEventListener("innograd:agent-open", openFromNavigation);
-    window.addEventListener("innograd:agent-refresh", refreshFromNavigation);
-    return () => {
-      window.removeEventListener("hashchange", routeChanged);
-      window.removeEventListener("innograd:agent-open", openFromNavigation);
-      window.removeEventListener(
-        "innograd:agent-refresh",
-        refreshFromNavigation,
-      );
-    };
-  }, [teacherSession, openTeacherConversation]);
-  useLayoutEffect(() => {
-    if (!teacherSession || !started) return;
-    const root = conversationRoot.current;
-    const controller = new AbortController();
-    refreshConversation.current = mountConversation(root, (path, options) =>
-      teacherSession.api(path, { ...options, signal: controller.signal }),
-    );
-    return () => {
-      refreshConversation.current = null;
-      controller.abort();
-      root.replaceChildren();
-    };
-  }, [teacherSession, started]);
+    if (guideContent.current && open)
+      guideContent.current.scrollTop = guideContent.current.scrollHeight;
+  }, [messages, open]);
+
   useEffect(() => {
-    if (!open) return;
-    const question = teacherSession
-      ? conversationRoot.current.querySelector("textarea:enabled")
-      : input.current;
-    (question || close.current).focus();
+    if (!teacherSession) return;
+    const collapse = () => setOpen(false);
+    window.addEventListener("innograd:open-portrait", collapse);
+    return () => window.removeEventListener("innograd:open-portrait", collapse);
+  }, [teacherSession]);
+
+  useEffect(() => {
+    if (open) (teacherSession ? close.current : input.current)?.focus();
   }, [open, teacherSession]);
-  useLayoutEffect(() => {
-    if (!teacherSession && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [messages, open, teacherSession]);
-  function toggle() {
-    if (open) {
-      launcher.current.focus();
-      setOpen(false);
-    } else if (teacherSession) openTeacherConversation();
-    else setOpen(true);
-  }
+
+  const toggle = useCallback(() => {
+    if (open) launcher.current?.focus();
+    setOpen((value) => !value);
+  }, [open]);
+
   function submit(value) {
     const text = value.trim();
     if (!text) return;
     const guide = guides.find(([keyword]) => text.includes(keyword));
     const reply = guide
-      ? "使用指引\n" + guide[1]
+      ? `使用指引\n${guide[1]}`
       : "当前提供预设使用指引，尚未接入 AI 对话服务，无法查询个人数据或执行操作。你可以询问论文材料提交、审核进度或培养任务。";
-    setMessages((prev) => [
-      ...prev,
+    setMessages((previous) => [
+      ...previous,
       { role: "user", text },
       { role: "assistant", text: reply },
     ]);
     setDraft("");
-    input.current.focus();
+    input.current?.focus();
   }
-  function suggest(event) {
-    const button = event.target.closest("button");
-    if (button) submit(button.firstChild.textContent);
-  }
+
   function enter(event) {
     if (
       event.key === "Enter" &&
@@ -163,6 +123,7 @@ export function AgentChat() {
       submit(draft);
     }
   }
+
   return (
     <div
       id="innograd-agent"
@@ -178,10 +139,8 @@ export function AgentChat() {
         createPortal(
           <>
             <style>{styles}</style>
-
             <section
-              ref={panel}
-              className="panel"
+              className={`panel ${teacherSession ? "teacher-panel" : ""} ${teacherSession && wide ? "is-wide" : ""}`}
               id="agent-panel"
               role="dialog"
               aria-label="InnoGrad Agent 对话"
@@ -205,24 +164,14 @@ export function AgentChat() {
                 </button>
               </header>
               {teacherSession ? (
-                <div
-                  ref={conversationRoot}
-                  className="content conversation-root"
-                  onKeyDown={(event) => {
-                    if (
-                      event.target.matches("textarea[name=question]") &&
-                      event.key === "Enter" &&
-                      !event.shiftKey &&
-                      !event.nativeEvent.isComposing
-                    ) {
-                      event.preventDefault();
-                      event.target.form.requestSubmit();
-                    }
-                  }}
+                <TeacherChat
+                  session={teacherSession}
+                  open={open}
+                  onWidthChange={setWide}
                 />
               ) : (
                 <>
-                  <div ref={scroll} className="content">
+                  <div className="content" ref={guideContent}>
                     <div hidden={messages.length > 0} className="welcome">
                       <div className="eyebrow">HERE TO HELP</div>
                       <h2>
@@ -235,16 +184,21 @@ export function AgentChat() {
                         <br />
                         让每一步都有清晰的方向。
                       </p>
-                      <div onClick={suggest} className="suggestions">
-                        <button type="button">
-                          如何提交论文材料？<span>↗</span>
-                        </button>
-                        <button type="button">
-                          在哪里查看审核进度？<span>↗</span>
-                        </button>
-                        <button type="button">
-                          如何查看我的培养任务？<span>↗</span>
-                        </button>
+                      <div className="suggestions">
+                        {[
+                          "如何提交论文材料？",
+                          "在哪里查看审核进度？",
+                          "如何查看我的培养任务？",
+                        ].map((question) => (
+                          <button
+                            type="button"
+                            key={question}
+                            onClick={() => submit(question)}
+                          >
+                            {question}
+                            <span>↗</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <div
@@ -253,8 +207,8 @@ export function AgentChat() {
                       aria-label="聊天消息"
                       aria-live="polite"
                     >
-                      {messages.map((message, i) => (
-                        <Bubble key={i} {...message} />
+                      {messages.map((message, index) => (
+                        <Bubble key={index} {...message} />
                       ))}
                     </div>
                   </div>
@@ -274,7 +228,7 @@ export function AgentChat() {
                         placeholder="输入你的问题…"
                         maxLength="2000"
                         rows="1"
-                      ></textarea>
+                      />
                       <button
                         className="send"
                         aria-label="发送消息"

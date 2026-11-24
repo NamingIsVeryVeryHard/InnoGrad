@@ -1,12 +1,31 @@
-import { marked } from "./vendor/marked.js";
+import { Marked, marked } from "./vendor/marked.js";
 import DOMPurify from "./vendor/purify.js";
 
+const controlledMarkdown = new Marked({
+  renderer: {
+    html({ text }) {
+      return text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    },
+    link({ tokens }) {
+      return this.parser.parseInline(tokens);
+    },
+    image({ text }) {
+      return this.html({ text });
+    },
+  },
+});
+
 // Build an allowlisted fragment; never insert backend HTML directly.
-export function renderMarkdown(text) {
+export function renderMarkdown(text, { controlled = false } = {}) {
+  const parser = controlled ? controlledMarkdown : marked;
   const fragment = DOMPurify.sanitize(
-    marked.parse(String(text), { gfm: true, breaks: true }),
+    parser.parse(String(text), { gfm: true, breaks: true }),
     {
       RETURN_DOM_FRAGMENT: true,
+      FORBID_TAGS: controlled ? ["a", "img"] : [],
       ALLOWED_TAGS: [
         "p",
         "br",

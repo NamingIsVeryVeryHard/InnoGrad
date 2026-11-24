@@ -1,4 +1,5 @@
 import { renderGrowth, renderWarnings } from "./growth-ui.js?v=campus-v1";
+import { fieldLabels, formatValue } from "../teacher-chat/field-labels.js";
 const $ = (s) => document.querySelector(s),
   esc = (v) =>
     String(v ?? "").replace(
@@ -125,7 +126,6 @@ const navs = [
   ["students", "users", "学生管理"],
   ["tasks", "task", "培养任务"],
   ["reviews", "spark", "Agent 审核"],
-  ["teacher-agent", "search", "Agent 论文问答"],
   ["papers", "paper", "论文成果"],
   ["archives", "archive", "成果档案"],
   ["portraits", "chart", "成长画像"],
@@ -134,7 +134,6 @@ const navs = [
   ["logs", "history", "操作记录"],
   ["settings", "settings", "系统设置"],
 ];
-const canAskPapers = () => ["teacher", "manager"].includes(role);
 async function go(p) {
   $("#dialog").close();
   page = p;
@@ -142,11 +141,6 @@ async function go(p) {
   query = "";
   pageNum = 1;
   menu = false;
-  if (p === "teacher-agent" && location.hash === "#teacher-agent") {
-    render();
-    window.dispatchEvent(new Event("innograd:agent-open"));
-    return;
-  }
   location.hash = p;
   await refresh();
 }
@@ -157,15 +151,13 @@ function render() {
   if (
     (role === "student" &&
       ["students", "reviews", "rules", "logs"].includes(page)) ||
-    (role !== "manager" && page === "rules") ||
-    (page === "teacher-agent" && !canAskPapers())
+    (role !== "manager" && page === "rules")
   )
     page = "dashboard";
   if (!navs.some((n) => n[0] === page)) page = "dashboard";
   const title = navs.find((n) => n[0] === page)[2];
   const available = navs.filter(
     (n) =>
-      (n[0] !== "teacher-agent" || canAskPapers()) &&
       (role !== "operator" ||
         ["dashboard", "settings", "logs"].includes(n[0])) &&
       !(
@@ -463,12 +455,6 @@ const views = {
   students: studentsView,
   tasks: taskView,
   reviews: agentReviewView,
-  "teacher-agent": () =>
-    heading(
-      "Agent 论文问答",
-      "在当前授权范围内查询论文成果，查看分析和材料依据。",
-      btn("打开论文问答", "navigate:teacher-agent", true, "search"),
-    ),
   papers: () => listing("papers"),
   archives: () => listing("archives"),
   portraits,
@@ -936,6 +922,17 @@ function settingsView() {
     `<section class="card"><div class="detail-content"><div class="switch-row"><div><h3>当前登录身份</h3><p>${esc(actor())} · ${roleName()}。授权范围由服务端控制。</p></div>${btn("退出登录", "logout")}</div><div class="switch-row"><div><h3>Agent 与归档 Worker</h3><p>${systemStatus.worker_last_seen ? "最近心跳：" + esc(new Date(systemStatus.worker_last_seen).toLocaleString("zh-CN")) : "尚未收到 Worker 心跳，请启动后台处理进程。"}</p></div><span class="badge ${systemStatus.worker_online ? "" : "amber"}">${systemStatus.worker_online ? "运行中" : "无近期心跳"}</span></div><div class="switch-row"><div><h3>Agent 审核服务</h3><p>${!capabilities.model_configured ? "Agent 服务待配置。设置接口后可启动材料解析、规则与证据审核。" : "已配置 Agent / 模型适配器，执行状态以任务结果为准。"} 审核通过自动归档；异常进入机构处理队列。</p></div><span class="badge">${capabilities.model_configured ? esc(capabilities.mode) : "待配置"}</span></div><div class="switch-row"><div><h3>附件与业务存储</h3><p>材料与版本写入数据库；附件保存于服务端受控目录。单份上限 50 MB。</p></div><span class="badge">服务端持久化</span></div><div class="switch-row"><div><h3>业务数据导出</h3><p>归档清单由后台生成，下载前重新校验授权与有效期。</p></div>${btn("打开成果档案", "navigate:archives")}</div><div class="callout amber" style="margin-top:20px">学校统一认证、OCR 与真实模型服务需要校方配置。当前仅显示已经执行的结果，不生成模拟评分或模拟审核结论。</div></div></section>`
   );
 }
+function versionFields(kind, form) {
+  if (kind !== "paper")
+    return `<pre>${esc(JSON.stringify(form, null, 2))}</pre>`;
+  const fields = Object.entries(form)
+    .filter(([key, value]) => Object.hasOwn(fieldLabels, key) && value)
+    .map(
+      ([key, value]) =>
+        `<div><dt>${esc(fieldLabels[key])}</dt><dd>${esc(formatValue(value))}</dd></div>`,
+    );
+  return `<dl class="facts">${fields.join("")}</dl>`;
+}
 async function showRecord(record) {
   const raw = await api("/submissions/" + record.id),
     r = normalize(raw),
@@ -972,7 +969,7 @@ async function showRecord(record) {
       .reverse()
       .map(
         (v) =>
-          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary><pre>${esc(JSON.stringify(v.snapshot.form, null, 2))}</pre>${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)}</button><br>`).join("")}</details>`,
+          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary>${versionFields(r.kind, v.snapshot.form)}${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)}</button><br>`).join("")}</details>`,
       )
       .join("")}</div>`,
     `${editable ? btn("编辑材料", "edit:" + r.id, true) : ""}${mine && r.status === "archived" && r.kind === "paper" ? btn("更新论文进展", "update:" + r.id) : ""}${r.effective ? btn("生成归档导出", "export-record:" + r.id) : ""}${r.status === "archived" ? btn("申请更正", "correct:" + r.id) : ""}${role === "manager" && ["pending", "returned"].includes(r.status) ? btn("调整复核教师", "reassign:" + r.id) : ""}<button class="btn" data-close>关闭</button>`,
@@ -983,6 +980,19 @@ async function showRecord(record) {
     version: raw.current_version_id,
   });
 }
+window.addEventListener("innograd:open-submission", (event) => {
+  const submissionId = event.detail?.submissionId;
+  if (!/^[A-Za-z0-9-]+$/.test(submissionId || "")) return;
+  showRecord({ id: submissionId }).catch(showError);
+});
+window.addEventListener("innograd:open-portrait", (event) => {
+  const studentId = event.detail?.studentId;
+  if (!/^[A-Za-z0-9-]+$/.test(studentId || "")) return;
+  selectedStudent = studentId;
+  growthTab = "personal";
+  growthPeriod = "";
+  go("portraits").catch(showError);
+});
 async function editRecord(record) {
   const raw = await api("/submissions/" + record.id);
   if (raw.student_id !== me.id || !["draft", "returned"].includes(raw.status))
@@ -1190,9 +1200,7 @@ async function action(raw) {
   } else if (a === "navigate") await go(arg);
   else if (a === "agent-config") agentConfigDialog();
   else if (a === "refresh") {
-    if (page === "teacher-agent" && canAskPapers())
-      window.dispatchEvent(new Event("innograd:agent-refresh"));
-    else await refresh();
+    await refresh();
   } else if (a === "logout") {
     await post("/auth/logout");
     me = null;
@@ -1746,10 +1754,6 @@ window.addEventListener("hashchange", () => {
     filter = "all";
     query = "";
     pageNum = 1;
-    if (next === "teacher-agent" && canAskPapers()) {
-      $("#dialog").close();
-      menu = false;
-    }
     refresh().catch(showError);
   }
 });

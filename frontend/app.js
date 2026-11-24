@@ -1,4 +1,5 @@
 import { enhanceRecord } from "./workflow.js";
+import { fieldLabels, formatValue } from "./teacher-chat/field-labels.js";
 let me = null,
   csrf = "",
   people = [],
@@ -189,7 +190,7 @@ function render() {
       }),
   );
 }
-async function openRecord(id) {
+async function openRecord(id, fromChat = false) {
   selected = id;
   const r = await api("/submissions/" + id);
   const box = $("detail");
@@ -324,9 +325,20 @@ async function openRecord(id) {
           " · " +
           new Date(v.created_at).toLocaleString(),
       ),
-      el("pre", JSON.stringify(v.snapshot.form, null, 2)),
     );
+    if (fromChat && r.kind === "paper") {
+      const fields = el("dl");
+      for (const [field, value] of Object.entries(v.snapshot.form)) {
+        if (Object.hasOwn(fieldLabels, field) && value)
+          fields.append(
+            el("dt", fieldLabels[field]),
+            el("dd", formatValue(value)),
+          );
+      }
+      part.append(fields);
+    } else part.append(el("pre", JSON.stringify(v.snapshot.form, null, 2)));
     for (const fid of v.snapshot.file_ids) {
+      if (!/^[A-Za-z0-9-]+$/.test(fid)) continue;
       const a = el("a", "下载原件 " + fid.slice(0, 8));
       a.href = "/api/v1/files/" + fid + "/download";
       a.target = "_blank";
@@ -398,6 +410,15 @@ async function openRecord(id) {
       ),
     );
 }
+window.addEventListener("innograd:open-submission", (event) => {
+  const submissionId = event.detail?.submissionId;
+  if (!/^[A-Za-z0-9-]+$/.test(submissionId || "")) return;
+  guard(async () => {
+    await openRecord(submissionId, true);
+    $("detail").scrollIntoView({ block: "start" });
+  });
+});
+
 $("loginForm").onsubmit = (e) => {
   e.preventDefault();
   guard(async () => {
