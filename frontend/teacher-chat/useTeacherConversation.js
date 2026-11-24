@@ -30,7 +30,7 @@ function legacyPrompt(result) {
 
 function readHistory(detail) {
   const turns = (detail.turns || []).map((turn) =>
-    turn.access_revoked ? revokedTurn(turn) : { ...turn, visual: null },
+    turn.access_revoked ? revokedTurn(turn) : turn,
   );
   const latest = turns.at(-1);
   const cards = new Map();
@@ -272,7 +272,6 @@ export function useTeacherConversation(session, open) {
               user_message: displayText,
               analysis: reply.analysis ?? reply.turn.analysis,
               analysisNotice: reply.analysis_notice,
-              visual: reply.visual ?? null,
               clarification:
                 reply.turn.clarification ?? legacyPrompt(reply.result),
             };

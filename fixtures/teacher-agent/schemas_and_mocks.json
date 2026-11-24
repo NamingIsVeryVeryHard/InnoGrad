@@ -8545,43 +8545,6 @@
         "title": "TurnTimelineItem",
         "type": "object"
       },
-      "VisualArtifact": {
-        "additionalProperties": false,
-        "properties": {
-          "kind": {
-            "const": "html_sandbox",
-            "default": "html_sandbox",
-            "title": "Kind",
-            "type": "string"
-          },
-          "title": {
-            "default": "",
-            "maxLength": 80,
-            "title": "Title",
-            "type": "string"
-          },
-          "html": {
-            "maxLength": 16384,
-            "minLength": 1,
-            "title": "Html",
-            "type": "string"
-          },
-          "source_run_ids": {
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Source Run Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "html",
-          "source_run_ids"
-        ],
-        "title": "VisualArtifact",
-        "type": "object"
-      },
       "YearFilter": {
         "additionalProperties": false,
         "properties": {
@@ -8670,16 +8633,9 @@
         "title": "Analysis Notice"
       },
       "visual": {
-        "anyOf": [
-          {
-            "$ref": "#/$defs/VisualArtifact"
-          },
-          {
-            "type": "null"
-          }
-        ],
         "default": null,
-        "description": "Initial-response sandboxed HTML visualization grounded in results."
+        "title": "Visual",
+        "type": "null"
       },
       "results": {
         "items": {

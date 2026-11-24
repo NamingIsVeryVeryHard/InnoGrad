@@ -108,6 +108,7 @@ async function snapshot(panel) {
           heading: card.querySelector("h4")?.textContent,
           asOf: card.querySelector(".data-as-of time")?.dateTime,
           text: card.textContent,
+          chart: Array.from(card.querySelectorAll(".breakdown-segment"), (node) => node.title),
           buttons: Array.from(card.querySelectorAll(".breakdown-pills button"), (node) => node.textContent),
           metrics: Array.from(card.querySelectorAll(".kpi"), (node) => node.textContent),
           rows: Array.from(card.querySelectorAll(".paper-item"), (row) => ({
@@ -138,47 +139,18 @@ async function waitForReady(panel) {
   if (await loading.count()) await loading.last().waitFor({state: "hidden"});
 }
 
-async function expandVisualEvidence(panel) {
-  const summary = panel.locator(".visual-evidence-toggle:not([open]) > summary");
-  while (await summary.count()) {
-    await summary.last().click();
-  }
-}
-
 async function capture(response, panel, started) {
   const body = await response.json();
   const latencyMs = started == null ? undefined : Math.round(performance.now() - started);
   const latest = body.turn ?? body.turns?.at(-1);
-  let visualState;
   if (latest?.id) {
     const turn = panel.locator(`[data-turn-id="${latest.id}"]`);
     await turn.waitFor();
     await panel.locator('textarea[aria-label="你的问题"]:enabled').waitFor();
-    const visual = latest.visual ?? body.visual;
-    if (visual && liveOutput) {
-      await turn.locator(".visual-sandbox-ready, .visual-fallback").waitFor();
-      const iframe = turn.locator(".visual-frame iframe");
-      if (await iframe.count()) {
-        await turn.locator(".visual-frame").evaluate(async host => {
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          await Promise.all(host.getAnimations().map(animation => animation.finished));
-        });
-        const guest = iframe.contentFrame().locator("iframe").contentFrame();
-        const chart = await guest.locator("canvas").evaluateAll(nodes => nodes.map(canvas => {
-          const chart = window.Chart.getChart(canvas);
-          return {labels: chart?.data.labels, values: chart?.data.datasets.map(dataset => dataset.data)};
-        }));
-        visualState = {phase: "ready", chart, height: (await iframe.boundingBox()).height,
-          sandbox: await iframe.getAttribute("sandbox")};
-      } else {
-        visualState = {phase: "fallback"};
-      }
-    }
+    check(`turn ${latest.id} renders without an iframe`, await turn.locator("iframe").count(), 0);
   }
-  await panel.locator(".visual-sandbox-loading").first().waitFor({state: "hidden"});
-  await expandVisualEvidence(panel);
   return {
-    latencyMs, visualState,
+    latencyMs,
     status: response.status(),
     request: response.request().postDataJSON(),
     body,
@@ -281,6 +253,9 @@ function inspectAggregate(phase, captured, expected, dates, clock) {
     /^\d+(条论文申报记录数|人涉及学生人数)$/.test(label)), [
     `${expected.total}条论文申报记录数`, `${expected.students}人涉及学生人数`,
   ]);
+  check(`${phase} host chart segments`, sorted(ui.flatMap((entry) => entry.chart)), sorted(Object.entries(expected.groups).map(
+    ([status, [count]]) => `${statusLabels[status]} ${count}条`,
+  )));
   check(`${phase} UI group rows`, sorted(ui.flatMap((entry) => entry.buttons)), sorted(Object.entries(expected.groups).map(
     ([status, [count, students]]) => `${statusLabels[status]} ${count}条 · ${students}人`,
   )));
@@ -354,7 +329,6 @@ async function run() {
       });
     });
     const screenshot = async (name, panel, showRows = false) => {
-      await expandVisualEvidence(panel);
       const rows = panel.locator(".teacher-turn").last().locator(".agent-result .paper-item");
       if (showRows && await rows.count()) await rows.last().scrollIntoViewIfNeeded();
       await panel.screenshot({
@@ -370,10 +344,7 @@ async function run() {
     const liveTurnShot = async (name) => {
       if (!liveOutput) return;
       const turn = panel.locator(".teacher-turn").last();
-      const evidence = turn.locator(".visual-evidence-toggle[open] > summary");
-      if (await evidence.count()) await evidence.click();
-      const visual = turn.locator(".visual-frame");
-      await liveShot(name, await visual.count() ? visual : turn.locator(".agent-result").first());
+      await liveShot(name, turn.locator(".agent-result").first());
     };
 
     await page.goto(`${root}/prototype/`);
@@ -392,7 +363,7 @@ async function run() {
     if (first.status !== 200) return;
     inspectAggregate("annual overview", first, overview, dates, clock);
     await liveTurnShot("01-live-turn1-overview");
-    if (liveOutput && first.visualState?.phase === "ready") {
+    if (liveOutput) {
       await panel.getByRole("button", {name: "展开宽浮窗"}).click();
       await liveTurnShot("01b-live-turn1-wide");
       await panel.getByRole("button", {name: "恢复默认宽度"}).click();

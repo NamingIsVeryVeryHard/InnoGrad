@@ -31,7 +31,7 @@ from .privacy import (
     prepare_question, render_agent_response, resolve_agent_spec, resolve_subjects,
     roster, safe_agent_clarification, safe_language, student_ids, subject_filter, with_subject,
 )
-from .visual import ExtractedTurnOutput, extract_visual_artifact
+from .visual import strip_visual_blocks
 
 
 @dataclass(frozen=True)
@@ -604,7 +604,7 @@ class TeacherQueryEngine:
         with self._grant(actor, conversation_id, version, digest, selected, ambiguous, request.budget,
                          only_published=requests_only_published(request.user_message)) as (issue_token, key):
             try:
-                text = self.planner.analyze(request, issue_token)
+                text = strip_visual_blocks(self.planner.analyze(request, issue_token))
             except TimeoutError:
                 raise PlannerUnavailableError("规划服务超时", retry_after_seconds=1) from None
 
@@ -624,13 +624,7 @@ class TeacherQueryEngine:
                     if result.status != "ok" or _view_digest(agent_tool_view(result)) != call["view_digest"]:
                         raise AgentResultViewChangedError(_RESULT_VIEW_CHANGED)
                     results.append(result)
-                extracted = extract_visual_artifact(text, results) if results else ExtractedTurnOutput("", None)
-                if results and extracted.prose:
-                    analysis, notice = render_agent_response(extracted.prose, results)
-                elif results and extracted.visual:
-                    analysis, notice = None, None
-                else:
-                    analysis, notice = render_agent_response(text, results) if results else (None, None)
+                analysis, notice = render_agent_response(text, results) if results else (None, None)
                 safe_question, _ = prepare_question(request.user_message, roster(session, scope[0]))
                 turn = StoredTurn(
                     grant.turn_id, conversation.turn_count + 1, "natural_language",
@@ -641,7 +635,7 @@ class TeacherQueryEngine:
                 )
                 clarification = None
                 if not results or grant.clarification_subjects is not None:
-                    clarification = self._agent_clarification(session, user, grant, extracted.prose or text)
+                    clarification = self._agent_clarification(session, user, grant, text)
                 self._append_turn(session, conversation, version, scope, turn, active_query=raw)
                 final = (results[-1] if results else ResultEnvelope(
                     status="clarification_needed", clarification=clarification,
@@ -650,8 +644,7 @@ class TeacherQueryEngine:
                 timeline = _timeline(turn, final.applied_query, clarification=clarification)
                 return TurnResponse(conversation_id=conversation_id, conversation_lock_version=version + 1,
                                     turn=timeline, result=final, results=results,
-                                    analysis=analysis, analysis_notice=notice,
-                                    visual=extracted.visual), {"turn_id": turn.id}
+                                    analysis=analysis, analysis_notice=notice), {"turn_id": turn.id}
 
             with self.grants.finalize(key) as grant:
                 return self._write_once(actor, record, finish,

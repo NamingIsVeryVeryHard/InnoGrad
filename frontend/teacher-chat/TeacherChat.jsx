@@ -7,7 +7,6 @@ import {
   titleFromQuery,
 } from "./ResultBlocks.jsx";
 import { runIdsFor, useTeacherConversation } from "./useTeacherConversation.js";
-import { VisualSandbox } from "./VisualSandbox.jsx";
 
 const starterQuestions = [
   "今年论文发表情况",
@@ -94,25 +93,7 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
           {turn.clarification ? (
             <Clarification prompt={turn.clarification} onAction={submit} />
           ) : null}
-          {turn.visual && results.length ? (
-            <VisualSandbox
-              visual={turn.visual}
-              results={results}
-              onOpen={openTarget}
-              onDrilldown={(runId, patch, label) =>
-                submit({
-                  mode: "drilldown_patch",
-                  parent_run_id: runId,
-                  patch,
-                  label,
-                })
-              }
-              onAsk={submit}
-              fallback={resultCards}
-            />
-          ) : (
-            resultCards
-          )}
+          {resultCards}
           {canReplay && runIds.length ? (
             <button
               type="button"

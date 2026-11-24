@@ -683,65 +683,6 @@ form:focus-within {
   font-size: 11px;
   color: #78696e;
 }
-.visual-sandbox {
-  margin: 8px 0 10px;
-  overflow: hidden;
-  border: 1px solid #eee4e6;
-  border-radius: 12px;
-  background: #fffafa;
-}
-.visual-frame {
-  min-height: 40px;
-  overflow: hidden;
-  transition: height 0.15s ease;
-}
-.visual-frame iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-.visual-frame > *,
-.visual-frame iframe {
-  width: 100%;
-  height: 100% !important;
-}
-.visual-title {
-  padding: 9px 12px 0;
-  color: #5d4f55;
-  font-size: 12px;
-  font-weight: 600;
-}
-.visual-loading-shimmer {
-  height: 56px;
-  background: linear-gradient(90deg, #fffafa 0%, #f5e8eb 45%, #fffafa 90%);
-  background-size: 220% 100%;
-  animation: visual-shimmer 1.2s ease-in-out infinite;
-}
-.visual-evidence-toggle {
-  border-top: 1px solid #eee4e6;
-  padding: 8px 12px 10px;
-  background: white;
-}
-.visual-evidence-toggle summary {
-  color: #8f1b31;
-  font-size: 11px;
-  font-weight: 600;
-}
-.visual-evidence-toggle[open] > :not(summary) {
-  margin-top: 8px;
-}
-.visual-fallback {
-  display: contents;
-}
-@keyframes visual-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
 @container (min-width: 500px) {
   .paper-table-head,
   .paper-table .paper-item {
@@ -806,10 +747,6 @@ form:focus-within {
   }
   .panel.is-wide {
     width: calc(100vw - 32px);
-  }
-  .visual-sandbox {
-    margin-left: -4px;
-    margin-right: -4px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
