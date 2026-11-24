@@ -4,6 +4,8 @@
 
 ## 检查范围
 
+本报告的静态扫描取样止于 `cd04e98`。后续可视化数据隔离修复的重构对比、实际操作截图及测试结果见[教师论文问答验收](teacher_visual_acceptance.md)。
+
 [PR #44](https://github.com/NamingIsVeryVeryHard/InnoGrad/pull/44) 的目标分支是 `main`（`00d6ea3`）。`backend/app/teacher_agent` 和 `frontend/teacher-chat` 均是本分支新增的模块。后端质量指标统计教师查询包；前端检查覆盖教师聊天组件，发现见[代码评审报告](code_review.md)。两个取样版本均从 Git 提交直接导出。
 
 ## 扫描前后对比
