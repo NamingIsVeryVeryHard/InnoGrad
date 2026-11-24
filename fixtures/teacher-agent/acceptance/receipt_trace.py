@@ -443,9 +443,10 @@ def evidence(output, invalid_receipt):
     print(json.dumps(verification), flush=True)
     if invalid_receipt:
         return verification["expected_failure_observed"]
+    expected_queries = 3 if os.getenv("VISUAL_LIVE_SCREENSHOTS") else 6
     return (
-        len(query_turns) == 4 and query_turns <= successful_turns
-        and len(successful_turns) == len(responses) == 5
+        len(query_turns) == expected_queries and query_turns <= successful_turns
+        and len(successful_turns) == len(responses) == expected_queries + 1
         and verification["provider_requests"] > 0
         and verification["correlated_receipts"] == verification["mcp_responses"] == verification["ingress"]
     )
