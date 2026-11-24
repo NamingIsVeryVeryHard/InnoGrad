@@ -47,14 +47,16 @@ $env:REVIEW_WORKFLOW = "manual"
 - `legacy-submission.json`：旧版本论文表单，用于确认历史数据仍能读取。
 - `proof-author-order.pdf`：合成作者列表与本人位次证明。
 - `proof-article-page.pdf`：合成外部文章页面证明。
+- `proof-acceptance.pdf` 上传为“录用证明”，用于核对录用日期。
+- `proof-contribution.pdf` 上传为“本人贡献证明”，用于核对学生承担的工作。
 
 ## 推荐验收顺序
 
 1. 使用新的临时数据库初始化账号，登录 `student1`。
 2. 点击“新建论文成果”，先只选择复核教师并创建工作稿，再进入“继续填写”。不要把 `valid-submission.json` 直接提交到新建工作稿接口。
-3. 同时上传两个 PDF 作为证明附件，保存草稿后刷新页面，确认字段和附件仍在。
+3. 按材料类型上传上述四份 PDF，保存草稿后刷新页面，确认字段和附件仍在。
 4. 正式提交，确认状态变为“待 Agent 审核”，生成一个新的版本号。
-5. 用教师账号打开论文详情，确认题名、作者顺序、本人身份、DOI、文章链接和两个证明附件可追溯。
+5. 用教师账号打开论文详情，确认题名、作者顺序、本人身份、DOI、文章链接和四份证明附件可追溯。
 6. 在教师 Agent 中查询“今年论文情况”，打开论文结果来源，确认新论文出现在结果卡片和证据来源中。
 7. 用 `invalid-forms.json` 中的三个负例分别保存并提交，确认服务端返回 422，且不会生成版本。
 8. 用 `student2` 访问 `student1` 的提交和附件，确认返回 404。
@@ -73,8 +75,8 @@ $env:REVIEW_WORKFLOW = "manual"
 如果使用 Swagger 或脚本验收，接口顺序是：
 
 1. `POST /api/v1/submissions` 使用 `create-submission.json`。
-2. 上传两个附件，记录返回的 `file_id`。
-3. `PATCH /api/v1/submissions/{id}/draft` 使用 `draft-request.example.json`，把 `reviewer_id` 替换成实际用户 ID，把 `file_ids` 替换成两个上传结果。
+2. 逐份上传四个附件，记录各自返回的 `file_id`。
+3. `PATCH /api/v1/submissions/{id}/draft` 使用 `draft-request.example.json`，把 `reviewer_id` 替换成实际用户 ID，把 `file_ids` 替换成四个上传结果。
 4. `POST /api/v1/submissions/{id}/submit` 只发送 `{ "expected_lock_version": 1 }`。
 
 自动回归命令：
