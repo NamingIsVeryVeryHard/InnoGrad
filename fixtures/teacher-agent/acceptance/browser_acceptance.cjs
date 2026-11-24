@@ -353,7 +353,7 @@ async function run() {
     let panel = await openAgent(page);
     const {dates, clock, overview, doctoral, drill: drillRoster, studentName, namedPapers, published} = fixture;
 
-    const first = await send(page, panel, "今年论文发表情况怎么样？请按发表状态画一张条形图，方便我对比各组。");
+    const first = await send(page, panel, "今年论文发表情况怎么样？");
     observations.phases.overview = first;
     if (invalidReceipt) {
       check("injected receipt returns planner error", first.body.code, "INVALID_PLANNER_OUTPUT");
@@ -376,7 +376,7 @@ async function run() {
     }
     await screenshot("01-overview", panel, true);
 
-    const followup = await send(page, panel, "只看博士，按发表状态画条形图，让我能点进各组看论文。", Boolean(first.body.turn));
+    const followup = await send(page, panel, "只看博士生呢？", Boolean(first.body.turn));
     observations.phases.followup = followup;
     check("follow-up uses same conversation", followup.body.conversation_id, first.body.conversation_id);
     check("follow-up uses previous lock version", followup.request.expected_lock_version, first.body.conversation_lock_version);
