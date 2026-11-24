@@ -1,5 +1,3 @@
-import chartSource from "../node_modules/chart.js/dist/chart.umd.min.js?raw";
-
 const policy = [
   "default-src 'none'",
   "style-src 'unsafe-inline'",
@@ -101,6 +99,15 @@ function startWrapper(channel, guestDocument) {
   guest.sandbox = "allow-scripts";
   guest.referrerPolicy = "no-referrer";
   guest.srcdoc = guestDocument;
+  guest.addEventListener(
+    "load",
+    () => {
+      guest.addEventListener("load", () =>
+        parent.postMessage({ type: "error", channel }, "*"),
+      );
+    },
+    { once: true },
+  );
   document.body.append(guest);
 
   window.addEventListener("message", (event) => {
@@ -121,7 +128,7 @@ function startWrapper(channel, guestDocument) {
   });
 }
 
-export function buildVisualDocument({ html, channel, data }) {
+export function buildVisualDocument({ html, channel, data, chartSource }) {
   const guest = `<!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">

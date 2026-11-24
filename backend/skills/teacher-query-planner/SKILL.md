@@ -49,7 +49,11 @@ description: 查询教师授权范围内的论文记录，给出带溯源引用�
 
 ## 交互可视化 HTML
 
-成功查询且有数据时，先写带引用的中文结论，然后追加一个 `visual-html title="简短中文标题"` 围栏，内含本轮设计的 HTML、CSS 和脚本。教师只需提问。根据问题和结果设计视觉层次、布局和交互，例如在篇数与学生人数之间切换、查看对比组明细，或在当前论文列表内排序与筛选。图表、表格和文字可以组合。视图须适应窄屏，长标题可换行，避免横向溢出。用清晰的单位、颜色与留白突出问题关心的内容，并保留键盘焦点样式。
+成功查询且有数据时，先写带引用的中文结论，然后追加一个 `visual-html title="简短中文标题"` 围栏，内含本轮设计的 HTML、CSS 和脚本。根据问题选择布局和交互，例如在篇数与学生人数间切换、查看分组明细，或在当前论文列表内排序与筛选。
+
+- 用一句短标题点明答案，最多突出一个取自数据的关键数字。紧接着显示主视图和最有用的操作，让教师在默认窄窗口里就能找到下钻入口。相关操作可直接放进主视图。
+- 每项数据只展示在最能说明问题的位置。已经在主视图中显示的状态和数量，无需再铺成一排指标卡。次要信息放在后面或按需展开。
+- 用文字标签和单位标明状态、数值与含义。颜色用于区分组别或突出重点，保持对比度，组别可凭标签辨认。布局须适应窄屏，长标题可换行，并保留键盘焦点样式。
 
 ### 数据和操作
 
@@ -80,7 +84,7 @@ window.innograd = {
 }
 ```
 
-- 年度发表状态概览和博士生追问都要遍历 `run.breakdown`，为实际返回的每个状态渲染原生 `<button type="button">`。按钮可见文字和可访问名称用 `row.label`，例如「已发表」。计数单独展示。按钮始终可见，支持键盘操作。图表图例或仅鼠标可触发的画布区域不能代替按钮。
+- 年度发表状态概览和博士生追问都要直接遍历 `run.breakdown`。每行的 `row.label` 已中文化，`row.recordCount` 和 `row.studentCount` 使用驼峰字段。按实际返回行渲染原生 `<button type="button">`，不要从推测的英文状态键重建、筛选或翻译行。按钮可见文字和可访问名称用 `row.label`，例如「已发表」。计数单独展示。按钮始终可见，支持键盘操作。
 - 只为 `row.drilldownPatch` 非空的分组提供下钻。点击时把系统提供的补丁原样传给 `window.innograd.drilldown`。父查询保留当前年度和博士生等筛选。以下片段只说明按钮的数据绑定和事件。
 
 ```js
@@ -93,5 +97,5 @@ button.addEventListener("click", () =>
 ```
 
 - 展示论文明细时用 `run.items`。每条含 `submissionId` 的论文都要有可见的「材料详情」按钮，点击调用 `window.innograd.openSubmission(item.submissionId)`。把按钮放在对应标题所在行。画像补充视图可遍历 `run.portrait.records`。
-- 沙箱预载离线 `window.Chart`（Chart.js 4）和 `--ig-accent`、`--ig-bg`、`--ig-surface`、`--ig-border`、`--ig-text`、`--ig-muted`、`--ig-radius` 主题变量。用 Chart.js 时给图表容器设置有限高度，启用 `responsive: true` 和 `maintainAspectRatio: false`，数据集颜色使用十六进制。
+- 沙箱预载离线 `window.Chart`（Chart.js 4）和 `--ig-accent`、`--ig-bg`、`--ig-surface`、`--ig-border`、`--ig-text`、`--ig-muted`、`--ig-radius` 主题变量。图表首次显示即呈现完整数据，不使用入场动画。用 Chart.js 时给容器设置有限高度，设置 `animation: false`、`responsive: true`、`maintainAspectRatio: false`，数据集颜色使用十六进制。
 - 将 HTML 控制在 16 KiB 以内。使用内联样式和脚本。禁止外部链接与资源、`@import`、网络请求、存储、Cookie、访问父窗口以及 `<meta>`、`<base>`、`<form>`、`<iframe>`。没有成功查询时只输出正文。

@@ -5,6 +5,17 @@ const publicationDates = {
   accepted: "acceptance_date",
   published: "publication_date",
 };
+const groupFields = new Set([
+  "publication_status",
+  "review_status",
+  "degree",
+  "major",
+  "year",
+  "stage",
+  "award_name",
+  "award_level",
+  "application_status",
+]);
 
 function mapItem(item, titleCounts) {
   const dateField = publicationDates[item.publication_status] || "status_date";
@@ -98,6 +109,12 @@ export function buildVisualData(results) {
         })),
         breakdown: (summary.breakdown ?? []).map((row) => ({
           label: row.label.split(" / ").map(formatValue).join(" / "),
+          group_key: Object.fromEntries(
+            Object.entries(row.group_key ?? {}).filter(
+              ([field, value]) =>
+                groupFields.has(field) && typeof value === "string",
+            ),
+          ),
           recordCount: row.record_count,
           studentCount: row.student_count,
           drilldownPatch: row.drilldown_patch ?? null,
@@ -118,6 +135,7 @@ export function resolveVisualAction(action, data) {
       : null;
   }
   if (action.type === "drilldown") {
+    if (action.group !== "breakdown" && action.group !== "metrics") return null;
     const run = data.runs.find(({ runId }) => runId === action.runId);
     if (!run || !Number.isSafeInteger(action.index) || action.index < 0)
       return null;

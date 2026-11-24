@@ -77,13 +77,42 @@ async function captureVisual(page, filename) {
 function visualResponse(reply) {
   return {
     ...reply,
-    analysis: "今年共有 5 条论文申报记录，涉及 2 名学生，其中 3 条已发表。",
+    analysis: `今年共有 5 条论文申报记录，涉及 2 名学生，其中 3 条已发表。 [${reply.results?.[0]?.query_run_id || firstRun}]`,
     visual: {
       kind: "html_sandbox",
-      html: '<p data-model-visual>模型生成的展示内容</p>',
+      html: `<style>
+        section { display:grid; gap:.45rem; }
+        @media (width > 480px) { section { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+      </style>
+      <h2 data-model-visual>论文发表进度</h2><section id="rows"></section>
+      <script>
+        const run = window.__INNOGRAD_DATA__.runs[0];
+        const rows = document.querySelector("#rows");
+        function button(label, action) {
+          const node = document.createElement("button");
+          node.type = "button";
+          node.textContent = label;
+          node.onclick = action;
+          rows.append(node);
+        }
+        for (const row of run.breakdown) {
+          button(row.label, () => window.innograd.drilldown(run.runId, row.drilldownPatch, row.label));
+          rows.lastElementChild.dataset.groupKey = row.group_key.publication_status;
+        }
+        button("材料详情", () => window.innograd.openSubmission(run.items[0].submissionId));
+        button("无效材料", () => window.innograd.openSubmission("sub-not-in-run"));
+        button("无效下钻", () => window.innograd.drilldown(run.runId, { operation: "list" }, "自定义"));
+        button("追问博士生", () => window.innograd.ask("只看博士"));
+      </script>`,
       source_run_ids: [reply.results?.[0]?.query_run_id || firstRun],
     },
   };
+}
+
+function visualGuest(panel) {
+  return panel
+    .frameLocator(".visual-sandbox-ready iframe")
+    .frameLocator("iframe[data-visual-guest]");
 }
 
 function query(filters = [], overrides = {}) {
@@ -478,7 +507,7 @@ async function openWorkspace(
   entry = "/prototype/",
   options = {},
 ) {
-  const context = await browser.newContext({ serviceWorkers: "block" });
+  const context = await browser.newContext();
   const heldResponses = [];
   testContext.after(async () => {
     for (const response of heldResponses) response.release();
@@ -928,7 +957,7 @@ test("teacher renders Chinese results, citations, evidence, and material details
   await card.getByText(/截至\s*2026-11-22/).waitFor();
   await card.getByRole("button", { name: /已发表\s*3\s*条.*2\s*人/ }).waitFor();
   const workspaceHash = new URL(page.url()).hash;
-  await panel.getByRole("link", { name: `[${firstRun}]`, exact: true }).click();
+  await panel.getByRole("link", { name: "依据 1", exact: true }).click();
   assert.equal(new URL(page.url()).hash, workspaceHash);
   assert.equal(
     await card.evaluate((node) => node.getRootNode().activeElement === node),
@@ -988,37 +1017,94 @@ test("teacher renders Chinese results, citations, evidence, and material details
   assert.deepEqual(errors, []);
 });
 
-test("visual payload renders the host chart, groups and material actions", async (testContext) => {
+test("model-authored HTML, CSS and JS render with verified actions and progressive evidence", async (testContext) => {
   const { page, panel, openAgent, sendQuestion, writes, errors } =
     await openWorkspace(testContext, "teacher", "/prototype/", {
       turnResponse: visualResponse,
     });
   await openAgent();
   await sendQuestion(firstQuestion);
-  const card = resultCard(panel, firstRun);
-  await card.waitFor({ state: "attached" });
-  assert.equal(await panel.locator("iframe, [data-model-visual]").count(), 0);
-  await card.locator(".breakdown-bar").waitFor();
-  assert.deepEqual(
-    await card.locator(".breakdown-segment").evaluateAll(nodes => nodes.map(node => node.title)),
-    ["已投稿 1条", "已录用 1条", "已发表 3条"],
+  const guest = visualGuest(panel);
+  await guest.getByRole("heading", { name: "论文发表进度" }).waitFor();
+  assert.equal(
+    await guest.getByRole("button", { name: "已发表", exact: true }).getAttribute("data-group-key"),
+    "published",
   );
-  await captureVisual(page, "01-visual-chart-standard.png");
+  const card = resultCard(panel, firstRun);
+  assert.equal(await card.isVisible(), false);
+  await panel.getByRole("link", { name: "依据 1", exact: true }).click();
+  await card.waitFor();
+  await panel.locator(".visual-evidence-toggle > summary").click();
+  await guest.getByRole("button", { name: "无效材料" }).click();
+  await guest.getByRole("button", { name: "无效下钻" }).click();
+  assert.equal(writes.length, 2);
+  assert.equal(await page.getByRole("heading", { name: "论文成果 · 材料详情", exact: true }).count(), 0);
+  await captureVisual(page, "01-visual-standard.png");
   await panel.getByRole("button", { name: "展开宽浮窗", exact: true }).click();
-  await captureVisual(page, "02-visual-chart-wide.png");
-  const row = card.locator(".paper-item").first();
-  await row.getByRole("button", { name: "材料详情", exact: true }).click();
+  await captureVisual(page, "02-visual-wide.png");
+  await guest.getByRole("button", { name: "材料详情", exact: true }).click();
   await page.getByRole("heading", { name: "论文成果 · 材料详情", exact: true }).waitFor();
-  await captureVisual(page, "03-visual-action-to-modal.png");
+  await captureVisual(page, "03-visual-material.png");
   await page.getByLabel("关闭").click();
-  await card.getByRole("button", { name: "已发表 3条 · 2人", exact: true }).click();
-  await panel.locator(".teacher-turn").nth(1).locator(".agent-result").first().waitFor();
+  await guest.getByRole("button", { name: "已发表", exact: true }).click();
+  await panel.locator(".teacher-turn").nth(1).locator(".visual-sandbox-ready").waitFor();
   assertTurnRequest(writes.at(-1), 1, {
     mode: "drilldown_patch",
     parent_run_id: firstRun,
     patch: publishedPatch,
-    label: "已发表 3条",
+    label: "已发表",
   });
+  assert.deepEqual(errors, []);
+});
+
+test("visual ask uses a real click and fits a phone viewport", async (testContext) => {
+  const { page, panel, openAgent, sendQuestion, writes } =
+    await openWorkspace(testContext, "teacher", "/prototype/", {
+      turnResponse: visualResponse,
+    });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openAgent();
+  await sendQuestion(firstQuestion);
+  const ask = visualGuest(panel).getByRole("button", { name: "追问博士生" });
+  await ask.waitFor();
+  assert.equal(
+    await ask.evaluate((button) => {
+      button.click();
+      return document.documentElement.scrollWidth <= innerWidth;
+    }),
+    true,
+  );
+  assert.equal(writes.length, 2);
+  await ask.click();
+  await panel.locator(".teacher-turn").nth(1).locator(".visual-sandbox-ready").waitFor();
+  assertTurnRequest(writes.at(-1), 1, { mode: "natural_language", message: "只看博士" });
+});
+
+test("visual sandbox blocks its own network navigation and keeps result cards usable", async (testContext) => {
+  const { page, panel, openAgent, sendQuestion, errors } =
+    await openWorkspace(testContext, "teacher", "/prototype/", {
+      turnResponse(reply) {
+        const response = visualResponse(reply);
+        response.visual.html += `<button id="navigate" type="button">导航测试</button>
+          <script>
+            document.getElementById("navigate").onclick = () => {
+              location.href = "/visual-navigation-canary";
+            };
+          </script>`;
+        return response;
+      },
+    });
+  const requests = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/visual-navigation-canary"))
+      requests.push(request.url());
+  });
+  await openAgent();
+  await sendQuestion(firstQuestion);
+  await visualGuest(panel).getByRole("button", { name: "导航测试" }).click();
+  await panel.locator(".visual-fallback").waitFor();
+  await resultCard(panel, firstRun).waitFor();
+  assert.deepEqual(requests, []);
   assert.deepEqual(errors, []);
 });
 
@@ -1029,7 +1115,7 @@ test("visual result cards survive reload and disappear after access revocation",
     });
   await openAgent();
   await sendQuestion(firstQuestion);
-  await resultCard(panel, firstRun).waitFor();
+  await panel.locator(".visual-sandbox-ready").waitFor();
   await page.reload();
   await openAgent();
   await resultCard(panel, firstRun).waitFor();

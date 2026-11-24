@@ -172,7 +172,11 @@ def test_innoagent_prompt_requests_bespoke_visual_html_for_plain_questions(pi_ru
 
     assert "纯文本" in prompts[0]
     assert "visual-html" in prompts[0] and "window.__INNOGRAD_DATA__.runs" in prompts[0]
-    assert all(label in prompts[0] for label in ("博士生", "已发表", "row.drilldownPatch", "材料详情"))
+    assert all(binding in prompts[0] for binding in (
+        "直接遍历 run.breakdown", "已中文化的 row.label", "原样传入 row.drilldownPatch", "英文状态键预筛选",
+    ))
+    assert all(label in prompts[0] for label in ("博士生", "已发表", "材料详情"))
+    assert all(instruction in prompts[0] for instruction in ("首屏", "避免重复指标卡", "关闭入场动画"))
     assert "visual-spec" not in prompts[0]
 
 
