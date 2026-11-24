@@ -289,6 +289,16 @@ def render_agent_analysis(text: str, results: list[ResultEnvelope]) -> str:
     return _REFERENCE.sub(replace, text)
 
 
+def _group_summary(card: ResultEnvelope) -> str:
+    if card.applied_query.group_by == ["publication_status"]:
+        labels = {"published": "已发表", "accepted": "已录用", "submitted": "已投稿"}
+        rows = card.summary.breakdown
+        if rows and all(row.group_key.get("publication_status") in labels for row in rows):
+            counts = "，".join(f"{labels[row.group_key['publication_status']]} {row.record_count} 条" for row in rows)
+            return f"{counts} [{card.query_run_id}]。"
+    return f"各组统计请查看分组结果卡 [{card.query_run_id}]。"
+
+
 def render_agent_response(text: str, results: list[ResultEnvelope]) -> tuple[str | None, str | None]:
     """Verify model sentences and use card summaries when the turn includes grouping."""
     kept = []
@@ -318,7 +328,7 @@ def render_agent_response(text: str, results: list[ResultEnvelope]) -> tuple[str
     cards = [result for result in results if result.status == "ok"]
     if any(card.applied_query.group_by for card in cards):
         analysis = "\n".join(
-            f"各组统计请查看分组结果卡 [{card.query_run_id}]。"
+            _group_summary(card)
             if card.applied_query.group_by
             else f"未分组查询 [{card.query_run_id}]：{card.summary.headline}"
             for card in cards
