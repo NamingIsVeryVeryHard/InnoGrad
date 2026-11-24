@@ -100,6 +100,7 @@ function visualResponse(reply) {
           rows.lastElementChild.dataset.groupKey = row.group_key.publication_status;
         }
         button("材料详情", () => window.innograd.openSubmission(run.items[0].submissionId));
+        button("成长画像", () => window.innograd.openPortrait(run.items[0].studentId));
         button("无效材料", () => window.innograd.openSubmission("sub-not-in-run"));
         button("无效下钻", () => window.innograd.drilldown(run.runId, { operation: "list" }, "自定义"));
         button("追问博士生", () => window.innograd.ask("只看博士"));
@@ -1054,6 +1055,10 @@ test("model-authored HTML, CSS and JS render with verified actions and progressi
     patch: publishedPatch,
     label: "已发表",
   });
+  await visualGuest(panel.locator(".teacher-turn").first())
+    .getByRole("button", { name: "成长画像", exact: true })
+    .click();
+  await page.waitForURL(/#portraits$/);
   assert.deepEqual(errors, []);
 });
 

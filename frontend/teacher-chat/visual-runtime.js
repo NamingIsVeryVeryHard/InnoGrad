@@ -6,7 +6,6 @@ const policy = [
   "frame-src 'none'",
   "form-action 'none'",
   "base-uri 'none'",
-  "webrtc 'block'",
 ].join("; ");
 
 function serialize(value) {

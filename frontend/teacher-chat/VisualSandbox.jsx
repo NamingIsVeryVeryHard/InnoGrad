@@ -78,7 +78,7 @@ export function VisualSandbox({
         activePhase.current === "ready" &&
         navigator.userActivation.isActive
       ) {
-        const action = resolveVisualAction(message, data);
+        const action = resolveVisualAction(message, data, sources);
         if (action?.type === "open")
           actions.current.onOpen?.(action.target, action.id);
         if (action?.type === "drilldown")
@@ -95,7 +95,7 @@ export function VisualSandbox({
       window.clearTimeout(timeout);
       window.removeEventListener("message", receive);
     };
-  }, [channel, data]);
+  }, [channel, data, sources]);
 
   if (phase === "fallback")
     return <div className="visual-fallback">{fallback}</div>;

@@ -126,7 +126,7 @@ export function buildVisualData(results) {
   };
 }
 
-export function resolveVisualAction(action, data) {
+export function resolveVisualAction(action, data, sources) {
   if (action.type === "ask") {
     const message =
       typeof action.message === "string" ? action.message.trim() : "";
@@ -152,6 +152,19 @@ export function resolveVisualAction(action, data) {
   }
 
   if (typeof action.id !== "string" || !action.id) return null;
+  const evidence = sources.flatMap((result) => result.sources ?? []);
+  if (
+    action.type === "open_submission" &&
+    evidence.some(({ submission_id }) => submission_id === action.id)
+  ) {
+    return { type: "open", target: "submission", id: action.id };
+  }
+  if (
+    action.type === "open_portrait" &&
+    evidence.some(({ student_id }) => student_id === action.id)
+  ) {
+    return { type: "open", target: "portrait", id: action.id };
+  }
   for (const run of data.runs) {
     const items = [...run.items, ...(run.portrait?.records ?? [])];
     if (
