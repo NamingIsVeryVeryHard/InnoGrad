@@ -164,6 +164,16 @@ def test_chat_repair_is_one_turn_and_sanitizes_fixed_text():
     assert INSTRUCTIONS in prompts[0][0]["content"]
 
 
+def test_innoagent_prompt_references_optional_visual_html_guidance(pi_runtime, issue_token):
+    create, _, _, prompts = pi_runtime
+    events = [*successful_attempt("visual"), {"type": "text_delta", "delta": "结论。"}, {"type": "done"}]
+
+    create(events).analyze(request("今年论文发表情况"), issue_token)
+
+    assert "Optional visual HTML" in prompts[0]
+    assert "visual-html" in prompts[0]
+
+
 def test_chat_invalid_output_maps_to_502_error_after_repair():
     def handler(request):
         return httpx.Response(200, json={

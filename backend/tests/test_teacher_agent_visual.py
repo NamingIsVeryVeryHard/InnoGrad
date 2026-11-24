@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.teacher_agent.contract import METRIC_CATALOG, MetricCard, PaperQuerySpec, ResultEnvelope
@@ -52,6 +54,19 @@ def test_extracts_valid_visual_block_and_strips_it_from_prose():
     assert extracted.visual.title == "2026年论文分布"
     assert extracted.visual.source_run_ids == ["run-1"]
     assert "__INNOGRAD_DATA__" in extracted.visual.html
+
+
+def test_extracts_realistic_deepseek_visual_html_after_cited_conclusion():
+    skill = Path(__file__).resolve().parents[1] / "skills/teacher-query-planner/SKILL.md"
+    guidance = skill.read_text().split("## Optional visual HTML", 1)[1]
+    example = guidance[guidance.index("```visual-html"):].split("\n```", 1)[0]
+    raw = f"今年共有 [run-1:paper_record_count] 篇论文申报。\n\n{example}\n```"
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+
+    assert extracted.dropped_reason is None
+    assert extracted.prose == "今年共有 [run-1:paper_record_count] 篇论文申报。"
+    assert extracted.visual is not None
+    assert "recordCount" in extracted.visual.html
 
 
 def test_returns_prose_unchanged_when_no_visual_block_present():

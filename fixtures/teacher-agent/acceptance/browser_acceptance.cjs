@@ -7,6 +7,8 @@ const {accounts, fixture, studentLogin} = JSON.parse(fs.readFileSync(0, "utf8"))
 const root = process.env.TEST_WORKSPACE_URL;
 const output = process.env.EVIDENCE_DIR;
 const invalidReceipt = process.env.TEST_INVALID_RECEIPT === "1";
+const liveOutput = process.env.VISUAL_LIVE_SCREENSHOTS;
+const statusLabels = {submitted: "已投稿", accepted: "已录用", published: "已发表"};
 const observations = {checks: [], phases: {}, console: [], pageErrors: [], failedRequests: [], httpErrors: []};
 const paths = {
   turns: /\/api\/v1\/teacher-agent\/conversations\/[^/?]+\/turns$/,
@@ -58,19 +60,19 @@ function apiRow(item) {
   };
 }
 
-function uiRow({id, owner, name, title}) {
-  return {id, owner, title, name};
+function uiRow({name, title}) {
+  return {title, name};
 }
 
 function expectedSource(row) {
-  const {id, owner, title, status, date} = row;
-  return {id, owner, title, status, date};
+  const {title, status, date} = row;
+  return {title, status, date};
 }
 
 function sourceRow(cardSource) {
   const {title, publication_status: status, ...fields} =
     Object.fromEntries(cardSource.field_pointers.map(({field, value}) => [field, value]));
-  return {id: cardSource.submission_id, owner: cardSource.student_id, title, status, date: fields[dateField[status]]};
+  return {title, status, date: fields[dateField[status]]};
 }
 
 function filters(spec) {
@@ -90,43 +92,96 @@ function groups(card) {
 async function snapshot(panel) {
   return {
     status: await panel.locator('[role="status"]').allTextContents(),
-    turns: await panel.locator(".agent-timeline article").evaluateAll((articles, dateField) => {
-      const linkId = (row, prefix) => row.querySelector(`a[href^="${prefix}"]`)
-        ?.getAttribute("href").slice(prefix.length).split("/")[0];
-      return articles.map((article) => ({
-        heading: article.querySelector("h2")?.textContent,
-        prompt: article.querySelector("h3")?.textContent,
-        text: article.innerText,
-        cards: Array.from(article.querySelectorAll(".agent-result"), (card) => ({
+    turns: await panel.locator(".teacher-turn").evaluateAll((turns) => {
+      const fields = (root) => Object.fromEntries(
+        Array.from(root.querySelectorAll(".paper-fields > div"), (entry) => [
+          entry.querySelector("dt")?.textContent,
+          entry.querySelector("dd")?.textContent,
+        ]),
+      );
+      return turns.map((turn) => ({
+        heading: turn.querySelector("h4")?.textContent,
+        prompt: turn.querySelector(".bubble.user")?.textContent,
+        text: turn.innerText,
+        cards: Array.from(turn.querySelectorAll(".agent-result"), (card) => ({
           id: card.id,
           heading: card.querySelector("h4")?.textContent,
-          scope: card.querySelector("p")?.textContent,
-          buttons: Array.from(card.querySelectorAll(".actions button"), (node) => node.textContent),
-          metrics: Array.from(card.querySelectorAll(".actions > *"), (node) => node.textContent),
-          rows: Array.from(card.querySelectorAll(":scope > .agent-row"), (row) => ({
-            id: linkId(row, "/api/v1/submissions/"),
-            owner: linkId(row, "/api/v1/students/"),
-            title: row.querySelector("strong")?.textContent,
-            name: row.querySelector("span")?.textContent,
+          asOf: card.querySelector(".data-as-of time")?.dateTime,
+          text: card.textContent,
+          buttons: Array.from(card.querySelectorAll(".breakdown-pills button"), (node) => node.textContent),
+          metrics: Array.from(card.querySelectorAll(".kpi"), (node) => node.textContent),
+          rows: Array.from(card.querySelectorAll(".paper-item"), (row) => ({
+            title: row.querySelector(".paper-title h5")?.textContent,
+            name: row.querySelector(".paper-student")?.textContent,
+            submissionId: fields(row)["提交编号"],
+            actions: Array.from(row.querySelectorAll(".paper-actions button"), (node) => node.textContent),
           })),
-          sources: Array.from(card.querySelectorAll("details"), (row) => {
-            const entries = Array.from(row.querySelectorAll("p"), (field) => field.textContent.split(" · "));
-            const {title, publication_status: status, ...fields} = Object.fromEntries(entries);
-            return {id: linkId(row, "/api/v1/submissions/"), owner: linkId(row, "/api/v1/students/"),
-              title, status, date: fields[dateField[status]]};
+          sources: Array.from(card.querySelectorAll(".source-detail"), (row) => {
+            const values = fields(row);
+            const status = values["发表状态"];
+            return {
+              title: row.querySelector("strong")?.textContent.split(" · 提交版本")[0],
+              status,
+              date: values[{"已发表": "发表日期", "已录用": "录用日期", "已投稿": "投稿日期"}[status]],
+            };
           }),
-          source_titles: Array.from(card.querySelectorAll("details > summary"), (node) => node.textContent),
+          source_titles: Array.from(card.querySelectorAll(".evidence-details > summary"), (node) => node.textContent),
         })),
       }));
-    }, dateField),
+    }),
   };
 }
 
-async function capture(response, panel) {
+async function waitForReady(panel) {
+  await panel.locator(".teacher-chat").waitFor();
+  const loading = panel.locator(".loading-indicator");
+  if (await loading.count()) await loading.last().waitFor({state: "hidden"});
+}
+
+async function expandVisualEvidence(panel) {
+  const summary = panel.locator(".visual-evidence-toggle:not([open]) > summary");
+  while (await summary.count()) {
+    await summary.last().click();
+  }
+}
+
+async function capture(response, panel, started) {
+  const body = await response.json();
+  const latencyMs = started == null ? undefined : Math.round(performance.now() - started);
+  const latest = body.turn ?? body.turns?.at(-1);
+  let visualState;
+  if (latest?.id) {
+    const turn = panel.locator(`[data-turn-id="${latest.id}"]`);
+    await turn.waitFor();
+    await panel.locator('textarea[aria-label="你的问题"]:enabled').waitFor();
+    const visual = latest.visual ?? body.visual;
+    if (visual && liveOutput) {
+      await turn.locator(".visual-sandbox-ready, .visual-fallback").waitFor();
+      const iframe = turn.locator(".visual-frame iframe");
+      if (await iframe.count()) {
+        await turn.locator(".visual-frame").evaluate(async host => {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await Promise.all(host.getAnimations().map(animation => animation.finished));
+        });
+        const guest = iframe.contentFrame().locator("iframe").contentFrame();
+        const chart = await guest.locator("canvas").evaluateAll(nodes => nodes.map(canvas => {
+          const chart = window.Chart.getChart(canvas);
+          return {labels: chart?.data.labels, values: chart?.data.datasets.map(dataset => dataset.data)};
+        }));
+        visualState = {phase: "ready", chart, height: (await iframe.boundingBox()).height,
+          sandbox: await iframe.getAttribute("sandbox")};
+      } else {
+        visualState = {phase: "fallback"};
+      }
+    }
+  }
+  await panel.locator(".visual-sandbox-loading").first().waitFor({state: "hidden"});
+  await expandVisualEvidence(panel);
   return {
+    latencyMs, visualState,
     status: response.status(),
     request: response.request().postDataJSON(),
-    body: await response.json(),
+    body,
     ui: await snapshot(panel),
   };
 }
@@ -158,17 +213,17 @@ async function openAgent(page, paperQuery = true) {
   if (await launcher.count()) await launcher.click();
   const panel = page.getByRole("dialog", {name: "InnoGrad Agent 对话"});
   await panel.waitFor();
-  if (paperQuery) await panel.locator("fieldset:enabled").waitFor();
+  if (paperQuery) await waitForReady(panel);
   return panel;
 }
 
 async function send(page, panel, message, followup = false) {
   await panel.getByLabel("你的问题").fill(message);
   const turn = responseFor(page, paths.turns, "POST");
+  const started = performance.now();
   await panel.getByRole("button", {name: followup ? "发送追问" : "发送问题", exact: true}).click();
   const response = await turn;
-  await panel.locator("fieldset:enabled").waitFor();
-  const result = await capture(response, panel);
+  const result = await capture(response, panel, started);
   check(`${message} HTTP`, result.status, invalidReceipt ? 502 : 200);
   check(`${message} request`, result.request.input, {mode: "natural_language", message});
   return result;
@@ -178,14 +233,14 @@ async function refresh(page, panel) {
   const detail = responseFor(page, paths.detail);
   await panel.getByRole("button", {name: "刷新对话", exact: true}).click();
   const response = await detail;
-  await panel.locator("fieldset:enabled").waitFor();
+  await waitForReady(panel);
   return capture(response, panel);
 }
 
 async function selectConversation(page, panel, id) {
   const detail = id ? responseFor(page, paths.detail) : null;
   await panel.getByLabel("最近对话").selectOption(id);
-  await panel.locator("fieldset:enabled").waitFor();
+  await waitForReady(panel);
   if (detail) return capture(await detail, panel);
 }
 
@@ -221,14 +276,13 @@ function inspectAggregate(phase, captured, expected, dates, clock) {
   check(`${phase} API data time`, card?.summary?.data_as_of, clock);
   check(`${phase} UI cards bind to HTTP runs`, ui.map((entry) => entry.id),
     cards.map((entry) => `agent-run-${entry.query_run_id}`));
-  check(`${phase} UI data time`, ui[0]?.scope?.includes(`数据时间 ${clock}`), true);
+  check(`${phase} UI data time`, ui[0]?.asOf, clock);
   check(`${phase} UI overall counts`, ui[0]?.metrics?.filter((label) =>
-    /^(论文申报记录数|涉及学生人数) /.test(label)), [
-    `论文申报记录数 ${expected.total} 条`, `涉及学生人数 ${expected.students} 人`,
+    /^\d+(条论文申报记录数|人涉及学生人数)$/.test(label)), [
+    `${expected.total}条论文申报记录数`, `${expected.students}人涉及学生人数`,
   ]);
-  check(`${phase} UI group rows`, sorted(ui.flatMap((entry) => entry.buttons)
-    .filter((label) => label.includes("条记录 /"))), sorted(Object.entries(expected.groups).map(
-    ([status, [count, students]]) => `${status} · ${count} 条记录 / ${students} 人`,
+  check(`${phase} UI group rows`, sorted(ui.flatMap((entry) => entry.buttons)), sorted(Object.entries(expected.groups).map(
+    ([status, [count, students]]) => `${statusLabels[status]} ${count}条 · ${students}人`,
   )));
   const expectedItems = spec?.include?.includes("items") ? expected.rows : [];
   check(`${phase} UI item rows equal HTTP items`, ui.flatMap((entry) => entry.rows.map(uiRow)),
@@ -239,7 +293,11 @@ function inspectAggregate(phase, captured, expected, dates, clock) {
     roster(expectedItems.map(uiRow)));
   const sources = spec?.include?.includes("sources") || expectedItems.length ? expected.rows.map(expectedSource) : [];
   check(`${phase} HTTP evidence identity, status and date`, roster((card?.sources ?? []).map(sourceRow)), roster(sources));
-  check(`${phase} UI evidence identity, status and date`, roster(ui.flatMap((entry) => entry.sources)), roster(sources));
+  check(`${phase} UI evidence identity, status and date`, roster(ui.flatMap((entry) => entry.sources)),
+    roster(sources.map(({title, status, date}) => {
+      const [year, month, day] = date.split("-");
+      return {title, status: statusLabels[status], date: `${year}年${Number(month)}月${Number(day)}日`};
+    })));
   return card;
 }
 
@@ -268,6 +326,10 @@ function inspectDrill(phase, card, ui, expected, dates) {
     roster(expected.map(uiRow)));
   check(`${phase} UI entries retain API order`, (ui?.rows ?? []).map(uiRow),
     (card?.items ?? []).map((item) => uiRow(apiRow(item))));
+  check(`${phase} same-title submission identifiers`, sorted((ui?.rows ?? []).map(row => row.submissionId)),
+    sorted(expected.map(row => row.id)));
+  check(`${phase} in-app row actions`, (ui?.rows ?? []).map(row => row.actions),
+    expected.map(() => ["材料详情", "成长画像"]));
 }
 
 async function run() {
@@ -292,16 +354,31 @@ async function run() {
       });
     });
     const screenshot = async (name, panel, showRows = false) => {
-      const rows = panel.locator(".agent-timeline article").last().locator(".agent-result > .agent-row");
+      await expandVisualEvidence(panel);
+      const rows = panel.locator(".teacher-turn").last().locator(".agent-result .paper-item");
       if (showRows && await rows.count()) await rows.last().scrollIntoViewIfNeeded();
       await panel.screenshot({
         path: `${output}/${name}.png`, mask: [panel.locator(".agent-analysis a")], maskColor: "#6b7280",
       });
       save();
     };
+    const liveShot = async (name, target) => {
+      if (!liveOutput) return;
+      await target.scrollIntoViewIfNeeded();
+      await page.screenshot({path: `${liveOutput}/${name}.png`, animations: "disabled"});
+    };
+    const liveTurnShot = async (name) => {
+      if (!liveOutput) return;
+      const turn = panel.locator(".teacher-turn").last();
+      const evidence = turn.locator(".visual-evidence-toggle[open] > summary");
+      if (await evidence.count()) await evidence.click();
+      const visual = turn.locator(".visual-frame");
+      await liveShot(name, await visual.count() ? visual : turn.locator(".agent-result").first());
+    };
 
     await page.goto(`${root}/prototype/`);
     check("teacher login role", await login(page, "teacher"), "teacher");
+    check("teacher navigation count", await page.getByRole("button", {name: "Agent 论文问答", exact: true}).count(), 0);
     let panel = await openAgent(page);
     const {dates, clock, overview, doctoral, drill: drillRoster, studentName, namedPapers, published} = fixture;
 
@@ -314,6 +391,12 @@ async function run() {
     }
     if (first.status !== 200) return;
     inspectAggregate("annual overview", first, overview, dates, clock);
+    await liveTurnShot("01-live-turn1-overview");
+    if (liveOutput && first.visualState?.phase === "ready") {
+      await panel.getByRole("button", {name: "展开宽浮窗"}).click();
+      await liveTurnShot("01b-live-turn1-wide");
+      await panel.getByRole("button", {name: "恢复默认宽度"}).click();
+    }
     await screenshot("01-overview", panel, true);
 
     const followup = await send(page, panel, "只看博士", Boolean(first.body.turn));
@@ -321,19 +404,20 @@ async function run() {
     check("follow-up uses same conversation", followup.body.conversation_id, first.body.conversation_id);
     check("follow-up uses previous lock version", followup.request.expected_lock_version, first.body.conversation_lock_version);
     const doctoralCard = inspectAggregate("doctoral follow-up", followup, doctoral, dates, clock);
+    await liveTurnShot("02-live-turn2-doctor");
     await screenshot("02-doctoral-followup", panel, true);
 
     const followupCard = doctoralCard
       ? panel.locator(`#agent-run-${doctoralCard.query_run_id}`)
       : panel.locator(".agent-result").last();
-    const groupButton = followupCard.getByRole("button", {name: /^published · /});
+    const groupButton = followupCard.getByRole("button", {name: /^已发表 \d+条 · /});
     let drill;
     if (await groupButton.count()) {
       const drillPending = responseFor(page, paths.turns, "POST");
+      const started = performance.now();
       await groupButton.click();
       const drillResponse = await drillPending;
-      await panel.locator("fieldset:enabled").waitFor();
-      drill = await capture(drillResponse, panel);
+      drill = await capture(drillResponse, panel, started);
       observations.phases.drill = drill;
       check("drill HTTP", drill.status, 200);
       check("drill request mode", drill.request.input.mode, "drilldown_patch");
@@ -344,6 +428,32 @@ async function run() {
       await screenshot("03-drill", panel, true);
     } else {
       check("doctoral published group has drill button", false, true);
+    }
+
+    if (liveOutput) {
+      const card = panel.locator(".teacher-turn").last().locator(".agent-result").first();
+      const note = card.locator(".duplicate-note");
+      await note.waitFor();
+      await liveShot("03-live-turn3-published", note);
+      await card.getByRole("button", {name: "材料详情", exact: true}).first().click();
+      const modal = page.getByRole("heading", {name: "论文成果 · 材料详情", exact: true});
+      await modal.waitFor();
+      await liveShot("04-live-inapp-modal", modal);
+      check("material opens in app", new URL(page.url()).pathname, "/prototype/");
+      await page.getByLabel("关闭").click();
+      panel = await openAgent(page);
+      const portrait = await send(page, panel, `看看${studentName}的成长画像`, true);
+      observations.phases.portrait = portrait;
+      const portraitCard = panel.locator(".teacher-turn").last().locator(".agent-result").first();
+      const button = portraitCard.getByRole("button", {name: "查看完整成长画像"});
+      await button.waitFor();
+      await liveShot("05-live-turn4-portrait", portraitCard.getByRole("heading", {name: `${studentName}的成长画像`}).first());
+      await button.click();
+      await page.waitForURL(/#portraits$/);
+      check("portrait opens in app", new URL(page.url()).pathname, "/prototype/");
+      check("portrait opens the requested student", await page.getByLabel("选择画像学生").inputValue(), fixture.studentId);
+      check("no uncaught page errors", observations.pageErrors, []);
+      return;
     }
 
     const conversationId = await panel.getByLabel("最近对话").inputValue();
@@ -382,8 +492,20 @@ async function run() {
     check("named UI rows", sorted((named.ui.turns.at(-1)?.cards[0]?.rows ?? []).map((row) =>
       `${row.title}:${row.name}`)), sorted(namedPapers.map((title) => `${title}:${studentName}`)));
     await screenshot("05-named-query", panel, true);
-
+    const namedRows = panel.locator(".teacher-turn").last().locator(".paper-item");
+    const firstNamedRow = namedRows.first();
+    await firstNamedRow.getByRole("button", {name: "材料详情", exact: true}).click();
+    await page.getByRole("heading", {name: "论文成果 · 材料详情", exact: true}).waitFor();
+    check("material action stays in app", new URL(page.url()).pathname, "/prototype/");
+    check("material action avoids raw API navigation", new URL(page.url()).pathname.includes("/api/"), false);
+    await page.getByLabel("关闭").click();
+    await firstNamedRow.getByRole("button", {name: "成长画像", exact: true}).click();
+    await page.waitForURL(/#portraits$/);
+    check("portrait action stays in app", new URL(page.url()).pathname, "/prototype/");
+    check("portrait action avoids raw API navigation", new URL(page.url()).pathname.includes("/api/"), false);
     revoke();
+    panel = await openAgent(page);
+    await panel.getByText("查询范围已变更，本轮内容不可查看。", {exact: true}).waitFor();
     const revoked = await refresh(page, panel);
     observations.phases.namedAfterRevocation = revoked;
     check("revoked named detail HTTP", revoked.status, 200);
@@ -408,7 +530,7 @@ async function run() {
     check("aggregate latest result scope is empty", recomputed.body.latest_result?.summary.scope_student_count, 0);
     check("aggregate latest result has zero matches", metrics(recomputed.body.latest_result).paper_record_count, 0);
     check("scope-checked UI has no paper rows", recomputed.ui.turns.flatMap((turn) => turn.cards.flatMap((card) => card.rows)), []);
-    check("scope-checked UI shows recomputation", recomputed.ui.turns.at(-1)?.cards[0]?.scope.includes("已按当前授权范围重新计算"), true);
+    check("scope-checked UI shows empty result", /0 条符合条件|没有符合条件/.test(recomputed.ui.turns.at(-1)?.cards[0]?.text), true);
     if (doctoralCard?.query_run_id) {
       const reply = await context.request.get(`${root}/api/v1/teacher-agent/runs/${doctoralCard.query_run_id}`);
       const body = await reply.json();
@@ -451,7 +573,7 @@ async function run() {
     observations.phases.student = {
       guide: await guide.innerText(),
       reply: await reply.innerText(),
-      teacherPanelCount: await panel.locator("fieldset.agent-panel").count(),
+      teacherPanelCount: await panel.locator(".teacher-chat").count(),
       teacherNavCount: await page.getByRole("button", {name: "Agent 论文问答", exact: true}).count(),
       agentRequests: studentAgentRequests,
     };
