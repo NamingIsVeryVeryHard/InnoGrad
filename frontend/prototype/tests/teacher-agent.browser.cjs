@@ -66,6 +66,62 @@ const firstQuestion = "今年论文发表情况";
 const secondQuestion = "只看博士";
 const namedQuestion = "请列出联调学生甲已发表的论文。";
 const savedNamedQuestion = "请列出指定学生已发表的论文";
+async function captureVisual(page, filename) {
+  if (process.env.VISUAL_ACCEPTANCE_DIR) {
+    await page.screenshot({
+      path: path.join(process.env.VISUAL_ACCEPTANCE_DIR, filename),
+      animations: "disabled",
+    });
+  }
+}
+const visualHtml = `
+  <style>
+    h3 { margin: 0 0 6px; font-size: 15px }
+    .plot { position: relative; height: 168px }
+    #visual-data { margin: 6px 0; font-size: 13px }
+    button { background: var(--ig-surface); border: 1px solid var(--ig-border); color: var(--ig-accent); padding: 4px 9px; border-radius: 6px; font-size: 13px }
+  </style>
+  <section id="visual-content">
+    <h3 id="visual-headline">各发表状态的申报记录数</h3>
+    <div class="plot"><canvas id="visual-chart"></canvas></div>
+    <p id="visual-data"></p>
+    <button id="open-submission" type="button">材料详情</button>
+    <button id="open-portrait" type="button">成长画像</button>
+    <button id="doctor-filter" type="button">只看博士</button>
+  </section>
+  <script>
+    const run = window.__INNOGRAD_DATA__.runs[0];
+    document.querySelector("#visual-data").textContent =
+      run.items[0].studentName + " · " + run.items[0].title;
+    new Chart(document.querySelector("#visual-chart"), {
+      type: "bar",
+      data: {
+        labels: run.breakdown.map((row) => row.label),
+        datasets: [{ data: run.breakdown.map((row) => row.recordCount), backgroundColor: "#a51f35" }],
+      },
+      options: { animation: false, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } },
+    });
+    document.querySelector("#open-submission").onclick = () =>
+      window.innograd.openSubmission(run.items[0].submissionId);
+    document.querySelector("#open-portrait").onclick = () =>
+      window.innograd.openPortrait(run.items[0].studentId);
+    document.querySelector("#doctor-filter").onclick = () =>
+      window.innograd.drilldown(run.runId, { set_filters: [{ field: "degree", operator: "eq", value: "博士" }] }, "只看博士");
+  </script>
+`;
+
+function visualResponse(reply, html = visualHtml) {
+  return {
+    ...reply,
+    analysis: "今年共有 5 条论文申报记录，涉及 2 名学生，其中 3 条已发表。",
+    visual: {
+      kind: "html_sandbox",
+      title: "年度论文统计",
+      html,
+      source_run_ids: [reply.results?.[0]?.query_run_id || firstRun],
+    },
+  };
+}
 
 function query(filters = [], overrides = {}) {
   return {
@@ -966,6 +1022,212 @@ test("teacher renders Chinese results, citations, evidence, and material details
     .getByRole("heading", { name: "论文成果 · 材料详情", exact: true })
     .waitFor();
   assert.equal(page.url().includes("/api/v1/submissions/"), false);
+  assert.deepEqual(errors, []);
+});
+
+test(
+  "visual sandbox renders offline Chart.js with strict permissions and verified actions",
+  { timeout: 15000 },
+  async (testContext) => {
+    const { page, panel, openAgent, sendQuestion, writes, errors } =
+      await openWorkspace(testContext, "teacher", "/prototype/", {
+        turnResponse: visualResponse,
+      });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAgent();
+    await sendQuestion(firstQuestion);
+    await page.evaluate(() => {
+      window.__visualOpenCount = 0;
+      window.addEventListener("innograd:open-submission", () => {
+        window.__visualOpenCount += 1;
+      });
+    });
+    const visual = panel.locator(".visual-sandbox-ready").first();
+    await visual.waitFor();
+    const frame = visual.locator("iframe").first();
+    assert.equal(await frame.getAttribute("sandbox"), "allow-scripts");
+    assert.equal(
+      await frame.evaluate((node) =>
+        node.getAttribute("sandbox").includes("allow-same-origin"),
+      ),
+      false,
+    );
+    assert.equal(
+      await frame.evaluate((node) =>
+        ["allow-forms", "allow-popups", "allow-top-navigation"].some((value) =>
+          node.getAttribute("sandbox").includes(value),
+        ),
+      ),
+      false,
+    );
+    const guest = frame.contentFrame().locator("iframe").first().contentFrame();
+    await guest.locator("#visual-headline").waitFor();
+    await guest.locator("#visual-chart").waitFor();
+    assert.equal(
+      await guest.locator("#visual-chart").evaluate((node) => node.tagName),
+      "CANVAS",
+    );
+    assert.match(await guest.locator("#visual-data").innerText(), /联调学生甲/);
+    assert.ok((await frame.boundingBox()).height >= 80);
+    assert.equal(
+      await visual
+        .locator("details.visual-evidence-toggle")
+        .evaluate((node) => node.open),
+      false,
+    );
+    assert.equal(
+      await frame.contentFrame().locator("iframe").getAttribute("sandbox"),
+      "allow-scripts",
+    );
+    const canvas = await guest.locator("canvas").elementHandle();
+    const guestFrame = await canvas.ownerFrame();
+    const checkChart = async (minimumWidth) => {
+      await guestFrame.waitForFunction(
+        ({ canvas, minimumWidth }) => {
+          const chart = window.Chart.getChart(canvas);
+          return (
+            canvas.isConnected &&
+            chart?.width > minimumWidth &&
+            chart.height > 160 &&
+            chart.getDatasetMeta(0).data.length === 3 &&
+            document.querySelector("#ig-root").getBoundingClientRect().bottom <=
+              innerHeight
+          );
+        },
+        { canvas, minimumWidth },
+      );
+    };
+    await checkChart(0);
+    const blockedDirective = await guest.locator("body").evaluate(
+      () =>
+        new Promise((resolve) => {
+          document.addEventListener(
+            "securitypolicyviolation",
+            (event) => resolve(event.effectiveDirective),
+            { once: true },
+          );
+          new Image().src = "https://example.invalid/visual.png";
+        }),
+    );
+    assert.equal(blockedDirective, "img-src");
+    const standardWidth = (await canvas.boundingBox()).width;
+    await captureVisual(page, "01-visual-chart-standard.png");
+    await panel
+      .getByRole("button", { name: "展开宽浮窗", exact: true })
+      .click();
+    await checkChart(standardWidth + 160);
+    await captureVisual(page, "02-visual-chart-wide.png");
+    await panel
+      .getByRole("button", { name: "恢复默认宽度", exact: true })
+      .click();
+    await guest.locator("#visual-chart").waitFor();
+    assert.ok((await frame.boundingBox()).height > 160);
+    assert.match(await guest.locator("#visual-data").innerText(), /联调学生甲/);
+    await guest.locator("#open-submission").click();
+    await page
+      .getByRole("heading", { name: "论文成果 · 材料详情", exact: true })
+      .waitFor();
+    await captureVisual(page, "03-visual-action-to-modal.png");
+    assert.equal(await page.evaluate(() => window.__visualOpenCount), 1);
+    await page.getByLabel("关闭").click();
+    await guest
+      .locator("body")
+      .evaluate(() => window.innograd.openSubmission("forged-id"));
+    await guest
+      .locator("body")
+      .evaluate(() => window.innograd.openPortrait("forged-id"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(
+      await page
+        .getByRole("heading", { name: "论文成果 · 材料详情", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(new URL(page.url()).hash, "");
+    await guest
+      .locator("body")
+      .evaluate(() =>
+        window.innograd.drilldown("run-overview", { page: 1 }, "查看已发表"),
+      );
+    await guest
+      .locator("body")
+      .evaluate(() => window.innograd.ask("请继续查看博士生"));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.deepEqual(writes.at(-2).body.input, {
+      mode: "drilldown_patch",
+      parent_run_id: "run-overview",
+      patch: { page: 1 },
+      label: "查看已发表",
+    });
+    assert.deepEqual(writes.at(-1).body.input, {
+      mode: "natural_language",
+      message: "请继续查看博士生",
+    });
+    await guest.locator("#open-portrait").click();
+    await page.waitForURL("**/#portraits");
+    assert.deepEqual(errors, []);
+  },
+);
+
+test("faulty visual HTML silently falls back to verified result cards", async (testContext) => {
+  const { page, panel, openAgent, sendQuestion, errors } = await openWorkspace(
+    testContext,
+    "teacher",
+    "/prototype/",
+    {
+      turnResponse: (reply) =>
+        visualResponse(
+          reply,
+          `<div id="faulty-visual"></div><script>throw new Error("visual failed")</script>`,
+        ),
+    },
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openAgent();
+  await sendQuestion(firstQuestion);
+  await panel.locator(".visual-fallback .agent-result").waitFor();
+  await captureVisual(page, "04-visual-error-fallback.png");
+  assert.equal(await panel.locator(".visual-frame").count(), 0);
+  assert.equal(await panel.locator(".visual-loading-shimmer").count(), 0);
+  assert.deepEqual(errors, ["visual failed"]);
+});
+
+test("empty visual HTML falls back when it has no visible content", async (testContext) => {
+  const { panel, openAgent, sendQuestion, errors } = await openWorkspace(
+    testContext,
+    "teacher",
+    "/prototype/",
+    {
+      turnResponse: (reply) =>
+        visualResponse(reply, "<script>window.__INNOGRAD_DATA__</script>"),
+    },
+  );
+  await openAgent();
+  await sendQuestion(firstQuestion);
+  await panel.locator(".visual-fallback .agent-result").waitFor();
+  assert.equal(await panel.locator(".visual-frame").count(), 0);
+  assert.deepEqual(errors, []);
+});
+
+test("visual payload is initial-only and clears on reload and access revocation", async (testContext) => {
+  const { page, panel, openAgent, sendQuestion, faults, errors } =
+    await openWorkspace(testContext, "teacher", "/prototype/", {
+      turnResponse: visualResponse,
+    });
+  await openAgent();
+  await sendQuestion(firstQuestion);
+  await panel.locator(".visual-sandbox-ready").waitFor();
+  await page.reload();
+  await openAgent();
+  await resultCard(panel, firstRun).waitFor();
+  assert.equal(await panel.locator(".visual-sandbox").count(), 0);
+  assert.equal(await panel.locator(".agent-result").count(), 1);
+  faults.revoked = true;
+  await panel.getByRole("button", { name: "刷新对话", exact: true }).click();
+  await panel
+    .getByText("查询范围已变更，本轮内容不可查看。", { exact: true })
+    .waitFor();
+  assert.equal(await panel.locator(".visual-sandbox").count(), 0);
   assert.deepEqual(errors, []);
 });
 

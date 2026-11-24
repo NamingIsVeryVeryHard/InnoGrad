@@ -7,6 +7,7 @@ import {
   titleFromQuery,
 } from "./ResultBlocks.jsx";
 import { runIdsFor, useTeacherConversation } from "./useTeacherConversation.js";
+import { VisualSandbox } from "./VisualSandbox.jsx";
 
 const starterQuestions = [
   "今年论文发表情况",
@@ -48,6 +49,29 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
   )
     ? titleFromQuery(query, "查看筛选结果")
     : turn.user_message;
+  const resultCards = results.map((result) => (
+    <ResultCard
+      key={result.query_run_id}
+      result={
+        result.clarification &&
+        JSON.stringify(result.clarification) === turnPrompt
+          ? { ...result, clarification: null }
+          : result
+      }
+      query={result.applied_query || turn.resolved_query}
+      onDrilldown={(patch, label) =>
+        submit({
+          mode: "drilldown_patch",
+          parent_run_id: result.query_run_id,
+          patch,
+          label,
+        })
+      }
+      onAction={submit}
+      onOpen={openTarget}
+      showAnalysis={!turn.analysis}
+    />
+  ));
 
   return (
     <article className="teacher-turn" data-turn-id={turn.id}>
@@ -70,29 +94,25 @@ function Turn({ turn, results, canReplay, latest, available, submit, replay }) {
           {turn.clarification ? (
             <Clarification prompt={turn.clarification} onAction={submit} />
           ) : null}
-          {results.map((result) => (
-            <ResultCard
-              key={result.query_run_id}
-              result={
-                result.clarification &&
-                JSON.stringify(result.clarification) === turnPrompt
-                  ? { ...result, clarification: null }
-                  : result
-              }
-              query={result.applied_query || turn.resolved_query}
-              onDrilldown={(patch, label) =>
+          {turn.visual && results.length ? (
+            <VisualSandbox
+              visual={turn.visual}
+              results={results}
+              onOpen={openTarget}
+              onDrilldown={(runId, patch, label) =>
                 submit({
                   mode: "drilldown_patch",
-                  parent_run_id: result.query_run_id,
+                  parent_run_id: runId,
                   patch,
                   label,
                 })
               }
-              onAction={submit}
-              onOpen={openTarget}
-              showAnalysis={!turn.analysis}
+              onAsk={submit}
+              fallback={resultCards}
             />
-          ))}
+          ) : (
+            resultCards
+          )}
           {canReplay && runIds.length ? (
             <button
               type="button"

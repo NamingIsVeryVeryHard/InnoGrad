@@ -1015,6 +1015,13 @@ class ConversationDetail(_StrictModel):
     ))
 
 
+class VisualArtifact(_StrictModel):
+    kind: Literal["html_sandbox"] = "html_sandbox"
+    title: str = Field(default="", max_length=80)
+    html: str = Field(min_length=1, max_length=16384)
+    source_run_ids: list[str] = Field(min_length=1)
+
+
 class TurnResponse(_StrictModel):
     conversation_id: str
     conversation_lock_version: int = Field(ge=0)
@@ -1023,6 +1030,9 @@ class TurnResponse(_StrictModel):
     analysis: str | None = Field(default=None, description="Generated summary for the initial response only.")
     analysis_notice: str | None = Field(
         default=None, description="Initial-response notice when the analysis cannot be verified but the result cards are valid."
+    )
+    visual: VisualArtifact | None = Field(
+        default=None, description="Initial-response sandboxed HTML visualization grounded in results."
     )
     results: list[ResultEnvelope] = Field(default_factory=lambda data: (
         [data["result"]] if data["result"].query_run_id else []
