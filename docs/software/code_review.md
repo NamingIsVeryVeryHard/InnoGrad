@@ -30,3 +30,5 @@
 | 教师聊天前端 `prettier --check 'teacher-chat/*.{js,jsx}'` | 6 个文件格式检查通过 |
 
 表中数据来自 `cd04e98`。本次 P1 的浏览器回归用例见[教师工作台测试](../../frontend/prototype/tests/teacher-agent.browser.cjs)，接口回归用例见[可视化响应测试](../../backend/tests/test_teacher_agent_visual.py)。分支扫描截图见[代码质量报告](code_quality.md)。
+
+[材料审核模块：本次专项报告](../../InnoGrad-portable-20261104/docs/software/code_review.md)

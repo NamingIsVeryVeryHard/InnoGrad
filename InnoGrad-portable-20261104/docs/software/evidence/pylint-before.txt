@@ -1,0 +1,151 @@
+************* Module app.agent_client
+backend/app/agent_client.py:162:12: W0707: Consider explicitly re-raising using 'except (ValueError, AttributeError) as exc' and 'raise AgentFailure('OUTPUT_INVALID') from exc' (raise-missing-from)
+backend/app/agent_client.py:184:12: W0707: Consider explicitly re-raising using 'except ValueError as exc' and 'raise AgentFailure('OUTPUT_INVALID') from exc' (raise-missing-from)
+backend/app/agent_client.py:375:12: W0707: Consider explicitly re-raising using 'except Exception as exc' and 'raise AgentFailure('TRANSIENT_TIMEOUT', transient=True) from exc' (raise-missing-from)
+backend/app/agent_client.py:378:12: W0707: Consider explicitly re-raising using 'raise AgentFailure('TRANSIENT_SERVICE' if transient else 'CONFIG_ERROR', transient=transient) from exc' (raise-missing-from)
+backend/app/agent_client.py:380:12: W0707: Consider explicitly re-raising using 'except Exception as exc' and 'raise AgentFailure('TRANSIENT_SERVICE', transient=True) from exc' (raise-missing-from)
+backend/app/agent_client.py:382:12: W0707: Consider explicitly re-raising using 'except (KeyError, ValueError, TypeError) as exc' and 'raise AgentFailure('OUTPUT_INVALID') from exc' (raise-missing-from)
+************* Module app.seed_scenarios
+backend/app/seed_scenarios.py:56:0: R0914: Too many local variables (59/15) (too-many-locals)
+backend/app/seed_scenarios.py:86:12: R0914: Too many local variables (20/15) (too-many-locals)
+************* Module app.review_execution
+backend/app/review_execution.py:20:0: R0914: Too many local variables (21/15) (too-many-locals)
+backend/app/review_execution.py:79:12: W0707: Consider explicitly re-raising using 'raise ReviewFailure('OUTPUT_INVALID', {'validation_issues': [{'location': list(error['loc']), 'issue': error['type']} for error in exc.errors(include_input=False, include_context=False, include_url=False)]}) from exc' (raise-missing-from)
+backend/app/review_execution.py:94:12: W0707: Consider explicitly re-raising using 'raise ReviewFailure(code, {'validation_issues': [{'issue': 'check_rule_coverage_applicability_and_evidence_roles', 'rules': [{'id': rule['id'], 'evidence_roles': rule.get('evidence_roles', [])} for rule in payload['requirements']['review_rules']]}]}) from exc' (raise-missing-from)
+************* Module app.growth
+backend/app/growth.py:29:0: R0914: Too many local variables (17/15) (too-many-locals)
+backend/app/growth.py:92:0: R0914: Too many local variables (30/15) (too-many-locals)
+backend/app/growth.py:146:0: R0914: Too many local variables (20/15) (too-many-locals)
+************* Module app.auto_review
+backend/app/auto_review.py:139:0: R0914: Too many local variables (17/15) (too-many-locals)
+************* Module app.jobs
+backend/app/jobs.py:14:0: R0914: Too many local variables (23/15) (too-many-locals)
+backend/app/jobs.py:67:0: R0914: Too many local variables (16/15) (too-many-locals)
+backend/app/jobs.py:96:0: R0914: Too many local variables (38/15) (too-many-locals)
+************* Module app.extensions
+backend/app/extensions.py:15:0: R0914: Too many local variables (31/15) (too-many-locals)
+************* Module app.agent
+backend/app/agent.py:176:0: R0914: Too many local variables (17/15) (too-many-locals)
+backend/app/agent.py:246:0: R0914: Too many local variables (20/15) (too-many-locals)
+backend/app/agent.py:312:0: R0914: Too many local variables (25/15) (too-many-locals)
+************* Module app.workspace
+backend/app/workspace.py:34:0: R0914: Too many local variables (31/15) (too-many-locals)
+************* Module app.main
+backend/app/main.py:77:0: R0914: Too many local variables (41/15) (too-many-locals)
+backend/app/main.py:145:4: R0914: Too many local variables (16/15) (too-many-locals)
+backend/app/main.py:230:4: R0914: Too many local variables (16/15) (too-many-locals)
+backend/app/main.py:403:4: R0914: Too many local variables (32/15) (too-many-locals)
+
+
+Report
+======
+3042 statements analysed.
+
+Statistics by type
+------------------
+
++---------+-------+-----------+-----------+------------+---------+
+|type     |number |old number |difference |%documented |%badname |
++=========+=======+===========+===========+============+=========+
+|module   |0      |NC         |NC         |0           |0        |
++---------+-------+-----------+-----------+------------+---------+
+|class    |0      |NC         |NC         |0           |0        |
++---------+-------+-----------+-----------+------------+---------+
+|method   |0      |NC         |NC         |0           |0        |
++---------+-------+-----------+-----------+------------+---------+
+|function |0      |NC         |NC         |0           |0        |
++---------+-------+-----------+-----------+------------+---------+
+
+
+
+3963 lines have been analyzed
+
+Raw metrics
+-----------
+
++----------+-------+------+---------+-----------+
+|type      |number |%     |previous |difference |
++==========+=======+======+=========+===========+
+|code      |3316   |83.67 |NC       |NC         |
++----------+-------+------+---------+-----------+
+|docstring |236    |5.96  |NC       |NC         |
++----------+-------+------+---------+-----------+
+|comment   |32     |0.81  |NC       |NC         |
++----------+-------+------+---------+-----------+
+|empty     |379    |9.56  |NC       |NC         |
++----------+-------+------+---------+-----------+
+
+
+
+Duplication
+-----------
+
++-------------------------+------+---------+-----------+
+|                         |now   |previous |difference |
++=========================+======+=========+===========+
+|nb duplicated lines      |0     |NC       |NC         |
++-------------------------+------+---------+-----------+
+|percent duplicated lines |0.000 |NC       |NC         |
++-------------------------+------+---------+-----------+
+
+
+
+Messages by category
+--------------------
+
++-----------+-------+---------+-----------+
+|type       |number |previous |difference |
++===========+=======+=========+===========+
+|convention |0      |NC       |NC         |
++-----------+-------+---------+-----------+
+|refactor   |19     |NC       |NC         |
++-----------+-------+---------+-----------+
+|warning    |8      |NC       |NC         |
++-----------+-------+---------+-----------+
+|error      |0      |NC       |NC         |
++-----------+-------+---------+-----------+
+
+
+
+% errors / warnings by module
+-----------------------------
+
++---------------------+------+--------+---------+-----------+
+|module               |error |warning |refactor |convention |
++=====================+======+========+=========+===========+
+|app.agent_client     |0.00  |75.00   |0.00     |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.review_execution |0.00  |25.00   |5.26     |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.main             |0.00  |0.00    |21.05    |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.jobs             |0.00  |0.00    |15.79    |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.growth           |0.00  |0.00    |15.79    |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.agent            |0.00  |0.00    |15.79    |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.seed_scenarios   |0.00  |0.00    |10.53    |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.workspace        |0.00  |0.00    |5.26     |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.extensions       |0.00  |0.00    |5.26     |0.00       |
++---------------------+------+--------+---------+-----------+
+|app.auto_review      |0.00  |0.00    |5.26     |0.00       |
++---------------------+------+--------+---------+-----------+
+
+
+
+Messages
+--------
+
++-------------------+------------+
+|message id         |occurrences |
++===================+============+
+|too-many-locals    |19          |
++-------------------+------------+
+|raise-missing-from |8           |
++-------------------+------------+
+
+
+

@@ -1,0 +1,13 @@
+[MAIN]
+persistent=no
+
+[MESSAGES CONTROL]
+disable=all
+enable=undefined-variable,used-before-assignment,duplicate-code,too-many-locals,raise-missing-from
+
+[REPORTS]
+reports=yes
+score=no
+
+[SIMILARITIES]
+min-similarity-lines=4

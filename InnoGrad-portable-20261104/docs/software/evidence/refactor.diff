@@ -1,0 +1,106 @@
+--- before/backend/app/review_execution.py
++++ after/backend/app/review_execution.py
+@@ -17,13 +17,37 @@
+     return "".join(text[index] for index in positions), positions
+ 
+ 
++def _matching_quotes(needle, source, normalized):
++    for block_index, block in source:
++        if block_index not in normalized:
++            normalized[block_index] = _without_whitespace(block["text"])
++        text, offsets = normalized[block_index]
++        start = text.find(needle)
++        while start >= 0:
++            candidate = {key: block[key] for key in ("file_id", "page_number", "paragraph_id")}
++            candidate["quote"] = block["text"][offsets[start]:offsets[start + len(needle) - 1] + 1]
++            yield candidate
++            start = text.find(needle, start + 1)
++
++
++def _unique_candidate(supplied, source, normalized):
++    needle, _ = _without_whitespace(supplied["quote"])
++    if not needle:
++        return None
++    candidates = {(*_location(item), item["quote"]): item
++                  for item in _matching_quotes(needle, source, normalized)}
++    preferred = [item for item in candidates.values() if _location(item) == _location(supplied)]
++    matches = preferred or list(candidates.values())
++    return matches[0] if len(matches) == 1 else None
++
++
+ def align_evidence(checks, blocks):
+     """Restore source text only for unambiguous same-file matches; record every change."""
+     by_file = defaultdict(list)
+     for index, block in enumerate(blocks):
+         by_file[block["file_id"]].append((index, block))
+     normalized = {}
+-    changes, issues = [], []
++    changes, issues, pending = [], [], []
+     for check in checks:
+         for index, evidence in enumerate(check.evidence):
+             supplied = evidence.model_dump()
+@@ -31,24 +55,8 @@
+             if any(_location(block) == _location(supplied) and evidence.quote in block["text"]
+                    for _, block in source):
+                 continue
+-            candidates = {}
+-            needle, _ = _without_whitespace(evidence.quote)
+-            if needle:
+-                for block_index, block in source:
+-                    if block_index not in normalized:
+-                        normalized[block_index] = _without_whitespace(block["text"])
+-                    text, offsets = normalized[block_index]
+-                    start = text.find(needle)
+-                    while start >= 0:
+-                        candidate = {key: block[key] for key in ("file_id", "page_number", "paragraph_id")}
+-                        candidate["quote"] = block["text"][offsets[start]:offsets[start + len(needle) - 1] + 1]
+-                        candidates[(*_location(candidate), candidate["quote"])] = candidate
+-                        start = text.find(needle, start + 1)
+-            at_location = {key: value for key, value in candidates.items()
+-                           if _location(value) == _location(supplied)}
+-            if at_location:
+-                candidates = at_location
+-            if len(candidates) != 1:
++            corrected = _unique_candidate(supplied, source, normalized)
++            if corrected is None:
+                 issues.append({
+                     "rule_id": check.rule_id, "evidence_index": index,
+                     "issue": "no_unique_same_file_source_match",
+@@ -56,9 +64,8 @@
+                     "paragraph_id": evidence.paragraph_id,
+                 })
+                 continue
+-            corrected = next(iter(candidates.values()))
+             try:
+-                check.evidence[index] = Evidence.model_validate(corrected)
++                pending.append((check, index, Evidence.model_validate(corrected)))
+             except ValidationError:
+                 issues.append({"rule_id": check.rule_id, "evidence_index": index,
+                                "issue": "source_quote_exceeds_output_limit"})
+@@ -66,6 +73,8 @@
+             changes.append({"rule_id": check.rule_id, "supplied": supplied, "source": corrected})
+     if issues:
+         raise ReviewFailure("EVIDENCE_INVALID", {"validation_issues": issues})
++    for check, index, replacement in pending:
++        check.evidence[index] = replacement
+     return changes
+ 
+ 
+@@ -79,7 +88,7 @@
+             raise ReviewFailure("OUTPUT_INVALID", {"validation_issues": [
+                 {"location": list(error["loc"]), "issue": error["type"]}
+                 for error in exc.errors(include_input=False, include_context=False, include_url=False)
+-            ]})
++            ]}) from exc
+         try:
+             blocks = _blocks_from_attachments(payload["attachments"])
+             changes = align_evidence(parsed.checks, blocks)
+@@ -95,7 +104,7 @@
+                 "issue": "check_rule_coverage_applicability_and_evidence_roles",
+                 "rules": [{"id": rule["id"], "evidence_roles": rule.get("evidence_roles", [])}
+                           for rule in payload["requirements"]["review_rules"]],
+-            }]})
++            }]}) from exc
+         validated.update(checks=[check.model_dump() for check in parsed.checks], changes=changes)
+         return {"checks": validated["checks"]}
+ 

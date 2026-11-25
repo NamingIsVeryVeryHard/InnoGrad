@@ -54,3 +54,5 @@ python -m pytest -q tests/test_teacher_agent_*.py
 ```
 
 当前提交还通过了教师规划器扩展的 2 项 Node 测试，`frontend/teacher-chat` 的 6 个 JS/JSX 文件均通过项目 Prettier 格式检查。
+
+[材料审核模块：本次专项报告](../../InnoGrad-portable-20261104/docs/software/code_quality.md)

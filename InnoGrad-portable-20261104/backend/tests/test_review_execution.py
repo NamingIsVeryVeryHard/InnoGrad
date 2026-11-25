@@ -59,6 +59,21 @@ def test_evidence_validator_itself_remains_exact():
         validate_evidence([check("co -\nregulate")], [block("co -regulate")])
 
 
+def test_failed_batch_leaves_earlier_evidence_unchanged():
+    checks = [check("AB"), check("missing")]
+    original = [item.model_dump() for item in checks]
+    with pytest.raises(ReviewFailure, match="EVIDENCE_INVALID"):
+        align_evidence(checks, [block("A B")])
+    assert [item.model_dump() for item in checks] == original
+
+
+def test_match_prefers_supplied_page_and_preserves_original_spacing():
+    item = check("AB", page=2)
+    changes = align_evidence([item], [block("A B", 1), block("A\nB", 2)])
+    assert item.evidence[0].quote == "A\nB"
+    assert changes[0]["source"]["page_number"] == 2
+
+
 @pytest.mark.parametrize("text", [
     '{"checks":[]}',
     '核对完成。\n```json\n{"checks":[]}\n```\n结果见上。',

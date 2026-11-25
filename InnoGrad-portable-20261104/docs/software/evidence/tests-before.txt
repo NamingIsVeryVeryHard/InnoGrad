@@ -1,0 +1,19 @@
+..........F..............                                                [100%]
+=================================== FAILURES ===================================
+_____________ test_failed_batch_leaves_earlier_evidence_unchanged ______________
+
+    def test_failed_batch_leaves_earlier_evidence_unchanged():
+        checks = [check("AB"), check("missing")]
+        original = [item.model_dump() for item in checks]
+        with pytest.raises(ReviewFailure, match="EVIDENCE_INVALID"):
+            align_evidence(checks, [block("A B")])
+>       assert [item.model_dump() for item in checks] == original
+E       AssertionError: assert [{'rule_id': ...下一阶段计划', ...}] == [{'rule_id': ...下一阶段计划', ...}]
+E         
+E         At index 0 diff: {'rule_id': 'ANNUAL_PLAN_PRESENT', 'conclusion': 'compliant', 'severity': 'info', 'explanation': '核对下一阶段计划', 'evidence': [{'file_id': 'report', 'page_number': 1, 'paragraph_id': None, 'quote': 'A B'}], 'suggestion': '', 'limitations': []} != {'rule_id': 'ANNUAL_PLAN_PRESENT', 'conclusion': 'compliant', 'severity': 'info', 'explanation': '核对下一阶段计划', 'evidence': [{'file_id': 'report', 'page_number': 1, 'paragraph_id': None, 'quote': 'AB'}], 'suggestion': '', 'limitations': []}
+E         Use -v to get more diff
+
+backend/tests/test_review_execution.py:67: AssertionError
+=========================== short test summary info ============================
+FAILED backend/tests/test_review_execution.py::test_failed_batch_leaves_earlier_evidence_unchanged
+1 failed, 24 passed in 0.33s
