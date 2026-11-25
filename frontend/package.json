@@ -1,0 +1,22 @@
+{
+  "name": "innograd-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test:teacher-browser": "node --test prototype/tests/teacher-agent.browser.cjs",
+    "format": "prettier --write \"**/*.{js,jsx,cjs,css,html,json}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,cjs,css,html,json}\""
+  },
+  "dependencies": {
+    "chart.js": "^4.6.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "prettier": "3.10.1",
+    "vite": "^7.2.0"
+  }
+}

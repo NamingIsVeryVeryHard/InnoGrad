@@ -1,0 +1,300 @@
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from app.seed_scenarios import seed_scenarios
+from app.teacher_agent.contract import METRIC_CATALOG, MetricCard, PaperQuerySpec, ResultEnvelope
+from app.teacher_agent.visual import MAX_VISUAL_HTML_BYTES, extract_visual_artifact
+from test_teacher_agent_conversations import CONVERSATIONS
+from test_teacher_agent_tools import agent, clock, env, tool_result  # noqa: F401
+from test_workflow import post
+
+
+def _ok_result(run_id="run-1"):
+    definition = METRIC_CATALOG["paper_record_count"]
+    return ResultEnvelope(
+        query_run_id=run_id,
+        applied_query=PaperQuerySpec(operation="aggregate", group_by=["publication_status"]),
+        summary={
+            "headline": "当前有效归档中有 5 条符合条件的论文申报记录，涉及 2 名学生。",
+            "metrics": [
+                MetricCard(
+                    key=definition.key,
+                    label=definition.label,
+                    value=5,
+                    unit=definition.unit,
+                    subject=definition.subject,
+                )
+            ],
+            "breakdown": [],
+            "data_as_of": "2026-11-22",
+            "basis": "current_effective_archives",
+            "scope_student_count": 2,
+            "notice": "",
+        },
+        pagination={"page": 1, "page_size": 50, "total": 5, "has_more": False},
+    )
+
+
+def test_extracts_valid_visual_block_and_strips_it_from_prose():
+    raw = (
+        "今年共有 [run-1:paper_record_count] 篇论文申报。\n\n"
+        '```visual-html title="2026年论文分布"\n'
+        '<div id="app"></div>\n'
+        "<script>\n"
+        "// harmless JS comment should be allowed\n"
+        "const data = window.__INNOGRAD_DATA__;\n"
+        "document.getElementById('app').textContent = data.runs[0].title;\n"
+        "</script>\n"
+        "```\n"
+    )
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+    assert extracted.dropped_reason is None
+    assert extracted.prose == "今年共有 [run-1:paper_record_count] 篇论文申报。"
+    assert extracted.visual is not None
+    assert extracted.visual.kind == "html_sandbox"
+    assert extracted.visual.title == "2026年论文分布"
+    assert extracted.visual.source_run_ids == ["run-1"]
+    assert "__INNOGRAD_DATA__" in extracted.visual.html
+
+
+def test_skill_group_button_example_is_accepted_in_a_visual():
+    skill = Path(__file__).resolve().parents[1] / "skills/teacher-query-planner/SKILL.md"
+    guidance = skill.read_text().split('const button = document.createElement("button");', 1)[1].split("\n```", 1)[0]
+    raw = (
+        "今年共有 [run-1:paper_record_count] 篇论文申报。\n\n"
+        '```visual-html title="发表概况"\n<script>\n'
+        "const run = window.__INNOGRAD_DATA__.runs[0];\n"
+        "for (const row of run.breakdown) {\n"
+        f'const button = document.createElement("button");{guidance}\n'
+        "document.body.append(button);\n}\n</script>\n```"
+    )
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+
+    assert extracted.dropped_reason is None
+    assert extracted.prose == "今年共有 [run-1:paper_record_count] 篇论文申报。"
+    assert extracted.visual is not None
+    assert "button.textContent = row.label" in extracted.visual.html
+    assert "window.innograd.drilldown(run.runId, row.drilldownPatch, row.label)" in extracted.visual.html
+
+
+def test_returns_prose_unchanged_when_no_visual_block_present():
+    raw = "今年共有 [run-1:paper_record_count] 篇论文申报。"
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+    assert extracted.prose == raw
+    assert extracted.visual is None
+    assert extracted.dropped_reason is None
+
+
+def test_drops_visual_without_data_binding_and_keeps_prose():
+    raw = (
+        "今年共有 [run-1:paper_record_count] 篇。\n"
+        "```visual-html\n<div>硬编码 5 篇论文</div>\n```"
+    )
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+    assert extracted.prose == "今年共有 [run-1:paper_record_count] 篇。"
+    assert extracted.visual is None
+    assert extracted.dropped_reason == "missing_data_binding"
+
+
+def test_drops_multiple_visual_blocks_and_empty_or_oversized_blocks():
+    block = "```visual-html\n<script>console.log(window.__INNOGRAD_DATA__)</script>\n```"
+    multi = extract_visual_artifact(f"结论。\n{block}\n{block}", [_ok_result()])
+    assert multi.visual is None
+    assert multi.dropped_reason == "multiple_visual_blocks"
+    assert multi.prose == "结论。"
+
+    empty = extract_visual_artifact("```visual-html\n   \n```", [_ok_result()])
+    assert empty.visual is None
+    assert empty.dropped_reason == "empty_html"
+
+    oversized_body = "window.__INNOGRAD_DATA__;" + ("a" * MAX_VISUAL_HTML_BYTES)
+    oversized = extract_visual_artifact(f"```visual-html\n<script>{oversized_body}</script>\n```", [_ok_result()])
+    assert oversized.visual is None
+    assert oversized.dropped_reason == "html_too_large"
+
+
+@pytest.mark.parametrize("fence", [
+    "```visual-html\nwindow.__INNOGRAD_DATA__",
+    "```visual-spec\n{}\n```",
+    "```visual-spec\n{}\n```\n```visual-html\nwindow.__INNOGRAD_DATA__\n```",
+])
+def test_invalid_visual_fences_are_removed_from_prose(fence):
+    extracted = extract_visual_artifact(f"结论 [run-1]。\r\n{fence}", [_ok_result()])
+    assert extracted.prose == "结论 [run-1]。"
+    assert extracted.visual is None
+
+
+def test_drops_visual_when_no_verified_ok_results():
+    clarification = ResultEnvelope(status="clarification_needed", clarification={"message": "请明确学生"})
+    raw = "```visual-html\n<script>window.__INNOGRAD_DATA__</script>\n```"
+    extracted = extract_visual_artifact(raw, [clarification])
+    assert extracted.visual is None
+    assert extracted.dropped_reason == "no_verified_results"
+
+
+@pytest.mark.parametrize(("name", "snippet"), [
+    ("external_url", '<img src="https://evil.example/leak.png"><script>window.__INNOGRAD_DATA__</script>'),
+    ("protocol_relative_attr", '<img src="//evil.example/leak.png"><script>window.__INNOGRAD_DATA__</script>'),
+    ("css_import", '<style>@import "x.css";</style><script>window.__INNOGRAD_DATA__</script>'),
+    ("script_src", '<script src="/evil.js">window.__INNOGRAD_DATA__</script>'),
+    ("meta_tag", '<meta http-equiv="refresh" content="0"><script>window.__INNOGRAD_DATA__</script>'),
+    ("base_tag", '<base href="/"><script>window.__INNOGRAD_DATA__</script>'),
+    ("nested_embed", '<iframe></iframe><script>window.__INNOGRAD_DATA__</script>'),
+    ("nested_embed", '<form></form><script>window.__INNOGRAD_DATA__</script>'),
+    ("storage_or_cookie", "<script>document.cookie; window.__INNOGRAD_DATA__</script>"),
+    ("storage_or_cookie", "<script>localStorage.getItem('x'); window.__INNOGRAD_DATA__</script>"),
+    ("network_api", "<script>fetch('/api/v1/me'); window.__INNOGRAD_DATA__</script>"),
+    ("network_api", "<script>new XMLHttpRequest(); window.__INNOGRAD_DATA__</script>"),
+    ("frame_escape", "<script>window.top.location='x'; window.__INNOGRAD_DATA__</script>"),
+    ("frame_escape", "<script>parent.postMessage({}, '*'); window.__INNOGRAD_DATA__</script>"),
+])
+def test_rejects_forbidden_patterns(name, snippet):
+    raw = f"结论 [run-1]。\n```visual-html\n{snippet}\n```"
+    extracted = extract_visual_artifact(raw, [_ok_result("run-1")])
+    assert extracted.visual is None
+    assert extracted.dropped_reason == f"forbidden_pattern:{name}"
+    assert extracted.prose == "结论 [run-1]。"
+
+
+def test_agent_turn_returns_initial_only_visual_alongside_grouped_prose(agent):
+    def analyze(token):
+        view = tool_result(agent.query(token, spec={"group_by": ["publication_status"]}))
+        run_id = view["query_run_id"]
+        return (
+            f"今年共有 [{run_id}:paper_record_count] 篇论文。\n\n"
+            '```visual-html title="发表状态分布"\n'
+            '<canvas id="chart"></canvas>\n'
+            "<script>const run = window.__INNOGRAD_DATA__.runs[0];</script>\n"
+            "```"
+        )
+
+    reply = agent.ask(analyze, key="visual-grouped", message="今年论文发表情况")
+    assert reply.status_code == 200, reply.text
+    payload = reply.json()
+    assert payload["analysis_notice"] is None
+    assert payload["analysis"].startswith("各组统计请查看分组结果卡 [")
+    assert payload["visual"]["kind"] == "html_sandbox"
+    assert payload["visual"]["title"] == "发表状态分布"
+    assert payload["visual"]["source_run_ids"] == payload["turn"]["run_ids"]
+    assert "__INNOGRAD_DATA__" in payload["visual"]["html"]
+
+    detail = agent.teacher.get(f"{CONVERSATIONS}/{agent.conversation}").json()
+    assert "visual" not in detail
+    assert "visual" not in detail["turns"][0]
+    replay = agent.ask(
+        lambda _: pytest.fail("replay invoked planner"), key="visual-grouped", message="今年论文发表情况",
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["visual"] is None
+
+
+def test_annual_visual_and_doctoral_followup_bind_current_runs_and_drill_to_published_records(agent, tmp_path):
+    seed_scenarios(agent.sessions, tmp_path / "files", tmp_path / "bundle", date(2026, 11, 19))
+    annual_query = {
+        "operation": "aggregate", "basis": "current_effective_archives",
+        "group_by": ["publication_status"],
+        "time_range": {"field": "status_date", "from": "2026-01-01", "to": "2026-12-31"},
+    }
+    doctoral_filter = {"field": "degree", "operator": "eq", "value": "博士"}
+
+    def answer(view, title):
+        return (
+            f"共有 {view['metric_refs']['paper_record_count']} 篇论文。\n"
+            f'```visual-html title="{title}"\n'
+            '<ul id="groups"></ul><script>\n'
+            "const run = window.__INNOGRAD_DATA__.runs[0];\n"
+            "for (const row of run.breakdown) {\n"
+            "  const group = document.createElement('li');\n"
+            "  const button = document.createElement('button');\n"
+            "  button.type = 'button';\n"
+            "  button.textContent = row.label;\n"
+            "  button.addEventListener('click', () => "
+            "window.innograd.drilldown(run.runId, row.drilldownPatch, row.label));\n"
+            "  group.append(button, ` ${row.recordCount} 篇`);\n"
+            "  document.getElementById('groups').append(group);\n"
+            "}\n</script>\n```"
+        )
+
+    annual_response = agent.ask(
+        lambda token: answer(tool_result(agent.query(token, spec=annual_query)), "年度科研概览"),
+        message="今年科研成果怎么样？",
+    )
+    assert annual_response.status_code == 200, annual_response.text
+    annual = annual_response.json()
+    assert annual["visual"]["source_run_ids"] == annual["turn"]["run_ids"]
+    assert "已发表" in annual["analysis"]
+
+    doctoral_response = agent.ask(
+        lambda token: answer(tool_result(agent.query(token, patch={"set_filters": [doctoral_filter]})), "博士生发表概览"),
+        key="doctoral", version=annual["conversation_lock_version"], message="只看博士生呢？",
+    )
+    assert doctoral_response.status_code == 200, doctoral_response.text
+    doctoral = doctoral_response.json()
+    run_id = doctoral["result"]["query_run_id"]
+    assert doctoral["visual"]["source_run_ids"] == [run_id]
+    assert run_id not in annual["visual"]["source_run_ids"]
+    assert doctoral["visual"]["title"] == "博士生发表概览"
+    assert doctoral["result"]["applied_query"]["filters"] == [doctoral_filter]
+    published = next(
+        row for row in doctoral["result"]["summary"]["breakdown"] if row["group_key"] == {"publication_status": "published"}
+    )
+    assert f"已发表 {published['record_count']} 条" in doctoral["analysis"]
+    assert f"[{run_id}]" in doctoral["analysis"]
+    detail = post(agent.teacher, f"{CONVERSATIONS}/{agent.conversation}/turns", {
+        "expected_lock_version": doctoral["conversation_lock_version"],
+        "input": {"mode": "drilldown_patch", "parent_run_id": run_id, "patch": published["drilldown_patch"]},
+    })
+    assert detail.status_code == 200, detail.text
+    result = detail.json()["result"]
+    assert result["applied_query"]["time_range"] == annual_query["time_range"]
+    assert result["applied_query"]["filters"] == [
+        doctoral_filter, {"field": "publication_status", "operator": "eq", "value": "published"},
+    ]
+    assert len(result["items"]) == published["record_count"]
+    assert all(item["submission_id"] and item["publication_status"] == "published" for item in result["items"])
+    material = agent.teacher.get(f"/api/v1/submissions/{result['items'][0]['submission_id']}")
+    assert material.status_code == 200, material.text
+
+
+def test_agent_turn_accepts_visual_only_without_unverified_notice(agent):
+    def analyze(token):
+        tool_result(agent.query(token, spec={"operation": "list"}))
+        return (
+            '```visual-html title="论文清单"\n'
+            "<div id='list'></div><script>window.__INNOGRAD_DATA__</script>\n"
+            "```"
+        )
+
+    reply = agent.ask(analyze, key="visual-only", message="列出今年论文")
+    assert reply.status_code == 200, reply.text
+    payload = reply.json()
+    assert payload["analysis"] is None
+    assert payload["analysis_notice"] is None
+    assert payload["visual"]["title"] == "论文清单"
+
+
+def test_agent_turn_drops_unsafe_visual_but_preserves_verified_prose(agent):
+    def analyze(token):
+        view = tool_result(agent.query(token, spec={"operation": "list"}))
+        run_id = view["query_run_id"]
+        return (
+            f"共有 [{run_id}:paper_record_count] 篇论文。\n"
+            "```visual-html\n<script>fetch('/api/v1/me'); window.__INNOGRAD_DATA__</script>\n```"
+        )
+
+    reply = agent.ask(analyze, key="visual-drop", message="列出论文")
+    assert reply.status_code == 200, reply.text
+    payload = reply.json()
+    assert payload["visual"] is None
+    assert payload["analysis_notice"] is None
+    assert payload["analysis"] is not None
+
+
+def test_clarification_strips_visual_without_verified_results(agent):
+    question = "您想查看今年还是去年的论文？"
+    reply = agent.ask(lambda _: f"{question}\n```visual-html\n<script>window.__INNOGRAD_DATA__</script>\n```")
+    assert reply.status_code == 200, reply.text
+    assert reply.json()["result"]["clarification"]["message"] == question
+    assert reply.json()["visual"] is None

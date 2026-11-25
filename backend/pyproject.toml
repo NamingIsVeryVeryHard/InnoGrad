@@ -7,3 +7,7 @@ dependencies = ["fastapi", "uvicorn", "sqlalchemy>=2.0", "alembic", "psycopg[bin
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.pylint.messages_control]
+disable = ["all"]
+enable = ["F", "E", "too-many-branches", "too-many-statements", "duplicate-code"]
