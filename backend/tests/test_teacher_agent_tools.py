@@ -592,5 +592,7 @@ def test_expiry_takeover_waits_for_finalization_without_blocking_other_conversat
 
 def test_grant_store_rejects_multiple_workers(monkeypatch):
     monkeypatch.setenv("WEB_CONCURRENCY", "2")
+    grants = InMemoryTurnGrantStore()
     with pytest.raises(PlannerConfigError):
-        InMemoryTurnGrantStore()
+        with grants.claim("turn"):
+            pytest.fail("A Pi grant was usable across workers")

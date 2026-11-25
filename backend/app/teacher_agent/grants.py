@@ -68,7 +68,6 @@ def _check_single_worker():
 
 class InMemoryTurnGrantStore:
     def __init__(self, *, clock: Callable[[], float] = monotonic, ttl_seconds: float = 60):
-        _check_single_worker()
         self._pid = os.getpid()
         self._clock = clock
         self._ttl = ttl_seconds
@@ -77,6 +76,7 @@ class InMemoryTurnGrantStore:
         self._by_conversation: dict[str, str] = {}
 
     def _check_process(self):
+        _check_single_worker()
         if os.getpid() != self._pid:
             raise PlannerConfigError(_SINGLE_WORKER)
 

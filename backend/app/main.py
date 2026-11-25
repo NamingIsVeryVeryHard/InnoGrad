@@ -47,6 +47,7 @@ from .db import (
     now,
 )
 from .paper_form import canonicalize_paper_form
+from .login_session import find_login, login_user
 from .paper_materials import PaperAttachmentRole, normalize_file_roles
 
 
@@ -120,16 +121,8 @@ def create_app(database_url=None, storage=None):
 
     def authenticated(request: Request, session=Depends(db)):
         token = request.cookies.get("session", "")
-        login = (
-            session.get(LoginSession, hashlib.sha256(token.encode()).hexdigest())
-            if token
-            else None
-        )
-        if not login or login.expires_at < now():
-            error(401, "请重新登录")
-        user = session.get(User, login.user_id)
-        if not user or not user.enabled:
-            error(401, "账号不可用")
+        login = find_login(session, token)
+        user = login_user(session, login)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             if not hmac.compare_digest(
                 request.headers.get("X-CSRF-Token", ""), login.csrf
@@ -698,7 +691,13 @@ def create_app(database_url=None, storage=None):
         return {"id": row.id, "name": row.name, "status": row.status, "size": row.size}
 
     @app.get("/api/v1/files/{ident}/download")
-    def download(ident: str, user=Depends(authenticated), session=Depends(db)):
+    def download(ident: str, request: Request, session=Depends(db)):
+        authorization = request.headers.get("Authorization")
+        if authorization is None:
+            user = authenticated(request, session)
+        else:
+            scheme, _, token = authorization.partition(" ")
+            user = login_user(session, find_login(session, token if scheme.lower() == "bearer" else None))
         row = session.get(File, ident)
         if not row:
             error(404, "文件不存在")

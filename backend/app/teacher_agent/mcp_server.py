@@ -4,11 +4,14 @@ import json
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from ..login_session import find_login, login_user
 from .contract import export_paper_tool_input_schema
-from .engine import TeacherQueryEngine
-from .errors import ResourceNotFoundError, RetryableToolInputError
+from .dsh_tools import TOOLS, call_tool
+from .engine import ActorContext, TeacherQueryEngine
+from .errors import ResourceNotFoundError, RetryableToolInputError, TeacherAgentError
 
 
 PROTOCOL_VERSION = "2025-11-25"
@@ -71,6 +74,30 @@ async def _call_paper_tool(engine, request_id, params, token):
     return _result(request_id, _tool_result({**view, "metric_refs": references}))
 
 
+def _list_tools(sessions, token):
+    if token:
+        with sessions() as session:
+            login = find_login(session, token)
+            if login is not None:
+                ActorContext.from_user(login_user(session, login))
+                return TOOLS
+    return [PAPER_TOOL]
+
+
+def _call_teacher_tool(sessions, token, name, arguments, base_url):
+    with sessions.begin() as session:
+        user = login_user(session, find_login(session, token))
+        ActorContext.from_user(user)
+        try:
+            return _tool_result(call_tool(session, user, name, arguments, base_url))
+        except ValidationError as error:
+            issues = [{"field": ".".join(map(str, issue["loc"])), "message": issue["msg"]}
+                      for issue in error.errors(include_input=False, include_url=False)]
+            return _tool_result({"code": "INVALID_ARGUMENTS", "issues": issues}, is_error=True)
+        except TeacherAgentError as error:
+            return _tool_result({"code": error.code, "message": str(error)}, is_error=True)
+
+
 async def handle_mcp(request: Request, engine: TeacherQueryEngine, token: str | None) -> Response:
     if "origin" in request.headers:
         return _error(None, -32600, "Origin not allowed", status=403)
@@ -115,7 +142,14 @@ async def handle_mcp(request: Request, engine: TeacherQueryEngine, token: str | 
     if method == "ping":
         return _result(request_id, {})
     if method == "tools/list":
-        return _result(request_id, {"tools": [PAPER_TOOL]})
+        tools = await run_in_threadpool(_list_tools, engine.sessions, token)
+        return _result(request_id, {"tools": tools})
     if method == "tools/call":
+        if any(params.get("name") == tool["name"] for tool in TOOLS):
+            result = await run_in_threadpool(
+                _call_teacher_tool, engine.sessions, token, params["name"], params.get("arguments", {}),
+                str(request.base_url).rstrip("/"),
+            )
+            return _result(request_id, result)
         return await _call_paper_tool(engine, request_id, params, token)
     return _error(request_id, -32601, "Method not found")
