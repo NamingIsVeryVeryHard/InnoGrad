@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from zipfile import ZipInfo
 
 from sqlalchemy import event, select
 
@@ -22,6 +23,12 @@ from app.teacher_agent.privacy import render_agent_response
 
 AS_OF = datetime(2026, 11, 19, 2, tzinfo=timezone.utc)
 FIXED_SEED = 320237
+
+
+class _FixtureZipInfo(ZipInfo):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.create_system = 0
 
 
 def _fixture_ids(session, flush_context, instances):
@@ -60,7 +67,8 @@ def build_artifact():
             zip_clock.localtime.return_value = AS_OF.timetuple()
             seed(sessions)
             root = Path(temp)
-            seed_scenarios(sessions, root / "files", root / "cohort", AS_OF.date())
+            with patch("zipfile.ZipInfo", _FixtureZipInfo):
+                seed_scenarios(sessions, root / "files", root / "cohort", AS_OF.date())
             with sessions() as session:
                 teacher = session.scalars(select(User).where(User.username == "teacher")).one()
                 aggregate = PaperQuerySpec(

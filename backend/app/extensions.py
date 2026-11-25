@@ -169,6 +169,7 @@ def register(app, ctx):
             draft = {
                 "form": original["form"],
                 "file_ids": original["file_ids"],
+                "file_roles": original.get("file_roles", {}),
                 "reference_ids": [
                     r["submission_id"] for r in original.get("references", [])
                 ],
@@ -218,6 +219,7 @@ def register(app, ctx):
             draft={
                 "form": original["form"],
                 "file_ids": original["file_ids"],
+                "file_roles": original.get("file_roles", {}),
                 "reference_ids": [],
             },
         )

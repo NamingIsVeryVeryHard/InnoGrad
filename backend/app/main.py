@@ -46,6 +46,8 @@ from .db import (
     uid,
     now,
 )
+from .paper_form import canonicalize_paper_form
+from .paper_materials import PaperAttachmentRole, normalize_file_roles
 
 
 def password_hash(password, salt=None):
@@ -79,6 +81,7 @@ class Draft(Input):
     expected_lock_version: int = Field(ge=0)
     form: dict
     file_ids: list[str] = Field(default_factory=list, max_length=30)
+    file_roles: dict[str, PaperAttachmentRole] = Field(default_factory=dict)
     reference_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -232,6 +235,11 @@ def create_app(database_url=None, storage=None):
                 File.id.in_(visible_file_ids), File.submission_id == sub.id
             )
         ).all()
+        file_roles = {}
+        for version in versions:
+            file_roles.update(version.snapshot.get("file_roles", {}))
+        if user.id == sub.student_id:
+            file_roles.update(sub.draft.get("file_roles", {}))
         archive = (
             session.get(Archive, sub.effective_archive_id)
             if sub.effective_archive_id
@@ -247,6 +255,7 @@ def create_app(database_url=None, storage=None):
                     size=f.size,
                     media_type=f.media_type,
                     sha256=f.sha256,
+                    role=file_roles.get(f.id, "other_proof"),
                 )
                 for f in files
             ],
@@ -564,7 +573,7 @@ def create_app(database_url=None, storage=None):
             kind=body.kind,
             task_id=body.task_id,
             reviewer_id=reviewer,
-            draft={"form": {}, "file_ids": [], "reference_ids": []},
+            draft={"form": {}, "file_ids": [], "file_roles": {}, "reference_ids": []},
         )
         session.add(sub)
         session.flush()
@@ -613,11 +622,17 @@ def create_app(database_url=None, storage=None):
             error(409, "当前状态不可修改工作稿")
         if len(json.dumps(body.form, ensure_ascii=False)) > 100000:
             error(422, "表单内容过大")
+        try:
+            file_roles = normalize_file_roles(body.file_ids, body.file_roles)
+        except ValueError as exc:
+            error(422, str(exc))
+        draft_payload = body.model_dump(exclude={"expected_lock_version"})
+        draft_payload["file_roles"] = file_roles
         cas(
             session,
             sub,
             body.expected_lock_version,
-            draft=body.model_dump(exclude={"expected_lock_version"}),
+            draft=draft_payload,
         )
         audit(session, user, "draft.saved", sub.id)
         session.commit()
@@ -737,6 +752,10 @@ def create_app(database_url=None, storage=None):
         ):
             error(422, "缺少必填信息：" + "、".join(required))
         if sub.kind == "paper":
+            try:
+                form = canonicalize_paper_form(form)
+            except ValueError as exc:
+                error(422, str(exc))
             state = form["publication_status"]
             if state not in ("submitted", "accepted", "published"):
                 error(422, "论文状态无效")
@@ -809,6 +828,7 @@ def create_app(database_url=None, storage=None):
                 "correction_id": correction.id if correction else None,
                 "form": form,
                 "file_ids": ids,
+                "file_roles": normalize_file_roles(ids, draft.get("file_roles")),
                 "references": refs,
                 "requirements": requirements,
                 "period": task.period if task else None,

@@ -2281,3 +2281,15 @@ dialog::backdrop {
     font-size: 23px;
   }
 }
+.file-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+  color: #66766f;
+  font-size: 12px;
+}
+
+.file-role select {
+  min-width: 150px;
+}
