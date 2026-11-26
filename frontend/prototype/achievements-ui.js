@@ -14,7 +14,6 @@ import {
   achievementStatusSummary,
   achievementTitle,
   fileRoleLabelsForKind,
-  renderAchievementSummaryBar,
   safeHttpUrl,
 } from "./achievements-labels.js";
 
@@ -29,12 +28,11 @@ export {
   achievementStatusSummary,
   achievementTitle,
   fileRoleLabelsForKind,
-  renderAchievementSummaryBar,
   safeHttpUrl,
 };
 
 const ARTIFACT_EMPTY_HTML =
-  '<div class="artifact-empty">暂未添加关联材料（选填）——可按需关联实验报告、数据集、代码仓库或原型演示</div>';
+  '<div class="artifact-empty">未添加关联材料（实验报告、数据集、代码或原型均为选填）</div>';
 
 function holdersToText(holders) {
   if (Array.isArray(holders)) return holders.join("\n");
@@ -53,13 +51,12 @@ function buildOptions(entries, selected) {
 function labelTag(text, required = false) {
   const mark = required
     ? '<span class="req-mark" aria-hidden="true">*</span>'
-    : '<span class="opt-pill">选填</span>';
+    : '<span class="opt-text">选填</span>';
   return `<span class="label-row">${text}${mark}</span>`;
 }
 
-function sectionHead(title, sub = "", rightHtml = "") {
-  const subHtml = sub ? `<div class="ach-section-sub">${sub}</div>` : "";
-  return `<div class="ach-section-head"><div><div class="ach-section-title">${title}</div>${subHtml}</div>${rightHtml}</div>`;
+function sectionHead(title, rightHtml = "") {
+  return `<div class="ach-section-head"><span class="ach-section-title">${title}</span>${rightHtml}</div>`;
 }
 
 export function renderSoftwareCopyrightFields(form, esc) {
@@ -69,20 +66,17 @@ export function renderSoftwareCopyrightFields(form, esc) {
   const noteStyle = isRegistered ? ' style="display:none"' : "";
   const reqAttr = isRegistered ? "required" : "disabled";
   return [
-    sectionHead("基础信息", "请准确填写软著名称、版本号与著作权人信息"),
-    `<label class="full">${labelTag("软件全称", true)}<input name="software_name" value="${esc(form.software_name || form.title || "")}" required maxlength="200" placeholder="请输入软件全称（如 研究生学术成果智能管理平台）"></label>`,
-    `<label>${labelTag("版本号", true)}<input name="version" value="${esc(form.version || "")}" required maxlength="50" placeholder="如 V1.0"></label>`,
+    sectionHead("基础信息"),
+    `<label class="full">${labelTag("软件全称", true)}<input name="software_name" value="${esc(form.software_name || form.title || "")}" required maxlength="200" placeholder="请输入软件全称"></label>`,
+    `<label>${labelTag("版本号", true)}<input name="version" value="${esc(form.version || "")}" required maxlength="50" placeholder="V1.0"></label>`,
     `<label>${labelTag("登记状态", true)}<select name="registration_status" id="sw-reg-status" required>${buildOptions(Object.entries(REGISTRATION_STATUS_LABELS), status)}</select></label>`,
-    `<label class="full">${labelTag("著作权人", true)}<textarea name="copyright_holders" required rows="3" placeholder="华东师范大学&#10;张三">${esc(holdersToText(form.copyright_holders))}</textarea><span class="field-hint">每行或以逗号、顿号分隔一名，提交时自动去重</span></label>`,
-    sectionHead("登记凭证信息", "仅已登记时填写登记号、登记日期并附证明材料"),
-    `<div class="ach-reg-note" id="sw-reg-note"${noteStyle}>当前为未登记或申请登记中，无需填写登记号与日期；后续获证后可通过「更新成果进展」补充登记信息。</div>`,
-    `<div class="ach-reg-panel" id="sw-reg-panel"${hiddenStyle}><div class="form-grid"><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记号", true)}<input name="registration_number" value="${esc(form.registration_number || "")}" ${reqAttr} maxlength="64" placeholder="如 2026SR1234567"></label><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记日期", true)}<input name="registration_date" type="date" value="${esc(form.registration_date || "")}" ${reqAttr}></label></div></div>`,
-    sectionHead(
-      "个人开发贡献",
-      "说明本人具体承担的架构设计、核心编码与测试工作",
-    ),
-    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="如 2025—2026学年"></label>`,
-    `<label class="full">${labelTag("学生承担的开发工作", true)}<textarea name="development_work" required rows="4" maxlength="4000" placeholder="请具体说明本人承担的架构设计、核心模块编码、测试验证等工作">${esc(form.development_work || "")}</textarea></label>`,
+    `<label class="full">${labelTag("著作权人", true)}<textarea name="copyright_holders" required rows="3" placeholder="华东师范大学&#10;张三">${esc(holdersToText(form.copyright_holders))}</textarea><span class="field-hint">每行或以逗号、顿号分隔一名</span></label>`,
+    sectionHead("登记信息"),
+    `<div class="ach-reg-note" id="sw-reg-note"${noteStyle}>未登记或申请中无需填写登记号与日期，获证后可通过「更新成果进展」补录。</div>`,
+    `<div class="ach-reg-panel" id="sw-reg-panel"${hiddenStyle}><div class="form-grid"><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记号", true)}<input name="registration_number" value="${esc(form.registration_number || "")}" ${reqAttr} maxlength="64" placeholder="2026SR1234567"></label><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记日期", true)}<input name="registration_date" type="date" value="${esc(form.registration_date || "")}" ${reqAttr}></label></div></div>`,
+    sectionHead("开发贡献"),
+    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年"></label>`,
+    `<label class="full">${labelTag("学生承担的开发工作", true)}<textarea name="development_work" required rows="4" maxlength="4000" placeholder="说明本人承担的架构设计、核心编码与测试工作">${esc(form.development_work || "")}</textarea></label>`,
   ].join("");
 }
 
@@ -95,7 +89,7 @@ function renderArtifactRow(item, files, esc) {
         `<option value="${esc(f.id)}" ${item.file_id === f.id ? "selected" : ""}>${esc(f.name)}</option>`,
     ),
   ].join("");
-  return `<div class="artifact-row"><div class="artifact-row-head"><span class="artifact-row-title">关联材料条目</span><button type="button" class="linkbtn danger-link" data-remove-artifact>移除</button></div><div class="form-grid"><label>${labelTag("材料类别", true)}<select data-art="artifact_type">${buildOptions(Object.entries(ARTIFACT_TYPE_LABELS), selectedType)}</select></label><label>${labelTag("材料名称", true)}<input data-art="name" value="${esc(item.name || "")}" maxlength="200" required placeholder="如 消融实验报告 v1"></label><label>${labelTag("访问链接", false)}<input data-art="url" type="url" value="${esc(item.url || "")}" maxlength="2000" placeholder="https://..."></label><label>${labelTag("关联已上传附件", false)}<select data-art="file_id">${fileOptions}</select></label><label class="full">${labelTag("简要说明", false)}<input data-art="description" value="${esc(item.description || "")}" maxlength="500" placeholder="补充说明版本、范围或使用方式"></label></div></div>`;
+  return `<div class="artifact-row"><div class="artifact-row-head"><span class="artifact-row-title">关联材料</span><button type="button" class="linkbtn danger-link" data-remove-artifact>移除</button></div><div class="form-grid"><label>${labelTag("类别", true)}<select data-art="artifact_type">${buildOptions(Object.entries(ARTIFACT_TYPE_LABELS), selectedType)}</select></label><label>${labelTag("名称", true)}<input data-art="name" value="${esc(item.name || "")}" maxlength="200" required placeholder="消融实验报告 v1"></label><label>${labelTag("访问链接", false)}<input data-art="url" type="url" value="${esc(item.url || "")}" maxlength="2000" placeholder="https://..."></label><label>${labelTag("关联附件", false)}<select data-art="file_id">${fileOptions}</select></label><label class="full">${labelTag("说明", false)}<input data-art="description" value="${esc(item.description || "")}" maxlength="500" placeholder="补充说明版本或用途"></label></div></div>`;
 }
 
 export function renderResearchProjectFields(form, files, esc) {
@@ -108,24 +102,17 @@ export function renderResearchProjectFields(form, files, esc) {
     ? artifacts.map((item) => renderArtifactRow(item, files, esc)).join("")
     : ARTIFACT_EMPTY_HTML;
   return [
-    sectionHead(
-      "项目与角色信息",
-      "记录参与的项目或课题、个人角色与阶段完成时间",
-    ),
+    sectionHead("项目信息"),
     `<label class="full">${labelTag("项目或课题名称", true)}<input name="project_name" value="${esc(form.project_name || form.title || "")}" required maxlength="200" placeholder="请输入项目或课题全称"></label>`,
     `<label>${labelTag("学生本人角色", true)}<select name="student_role" id="rp-student-role" required>${buildOptions(Object.entries(STUDENT_ROLE_LABELS), roleVal)}</select></label>`,
     `<label>${labelTag("完成时间", true)}<input name="completion_date" type="date" value="${esc(form.completion_date || "")}" required></label>`,
-    `<label class="full">${labelTag("角色补充说明（选“其他”时必填）", roleVal === "other")}<input name="role_description" id="rp-role-detail" value="${esc(form.role_description || "")}" ${roleDetailReq} maxlength="100" placeholder="如 数据管线负责人、前端交互开发"></label>`,
-    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="如 2025—2026学年"></label>`,
-    sectionHead(
-      "阶段完成事项",
-      "具体描述本阶段达成的实验结论、系统模块或交付物",
-    ),
-    `<label class="full">${labelTag("本阶段完成的具体事项", true)}<textarea name="stage_deliverables" required rows="4" maxlength="4000" placeholder="请具体说明本阶段完成的研究任务、实验结果或系统交付">${esc(form.stage_deliverables || "")}</textarea></label>`,
+    `<label class="full">${labelTag("角色补充说明（选“其他”时必填）", roleVal === "other")}<input name="role_description" id="rp-role-detail" value="${esc(form.role_description || "")}" ${roleDetailReq} maxlength="100" placeholder="如 数据管线负责人、前端开发"></label>`,
+    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年"></label>`,
+    sectionHead("阶段事项"),
+    `<label class="full">${labelTag("本阶段完成的具体事项", true)}<textarea name="stage_deliverables" required rows="4" maxlength="4000" placeholder="说明本阶段完成的研究任务、实验结果或交付物">${esc(form.stage_deliverables || "")}</textarea></label>`,
     sectionHead(
       "按需关联材料（选填）",
-      "支持实验报告、数据集、代码或原型，不作为必填项",
-      '<button type="button" class="btn sm" id="add-artifact-btn">+ 添加关联材料</button>',
+      '<button type="button" class="btn sm" id="add-artifact-btn">添加材料</button>',
     ),
     `<div class="full" id="artifact-list">${artifactBody}</div>`,
   ].join("");

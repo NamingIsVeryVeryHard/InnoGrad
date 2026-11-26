@@ -131,14 +131,3 @@ export function achievementStatusSummary(kind, form, taskPeriod = "") {
   }
   return taskPeriod || "—";
 }
-
-export function renderAchievementSummaryBar(items) {
-  const archived = items.filter((r) => r.status === "archived").length;
-  const reviewing = items.filter((r) =>
-    ["pending", "approved"].includes(r.status),
-  ).length;
-  const editing = items.filter((r) =>
-    ["draft", "returned"].includes(r.status),
-  ).length;
-  return `<div class="ach-summary-bar"><div class="ach-kpi is-brand"><span>全部记录</span><strong>${items.length}</strong></div><div class="ach-kpi is-ok"><span>已归档认定</span><strong>${archived}</strong></div><div class="ach-kpi is-warn"><span>审核流转中</span><strong>${reviewing}</strong></div><div class="ach-kpi"><span>草稿与待补正</span><strong>${editing}</strong></div></div>`;
-}

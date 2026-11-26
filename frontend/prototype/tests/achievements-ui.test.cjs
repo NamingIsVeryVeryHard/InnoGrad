@@ -6,7 +6,6 @@ const {
   extractSoftwareCopyrightForm,
   fileRoleLabelsForKind,
   renderAchievementDetail,
-  renderAchievementSummaryBar,
   renderResearchProjectFields,
   renderSoftwareCopyrightFields,
   renderVersionStructuredFields,
@@ -260,15 +259,4 @@ test("kind-specific role maps, titles, summaries, and growth bars handle new kin
   assert.ok(growthHtml.includes("1 份软著"));
   assert.ok(growthHtml.includes("1 份科研项目"));
   assert.ok(growthHtml.includes("2026-11归档2份"));
-
-  const kpiHtml = renderAchievementSummaryBar([
-    { status: "archived" },
-    { status: "pending" },
-    { status: "draft" },
-    { status: "returned" },
-  ]);
-  assert.ok(kpiHtml.includes("ach-summary-bar"));
-  assert.ok(kpiHtml.includes("<strong>4</strong>"));
-  assert.ok(kpiHtml.includes("<strong>1</strong>"));
-  assert.ok(kpiHtml.includes("<strong>2</strong>"));
 });

@@ -34,18 +34,21 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   margin-left: auto;
-  background: #a51f35;
-  color: white;
-  border: 0;
+  background: #141413;
+  color: #faf9f5;
+  border: 1px solid rgba(20, 20, 19, 0.14);
   border-radius: 50%;
-  box-shadow: 0 6px 24px #64142740;
-  transition: transform 0.2s;
+  box-shadow: 0 4px 14px rgba(20, 20, 19, 0.16);
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease;
 }
 .launcher:hover {
-  transform: translateY(-3px);
+  background: #2c2b29;
+  transform: translateY(-2px);
 }
 svg {
   width: 25px;

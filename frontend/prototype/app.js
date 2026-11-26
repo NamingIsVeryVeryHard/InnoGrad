@@ -13,7 +13,6 @@ import {
   extractSoftwareCopyrightForm,
   fileRoleLabelsForKind,
   renderAchievementDetail,
-  renderAchievementSummaryBar,
   renderResearchProjectFields,
   renderSoftwareCopyrightFields,
   renderVersionStructuredFields,
@@ -381,9 +380,6 @@ function listing(kind) {
           .toLowerCase()
           .includes(query.toLowerCase())),
   );
-  const summaryHtml = ["software", "projects", "papers"].includes(kind)
-    ? renderAchievementSummaryBar(allKind)
-    : "";
   return (
     heading(
       meta.title,
@@ -393,7 +389,6 @@ function listing(kind) {
           ? btn(meta.action[0], meta.action[1], true, "plus")
           : ""),
     ) +
-    summaryHtml +
     `<section class="card"><div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
       statusLabels,
     )
@@ -1025,7 +1020,7 @@ async function showRecord(record) {
   ].includes(r.kind);
   modal(
     (KIND_LABELS[r.kind] || "培养材料") + " · 材料详情",
-    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${esc(KIND_LABELS[r.kind] || "年度报告")}</dd></div><div><dt>当前状态</dt><dd>${esc(achievementStatusSummary(r.kind, r.form, taskPeriod))}</dd></div></dl>${customDetail || `<h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}`}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(achievementTitle(ref.kind || "paper", ref.form))} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
+    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${esc(KIND_LABELS[r.kind] || "年度报告")}</dd></div><div><dt>当前状态</dt><dd>${esc(achievementStatusSummary(r.kind, r.form, taskPeriod))}</dd></div></dl>${customDetail || `<h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}`}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(achievementTitle(ref.kind || "paper", ref.form))} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3>${r.history.length ? `<div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div>` : '<p class="muted" style="margin-top:8px">暂无流转记录。</p>'}<div class="version-list">${[
       ...r.versions,
     ]
       .reverse()
@@ -1135,14 +1130,10 @@ async function editRecord(record) {
     : isSoftware
       ? "证明材料（已登记必传）"
       : "证明材料";
-  const uploadHint = isProject
-    ? "不作为必填项；支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB"
-    : isSoftware
-      ? "已登记时须上传软著登记证书或证明附件；支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB"
-      : "支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB";
+  const uploadHint = "PDF / DOCX / JPG / PNG · 单份 ≤ 50 MB";
   modal(
     "编辑" + (KIND_LABELS[raw.kind] || "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><div><div class="ach-section-title">${uploadTitle}</div><div class="ach-section-sub">${uploadHint}</div></div></div><div class="full"><label class="upload-dropzone">${icon("download", 20)}<strong>点击选择或拖入上传文件</strong><small>支持多选 · PDF / DOCX / JPG / PNG · 单份 ≤ 50 MB</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
+    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><span class="ach-section-title">${uploadTitle}</span></div><div class="full"><label class="upload-bar"><span class="upload-bar-cta">${icon("paper", 15)}<span>选择附件文件</span></span><small>${uploadHint}</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
     `<button type="button" class="btn" data-close>取消</button><button type="submit" form="edit-form" class="btn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
   );
   const editFormEl = $("#edit-form");
