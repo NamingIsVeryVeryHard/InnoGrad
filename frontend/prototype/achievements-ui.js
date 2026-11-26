@@ -16,6 +16,21 @@ import {
   fileRoleLabelsForKind,
   safeHttpUrl,
 } from "./achievements-labels.js";
+import {
+  QUICK_PERIODS,
+  achievementRowMeta,
+  bindArtifactRowEvents,
+  bindCharCounters,
+  bindFormShortcutsAndDirty,
+  bindHolderPreview,
+  bindQuickPeriods,
+  bindRoleDetailToggle,
+  bindUploadDropzone,
+  defaultFileRoleForSubmission,
+  holdersToText,
+  parseCopyrightHolders,
+  syncResearchProjectFileOptions,
+} from "./achievements-enhance.js";
 
 export {
   ALL_FILE_ROLE_LABELS,
@@ -25,19 +40,20 @@ export {
   REGISTRATION_STATUS_LABELS,
   STUDENT_ROLE_LABELS,
   achievementPrimaryText,
+  achievementRowMeta,
   achievementStatusSummary,
   achievementTitle,
+  bindFormShortcutsAndDirty,
+  bindUploadDropzone,
+  defaultFileRoleForSubmission,
   fileRoleLabelsForKind,
+  parseCopyrightHolders,
   safeHttpUrl,
+  syncResearchProjectFileOptions,
 };
 
 const ARTIFACT_EMPTY_HTML =
   '<div class="artifact-empty">未添加关联材料（实验报告、数据集、代码或原型均为选填）</div>';
-
-function holdersToText(holders) {
-  if (Array.isArray(holders)) return holders.join("\n");
-  return String(holders || "");
-}
 
 function buildOptions(entries, selected) {
   return entries
@@ -48,15 +64,19 @@ function buildOptions(entries, selected) {
     .join("");
 }
 
-function labelTag(text, required = false) {
+function labelTag(text, required = false, rightHtml = "") {
   const mark = required
     ? '<span class="req-mark" aria-hidden="true">*</span>'
     : '<span class="opt-text">选填</span>';
-  return `<span class="label-row">${text}${mark}</span>`;
+  return `<span class="label-row"><span>${text}</span>${mark}${rightHtml}</span>`;
 }
 
 function sectionHead(title, rightHtml = "") {
   return `<div class="ach-section-head"><span class="ach-section-title">${title}</span>${rightHtml}</div>`;
+}
+
+function quickPeriodRow() {
+  return `<div class="quick-chips">${QUICK_PERIODS.map((p) => `<button type="button" class="quick-chip" data-quick-period="${p}">${p}</button>`).join("")}</div>`;
 }
 
 export function renderSoftwareCopyrightFields(form, esc) {
@@ -68,19 +88,19 @@ export function renderSoftwareCopyrightFields(form, esc) {
   return [
     sectionHead("基础信息"),
     `<label class="full">${labelTag("软件全称", true)}<input name="software_name" value="${esc(form.software_name || form.title || "")}" required maxlength="200" placeholder="请输入软件全称"></label>`,
-    `<label>${labelTag("版本号", true)}<input name="version" value="${esc(form.version || "")}" required maxlength="50" placeholder="V1.0"></label>`,
+    `<label>${labelTag("版本号", true)}<input name="version" value="${esc(form.version || "")}" required maxlength="50" placeholder="如 V1.0"></label>`,
     `<label>${labelTag("登记状态", true)}<select name="registration_status" id="sw-reg-status" required>${buildOptions(Object.entries(REGISTRATION_STATUS_LABELS), status)}</select></label>`,
-    `<label class="full">${labelTag("著作权人", true)}<textarea name="copyright_holders" required rows="3" placeholder="华东师范大学&#10;张三">${esc(holdersToText(form.copyright_holders))}</textarea><span class="field-hint">每行或以逗号、顿号分隔一名</span></label>`,
+    `<label class="full">${labelTag("著作权人", true)}<textarea name="copyright_holders" required rows="3" placeholder="华东师范大学&#10;张三">${esc(holdersToText(form.copyright_holders))}</textarea><span class="field-hint">每行或以逗号、顿号分隔一名，自动去重</span><div class="holder-chips" id="sw-holders-preview"></div></label>`,
     sectionHead("登记信息"),
     `<div class="ach-reg-note" id="sw-reg-note"${noteStyle}>未登记或申请中无需填写登记号与日期，获证后可通过「更新成果进展」补录。</div>`,
-    `<div class="ach-reg-panel" id="sw-reg-panel"${hiddenStyle}><div class="form-grid"><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记号", true)}<input name="registration_number" value="${esc(form.registration_number || "")}" ${reqAttr} maxlength="64" placeholder="2026SR1234567"></label><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记日期", true)}<input name="registration_date" type="date" value="${esc(form.registration_date || "")}" ${reqAttr}></label></div></div>`,
+    `<div class="ach-reg-panel" id="sw-reg-panel"${hiddenStyle}><div class="form-grid"><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记号", true)}<input name="registration_number" value="${esc(form.registration_number || "")}" ${reqAttr} maxlength="64" placeholder="如 2026SR1234567"></label><label class="sw-reg-only"${hiddenStyle}>${labelTag("登记日期", true)}<input name="registration_date" type="date" value="${esc(form.registration_date || "")}" ${reqAttr}></label></div></div>`,
     sectionHead("开发贡献"),
-    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年"></label>`,
-    `<label class="full">${labelTag("学生承担的开发工作", true)}<textarea name="development_work" required rows="4" maxlength="4000" placeholder="说明本人承担的架构设计、核心编码与测试工作">${esc(form.development_work || "")}</textarea></label>`,
+    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年">${quickPeriodRow()}</label>`,
+    `<label class="full">${labelTag("学生承担的开发工作", true, '<span class="char-counter" data-counter-for="development_work">0 / 4000</span>')}<textarea name="development_work" data-counter required rows="4" maxlength="4000" placeholder="说明本人承担的架构设计、核心编码与测试工作">${esc(form.development_work || "")}</textarea></label>`,
   ].join("");
 }
 
-function renderArtifactRow(item, files, esc) {
+function renderArtifactRow(item, files, esc, entering = false) {
   const selectedType = item.artifact_type || "experiment_report";
   const fileOptions = [
     `<option value="">不关联已上传附件</option>`,
@@ -89,7 +109,8 @@ function renderArtifactRow(item, files, esc) {
         `<option value="${esc(f.id)}" ${item.file_id === f.id ? "selected" : ""}>${esc(f.name)}</option>`,
     ),
   ].join("");
-  return `<div class="artifact-row"><div class="artifact-row-head"><span class="artifact-row-title">关联材料</span><button type="button" class="linkbtn danger-link" data-remove-artifact>移除</button></div><div class="form-grid"><label>${labelTag("类别", true)}<select data-art="artifact_type">${buildOptions(Object.entries(ARTIFACT_TYPE_LABELS), selectedType)}</select></label><label>${labelTag("名称", true)}<input data-art="name" value="${esc(item.name || "")}" maxlength="200" required placeholder="消融实验报告 v1"></label><label>${labelTag("访问链接", false)}<input data-art="url" type="url" value="${esc(item.url || "")}" maxlength="2000" placeholder="https://..."></label><label>${labelTag("关联附件", false)}<select data-art="file_id">${fileOptions}</select></label><label class="full">${labelTag("说明", false)}<input data-art="description" value="${esc(item.description || "")}" maxlength="500" placeholder="补充说明版本或用途"></label></div></div>`;
+  const animCls = entering ? " is-entering" : "";
+  return `<div class="artifact-row${animCls}"><div class="artifact-row-head"><span class="artifact-row-title">${ARTIFACT_TYPE_LABELS[selectedType] || "关联材料"}</span><button type="button" class="linkbtn danger-link" data-remove-artifact>移除</button></div><div class="form-grid"><label>${labelTag("类别", true)}<select data-art="artifact_type">${buildOptions(Object.entries(ARTIFACT_TYPE_LABELS), selectedType)}</select></label><label>${labelTag("名称", true)}<input data-art="name" value="${esc(item.name || "")}" maxlength="200" required placeholder="消融实验报告 v1"></label><label>${labelTag("访问链接", false)}<input data-art="url" type="url" value="${esc(item.url || "")}" maxlength="2000" placeholder="https://..."></label><label>${labelTag("关联附件", false)}<select data-art="file_id">${fileOptions}</select></label><label class="full">${labelTag("说明", false)}<input data-art="description" value="${esc(item.description || "")}" maxlength="500" placeholder="补充说明版本或用途"></label></div></div>`;
 }
 
 export function renderResearchProjectFields(form, files, esc) {
@@ -101,32 +122,48 @@ export function renderResearchProjectFields(form, files, esc) {
   const artifactBody = artifacts.length
     ? artifacts.map((item) => renderArtifactRow(item, files, esc)).join("")
     : ARTIFACT_EMPTY_HTML;
+  const quickAddBtns = Object.entries(ARTIFACT_TYPE_LABELS)
+    .map(
+      ([key, label]) =>
+        `<button type="button" class="quick-chip" data-add-artifact="${key}">+ ${label}</button>`,
+    )
+    .join("");
   return [
     sectionHead("项目信息"),
     `<label class="full">${labelTag("项目或课题名称", true)}<input name="project_name" value="${esc(form.project_name || form.title || "")}" required maxlength="200" placeholder="请输入项目或课题全称"></label>`,
     `<label>${labelTag("学生本人角色", true)}<select name="student_role" id="rp-student-role" required>${buildOptions(Object.entries(STUDENT_ROLE_LABELS), roleVal)}</select></label>`,
     `<label>${labelTag("完成时间", true)}<input name="completion_date" type="date" value="${esc(form.completion_date || "")}" required></label>`,
-    `<label class="full">${labelTag("角色补充说明（选“其他”时必填）", roleVal === "other")}<input name="role_description" id="rp-role-detail" value="${esc(form.role_description || "")}" ${roleDetailReq} maxlength="100" placeholder="如 数据管线负责人、前端开发"></label>`,
-    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年"></label>`,
+    `<label class="full" id="rp-role-detail-wrap">${labelTag("角色补充说明（选“其他”时必填）", roleVal === "other")}<input name="role_description" id="rp-role-detail" value="${esc(form.role_description || "")}" ${roleDetailReq} maxlength="100" placeholder="如 数据管线负责人、前端开发"></label>`,
+    `<label class="full">${labelTag("所属学年 / 周期", false)}<input name="period" value="${esc(form.period || "")}" maxlength="40" placeholder="2025—2026学年">${quickPeriodRow()}</label>`,
     sectionHead("阶段事项"),
-    `<label class="full">${labelTag("本阶段完成的具体事项", true)}<textarea name="stage_deliverables" required rows="4" maxlength="4000" placeholder="说明本阶段完成的研究任务、实验结果或交付物">${esc(form.stage_deliverables || "")}</textarea></label>`,
+    `<label class="full">${labelTag("本阶段完成的具体事项", true, '<span class="char-counter" data-counter-for="stage_deliverables">0 / 4000</span>')}<textarea name="stage_deliverables" data-counter required rows="4" maxlength="4000" placeholder="说明本阶段完成的研究任务、实验结果或交付物">${esc(form.stage_deliverables || "")}</textarea></label>`,
     sectionHead(
-      "按需关联材料（选填）",
-      '<button type="button" class="btn pbtn" id="add-artifact-btn">添加材料</button>',
+      `按需关联材料（选填）<span class="pm-sheet-meta" id="rp-artifact-count" style="margin-left:8px">${artifacts.length} / 20</span>`,
+      `<button type="button" class="btn pbtn" id="add-artifact-btn">添加材料</button>`,
     ),
+    `<div class="full quick-chips">${quickAddBtns}</div>`,
     `<div class="full" id="artifact-list">${artifactBody}</div>`,
   ].join("");
 }
 
-export function bindSoftwareCopyrightForm(formEl) {
+export function bindSoftwareCopyrightForm(formEl, esc) {
   const statusEl = formEl.querySelector("#sw-reg-status");
   if (!statusEl) return;
-  const sync = () => {
+  const sync = (focusReg = false) => {
     const registered = statusEl.value === "registered";
     const panel = formEl.querySelector("#sw-reg-panel");
     const note = formEl.querySelector("#sw-reg-note");
-    if (panel) panel.style.display = registered ? "" : "none";
+    const uploadTitle = formEl.querySelector("#upload-section-title");
+    if (panel) {
+      panel.style.display = registered ? "" : "none";
+      panel.classList.toggle("is-entering", registered);
+    }
     if (note) note.style.display = registered ? "none" : "";
+    if (uploadTitle) {
+      uploadTitle.textContent = registered
+        ? "证明材料（已登记必传，至少 1 份）"
+        : "证明材料（当前状态选填）";
+    }
     formEl.querySelectorAll(".sw-reg-only").forEach((wrap) => {
       wrap.style.display = registered ? "" : "none";
       const input = wrap.querySelector("input");
@@ -135,71 +172,53 @@ export function bindSoftwareCopyrightForm(formEl) {
       input.required = registered;
       if (!registered) input.value = "";
     });
+    if (focusReg && registered) {
+      formEl.querySelector('input[name="registration_number"]')?.focus();
+    }
   };
-  statusEl.onchange = sync;
-  sync();
+  statusEl.onchange = () => sync(true);
+  sync(false);
+  bindQuickPeriods(formEl);
+  bindCharCounters(formEl);
+  if (esc) bindHolderPreview(formEl, esc);
 }
 
 export function bindResearchProjectForm(formEl, getFiles, esc) {
-  const roleEl = formEl.querySelector("#rp-student-role");
-  const detailEl = formEl.querySelector("#rp-role-detail");
-  if (roleEl && detailEl) {
-    const syncRole = () => {
-      detailEl.required = roleEl.value === "other";
-    };
-    roleEl.onchange = syncRole;
-    syncRole();
-  }
+  bindRoleDetailToggle(formEl);
   const listEl = formEl.querySelector("#artifact-list");
-  const addBtn = formEl.querySelector("#add-artifact-btn");
-  if (!listEl || !addBtn) return;
-  const bindRowRemovers = () => {
-    listEl.querySelectorAll("[data-remove-artifact]").forEach((btn) => {
-      btn.onclick = () => {
-        btn.closest(".artifact-row")?.remove();
-        if (!listEl.querySelector(".artifact-row")) {
-          listEl.innerHTML = ARTIFACT_EMPTY_HTML;
-        }
-      };
-    });
-  };
-  addBtn.onclick = () => {
+  const countEl = formEl.querySelector("#rp-artifact-count");
+  if (!listEl) return;
+  const refreshRows = () =>
+    bindArtifactRowEvents(listEl, countEl, ARTIFACT_EMPTY_HTML);
+  const appendArtifact = (presetType = "experiment_report") => {
     if (listEl.querySelectorAll(".artifact-row").length >= 20) return;
     listEl.querySelector(".artifact-empty")?.remove();
     listEl.insertAdjacentHTML(
       "beforeend",
-      renderArtifactRow({}, getFiles(), esc),
+      renderArtifactRow({ artifact_type: presetType }, getFiles(), esc, true),
     );
-    bindRowRemovers();
+    refreshRows();
+    const last = listEl.querySelector(".artifact-row:last-child");
+    last?.querySelector('[data-art="name"]')?.focus();
+    last?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
-  bindRowRemovers();
-}
-
-export function syncResearchProjectFileOptions(formEl, files, esc) {
-  const selects = formEl.querySelectorAll('.artifact-row [data-art="file_id"]');
-  selects.forEach((select) => {
-    const prev = select.value;
-    select.innerHTML = [
-      `<option value="">不关联已上传附件</option>`,
-      ...files.map(
-        (f) =>
-          `<option value="${esc(f.id)}" ${prev === f.id ? "selected" : ""}>${esc(f.name)}</option>`,
-      ),
-    ].join("");
+  const addBtn = formEl.querySelector("#add-artifact-btn");
+  if (addBtn) addBtn.onclick = () => appendArtifact("experiment_report");
+  formEl.querySelectorAll("[data-add-artifact]").forEach((btn) => {
+    btn.onclick = () => appendArtifact(btn.dataset.addArtifact);
   });
+  refreshRows();
+  bindQuickPeriods(formEl);
+  bindCharCounters(formEl);
 }
 
 export function extractSoftwareCopyrightForm(formData) {
   const status = String(formData.get("registration_status") || "unregistered");
-  const holders = String(formData.get("copyright_holders") || "")
-    .split(/[\r\n,，、;；]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
   const payload = {
     metadata_version: 1,
     software_name: String(formData.get("software_name") || "").trim(),
     version: String(formData.get("version") || "").trim(),
-    copyright_holders: holders,
+    copyright_holders: parseCopyrightHolders(formData.get("copyright_holders")),
     development_work: String(formData.get("development_work") || "").trim(),
     registration_status: status,
     registration_number:
@@ -300,6 +319,10 @@ function softwareFactPairs(form, fallback = "") {
       ["登记日期", form.registration_date || fallback],
     );
   }
+  if (form.period) pairs.push(["所属学年 / 周期", form.period]);
+  if (form.software_copyright_key) {
+    pairs.push(["核验指纹", String(form.software_copyright_key).slice(0, 12)]);
+  }
   return pairs;
 }
 
@@ -308,11 +331,20 @@ function projectFactPairs(form, fallback = "") {
     STUDENT_ROLE_LABELS[form.student_role] || form.student_role || fallback;
   const roleText =
     roleLabel + (form.role_description ? `（${form.role_description}）` : "");
-  return [
+  const count = Array.isArray(form.linked_artifacts)
+    ? form.linked_artifacts.length
+    : 0;
+  const pairs = [
     ["项目或课题名称", form.project_name || fallback],
     ["学生本人角色", roleText],
     ["完成时间", form.completion_date || fallback],
+    ["可选关联材料", count ? `已关联 ${count} 项` : "未关联（选填）"],
   ];
+  if (form.period) pairs.push(["所属学年 / 周期", form.period]);
+  if (form.research_project_key) {
+    pairs.push(["核验指纹", String(form.research_project_key).slice(0, 12)]);
+  }
+  return pairs;
 }
 
 export function renderAchievementDetail(kind, form, files, esc) {

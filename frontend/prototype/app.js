@@ -5,10 +5,14 @@ import {
   KIND_LABELS,
   KIND_SHORT_TITLES,
   achievementPrimaryText,
+  achievementRowMeta,
   achievementStatusSummary,
   achievementTitle,
+  bindFormShortcutsAndDirty,
   bindResearchProjectForm,
   bindSoftwareCopyrightForm,
+  bindUploadDropzone,
+  defaultFileRoleForSubmission,
   extractResearchProjectForm,
   extractSoftwareCopyrightForm,
   fileRoleLabelsForKind,
@@ -273,10 +277,29 @@ function statCards() {
     )
     .join("")}</div>`;
 }
-function recordTable(rr, compact = false) {
+function recordTable(rr, compact = false, emptyHtml = "") {
   if (!rr.length)
-    return empty("当前没有相关材料", "新的提交或状态变更会显示在这里。");
-  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "280"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? KIND_SHORT_TITLES[r.kind] || r.title : r.title)}</div><small style="display:block;margin-top:6px">${esc(KIND_LABELS[r.kind] || "培养材料")} · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td><button class="linkbtn" data-action="record:${r.id}">${role === "student" && ["draft", "returned"].includes(r.status) ? "继续填写" : r.status === "pending" && role === "teacher" && r.raw.reviewer_id === me.id ? "去审核" : "查看详情"} &nbsp;↗</button></td></tr>`).join("")}</tbody></table></div>`;
+    return (
+      emptyHtml || empty("当前没有相关材料", "新的提交或状态变更会显示在这里。")
+    );
+  const rowActions = (r) => {
+    const canEdit =
+      role === "student" &&
+      r.student === me.id &&
+      ["draft", "returned"].includes(r.status);
+    if (canEdit && !compact) {
+      return `<div class="row-actions"><button class="linkbtn" data-action="edit:${r.id}">编辑</button><button class="linkbtn" data-action="record:${r.id}">详情 ↗</button></div>`;
+    }
+    const label = canEdit
+      ? "继续填写"
+      : r.status === "pending" &&
+          role === "teacher" &&
+          r.raw.reviewer_id === me.id
+        ? "去审核"
+        : "查看详情";
+    return `<button class="linkbtn" data-action="record:${r.id}">${label} ↗</button>`;
+  };
+  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "260"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? KIND_SHORT_TITLES[r.kind] || r.title : r.title)}</div><small style="display:block;margin-top:5px">${esc(achievementRowMeta(r))}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td>${rowActions(r)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function progress(t) {
   const ids = t.students.filter((s) =>
@@ -424,6 +447,12 @@ function listing(kind) {
     ],
     ["archived", "已归档", archivedCount],
   ];
+  const filteredEmpty =
+    filter !== "all" || query
+      ? `<div class="empty">${icon("search")}<h3>没有匹配的${meta.title}</h3><p>当前筛选条件下暂无记录，可一键重置查看全部。</p><div style="margin-top:14px">${btn("重置筛选条件", "reset-filter")}</div></div>`
+      : meta.action && role === "student"
+        ? `<div class="empty">${icon("archive")}<h3>尚未登记${meta.title}</h3><p>${meta.sub}</p><div style="margin-top:14px">${btn(meta.action[0], meta.action[1], true, "plus")}</div></div>`
+        : "";
   return (
     heading(
       meta.title,
@@ -440,7 +469,7 @@ function listing(kind) {
       )
       .join(
         "",
-      )}</div><label class="pm-search">${icon("search", 14)}<input id="list-query" aria-label="筛选材料" placeholder="筛选名称或学生" value="${esc(query)}"><span class="kbd">/</span></label></div>${recordTable(rr.slice((pageNum - 1) * 6, pageNum * 6))}<div class="table-footer"><span>显示 ${rr.length ? (pageNum - 1) * 6 + 1 : 0}–${Math.min(pageNum * 6, rr.length)} / 共 ${rr.length} 条</span><div class="pagers">${Array.from({ length: Math.max(1, Math.ceil(rr.length / 6)) }, (_, i) => `<button data-pager="${i + 1}" class="${pageNum === i + 1 ? "active" : ""}">${i + 1}</button>`).join("")}</div></div></section>${kind === "archives" ? correctionPanel() : ""}`
+      )}</div><label class="pm-search">${icon("search", 14)}<input id="list-query" aria-label="筛选材料" placeholder="筛选名称或学生" value="${esc(query)}">${query ? '<button type="button" class="search-clear" id="clear-list-query" aria-label="清空搜索">×</button>' : '<span class="kbd">/</span>'}</label></div>${recordTable(rr.slice((pageNum - 1) * 6, pageNum * 6), false, filteredEmpty)}<div class="table-footer"><span>显示 ${rr.length ? (pageNum - 1) * 6 + 1 : 0}–${Math.min(pageNum * 6, rr.length)} / 共 ${rr.length} 条</span><div class="pagers">${Array.from({ length: Math.max(1, Math.ceil(rr.length / 6)) }, (_, i) => `<button data-pager="${i + 1}" class="${pageNum === i + 1 ? "active" : ""}">${i + 1}</button>`).join("")}</div></div></section>${kind === "archives" ? correctionPanel() : ""}`
   );
 }
 function correctionPanel() {
@@ -578,6 +607,7 @@ function formModal(title, fields, save, submit = "保存") {
       $("#dialog").close();
       await refresh().catch(showError);
       if (result?.created) credentialsDialog(result.created);
+      if (result?.openEditId) await editRecord({ id: result.openEditId });
     } catch (err) {
       toast(err.message);
     } finally {
@@ -698,12 +728,44 @@ function bind(root = document) {
       render();
     };
   if ($("#list-query")) {
-    $("#list-query").onkeydown = (e) => {
-      if (e.key === "Enter") action("search-list");
+    const qInput = $("#list-query");
+    let searchTimer = null;
+    qInput.oninput = (e) => {
+      clearTimeout(searchTimer);
+      const val = e.target.value;
+      const pos = e.target.selectionStart ?? val.length;
+      searchTimer = setTimeout(() => {
+        query = val.trim();
+        pageNum = 1;
+        render();
+        const next = $("#list-query");
+        if (next) {
+          next.focus();
+          next.setSelectionRange(
+            Math.min(pos, next.value.length),
+            Math.min(pos, next.value.length),
+          );
+        }
+      }, 150);
+    };
+    qInput.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        clearTimeout(searchTimer);
+        action("search-list");
+      }
       if (e.key === "Escape") {
+        clearTimeout(searchTimer);
         e.target.value = "";
         action("search-list");
       }
+    };
+  }
+  if ($("#clear-list-query")) {
+    $("#clear-list-query").onclick = () => {
+      query = "";
+      pageNum = 1;
+      render();
+      $("#list-query")?.focus();
     };
   }
   if (
@@ -1210,17 +1272,20 @@ async function editRecord(record) {
   const uploadTitle = isProject
     ? "证明或关联附件（选填）"
     : isSoftware
-      ? "证明材料（已登记必传）"
+      ? form.registration_status === "registered"
+        ? "证明材料（已登记必传，至少 1 份）"
+        : "证明材料（当前状态选填）"
       : "证明材料";
-  const uploadHint = "PDF / DOCX / JPG / PNG · 单份 ≤ 50 MB";
+  const uploadHint = "点击或拖入文件 · PDF / DOCX / JPG / PNG · ≤ 50 MB";
   modal(
     "编辑" + (KIND_LABELS[raw.kind] || "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><span class="ach-section-title">${uploadTitle}</span></div><div class="full"><label class="upload-bar"><span class="upload-bar-cta">${icon("paper", 15)}<span>选择附件文件</span></span><small class="pm-mono">${uploadHint}</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
-    `<button type="button" class="btn pbtn--ghost" data-close>取消</button><button type="submit" form="edit-form" class="btn pbtn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
+    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><span class="ach-section-title" id="upload-section-title">${uploadTitle}</span></div><div class="full"><label class="upload-bar" id="upload-dropzone"><span class="upload-bar-cta">${icon("paper", 15)}<span id="upload-cta-text">选择或拖入附件文件</span></span><small class="pm-mono">${uploadHint}</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
+    `<span class="dirty-indicator" id="form-dirty-state" hidden>有未保存修改 · Ctrl+Enter 快捷保存</span><button type="button" class="btn pbtn--ghost" data-close>取消</button><button type="submit" form="edit-form" class="btn pbtn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
   );
   const editFormEl = $("#edit-form");
-  if (isSoftware) bindSoftwareCopyrightForm(editFormEl);
+  if (isSoftware) bindSoftwareCopyrightForm(editFormEl, esc);
   if (isProject) bindResearchProjectForm(editFormEl, () => files, esc);
+  bindFormShortcutsAndDirty(editFormEl, $("#dialog"));
   const renderFiles = () => {
     $("#attached").innerHTML = files
       .map(
@@ -1256,31 +1321,51 @@ async function editRecord(record) {
     if (isProject) syncResearchProjectFileOptions(editFormEl, files, esc);
   };
   renderFiles();
-  $("#attachments").onchange = async (e) => {
+  const uploadSelectedFiles = async (fileList) => {
+    if (!fileList.length || uploading) return;
     uploading = true;
     const buttons = $("#dialog").querySelectorAll("button");
+    const ctaText = $("#upload-cta-text");
     buttons.forEach((b) => (b.disabled = true));
+    if (ctaText) ctaText.textContent = `正在上传 ${fileList.length} 份文件...`;
     try {
-      for (const f of e.target.files) {
+      const liveForm = {
+        ...form,
+        registration_status:
+          editFormEl.querySelector("#sw-reg-status")?.value ||
+          form.registration_status,
+      };
+      const fallbackRole = defaultFileRoleForSubmission(raw.kind, liveForm);
+      for (const f of fileList) {
         const data = new FormData();
         data.append("file", f);
-        files.push(
-          await api("/submissions/" + raw.id + "/files", {
-            method: "POST",
-            body: data,
-          }),
-        );
+        const uploaded = await api("/submissions/" + raw.id + "/files", {
+          method: "POST",
+          body: data,
+        });
+        files.push(uploaded);
+        if (!fileRoles[uploaded.id]) fileRoles[uploaded.id] = fallbackRole;
       }
+      const dirtyEl = $("#form-dirty-state");
+      if (dirtyEl) dirtyEl.hidden = false;
       toast("上传完成，请保存草稿或正式提交");
     } catch (e) {
       showError(e);
     } finally {
       uploading = false;
-      e.target.value = "";
+      if ($("#attachments")) $("#attachments").value = "";
+      if (ctaText) ctaText.textContent = "选择或拖入附件文件";
       buttons.forEach((b) => (b.disabled = false));
       renderFiles();
     }
   };
+  $("#attachments").onchange = (e) =>
+    uploadSelectedFiles(Array.from(e.target.files || []));
+  bindUploadDropzone(
+    $("#upload-dropzone"),
+    $("#attachments"),
+    uploadSelectedFiles,
+  );
   $("#edit-form").onsubmit = async (e) => {
     e.preventDefault();
     if (uploading) return;
@@ -1432,6 +1517,11 @@ async function action(raw) {
     query = $("#list-query").value.trim();
     pageNum = 1;
     render();
+  } else if (a === "reset-filter") {
+    filter = "all";
+    query = "";
+    pageNum = 1;
+    render();
   } else if (a === "record") await showRecord({ id: arg });
   else if (a === "task") taskDialog(tasks().find((t) => t.id === arg));
   else if (a === "student") {
@@ -1448,34 +1538,35 @@ async function action(raw) {
         kind: "paper",
         title: "登记论文成果",
         targetPage: "papers",
-        msg: "论文工作稿已创建，请从列表继续填写",
+        msg: "论文工作稿已创建，请填写内容",
       },
       "new-software": {
         kind: "software_copyright",
         title: "登记软件著作权",
         targetPage: "software",
-        msg: "软件著作权工作稿已创建，请从列表继续填写",
+        msg: "软件著作权工作稿已创建，请填写内容",
       },
       "new-project": {
         kind: "research_project",
         title: "登记科研项目阶段成果",
         targetPage: "projects",
-        msg: "科研项目工作稿已创建，请从列表继续填写",
+        msg: "科研项目工作稿已创建，请填写内容",
       },
     }[a];
     formModal(
       kindCfg.title,
       `<label class="full">复核教师<select name="reviewer_id">${teachers.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></label>`,
       async (d) => {
-        await post("/submissions", {
+        const created = await post("/submissions", {
           kind: kindCfg.kind,
           reviewer_id: d.get("reviewer_id"),
         });
         toast(kindCfg.msg);
         page = kindCfg.targetPage;
         location.hash = page;
+        return { openEditId: created.id };
       },
-      "创建工作稿",
+      "创建并开始填写",
     );
   } else if (a === "start-task") {
     let r = records().find((r) => r.task === arg && r.student === me.id);

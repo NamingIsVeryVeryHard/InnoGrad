@@ -1,10 +1,13 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  achievementRowMeta,
   achievementStatusSummary,
   achievementTitle,
+  defaultFileRoleForSubmission,
   extractSoftwareCopyrightForm,
   fileRoleLabelsForKind,
+  parseCopyrightHolders,
   renderAchievementDetail,
   renderResearchProjectFields,
   renderSoftwareCopyrightFields,
@@ -259,4 +262,52 @@ test("kind-specific role maps, titles, summaries, and growth bars handle new kin
   assert.ok(growthHtml.includes("1 份软著"));
   assert.ok(growthHtml.includes("1 份科研项目"));
   assert.ok(growthHtml.includes("2026-11归档2份"));
+});
+
+test("interactive helpers parse deduplicated holders, pick smart file roles, and build row summaries", () => {
+  assert.deepEqual(parseCopyrightHolders("华东师范大学，张三\n张三；李四"), [
+    "华东师范大学",
+    "张三",
+    "李四",
+  ]);
+  assert.equal(
+    defaultFileRoleForSubmission("software_copyright", {
+      registration_status: "registered",
+    }),
+    "copyright_certificate",
+  );
+  assert.equal(
+    defaultFileRoleForSubmission("software_copyright", {
+      registration_status: "applying",
+    }),
+    "registration_application",
+  );
+  assert.equal(
+    defaultFileRoleForSubmission("research_project", {}),
+    "experiment_report",
+  );
+  assert.equal(
+    achievementRowMeta({
+      kind: "software_copyright",
+      form: {
+        version: "V1.2",
+        registration_status: "registered",
+        registration_number: "2026SR1234567",
+      },
+      files: [{ id: "f1" }],
+    }),
+    "V1.2 · 已登记 · 2026SR1234567 · 1 份附件",
+  );
+  assert.equal(
+    achievementRowMeta({
+      kind: "research_project",
+      form: {
+        student_role: "lead",
+        completion_date: "2026-11-20",
+        linked_artifacts: [{ name: "实验报告" }],
+      },
+      files: [],
+    }),
+    "项目/子课题负责人 · 2026-11-20 · 1 项关联材料",
+  );
 });
