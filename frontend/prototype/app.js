@@ -85,13 +85,27 @@ const id = () => crypto.randomUUID(),
     `<button type="button" class="btn ${primary ? "primary" : ""}" data-action="${action}">${ico ? icon(ico) : ""}${label}</button>`;
 const statusLabels = {
     draft: "草稿",
-    pending: "待 Agent 审核",
+    pending: "待审核",
     returned: "待补正",
     archived: "已归档",
-    approved: "待后台归档",
+    approved: "待归档",
+  },
+  pmMark = (w = 28, h = 22) =>
+    `<svg width="${w}" height="${h}" viewBox="0 0 30 24" fill="none" aria-hidden="true"><rect x="2" y="5" width="21" height="16" rx="3.5" stroke="currentColor" stroke-width="2"/><circle cx="23.5" cy="5.5" r="4.5" fill="currentColor"/></svg>`,
+  standingGlyph = (s) => {
+    if (s === "archived") {
+      return '<svg class="pm-glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="currentColor"/><path d="M3.6 6.2 5.2 7.8 8.4 4.4" stroke="#fcfefe" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    if (s === "pending" || s === "approved") {
+      return '<svg class="pm-glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 1.5a4.5 4.5 0 0 1 0 9V1.5Z" fill="currentColor"/></svg>';
+    }
+    if (s === "returned") {
+      return '<svg class="pm-glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.2" stroke="currentColor" stroke-width="1.8"/></svg>';
+    }
+    return '<svg class="pm-glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.2" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>';
   },
   badge = (s) =>
-    `<span class="badge ${{ pending: "amber", returned: "red", draft: "gray", archived: "" }[s] || ""}">${statusLabels[s] || esc(s)}</span>`;
+    `<span class="badge ${{ pending: "amber", returned: "red", draft: "gray", archived: "is-archived" }[s] || ""}">${standingGlyph(s)}${statusLabels[s] || esc(s)}</span>`;
 const paperFileRoleLabels = ALL_FILE_ROLE_LABELS;
 let me = null,
   role = "",
@@ -195,8 +209,26 @@ function render() {
       !(role === "teacher" && n[0] === "rules"),
   );
   const notices = visibleAlerts().filter((a) => a.status === "open").length;
+  const navCount = (id) => {
+    if (id === "reviews") return pending().length;
+    if (id === "papers")
+      return records().filter((r) => r.kind === "paper").length;
+    if (id === "software")
+      return records().filter((r) => r.kind === "software_copyright").length;
+    if (id === "projects")
+      return records().filter((r) => r.kind === "research_project").length;
+    if (id === "archives") return records().filter((r) => r.effective).length;
+    return 0;
+  };
   $("#app").innerHTML =
-    `<div class="shell campus-shell ${menu ? "menu-open" : ""}"><header class="campus-masthead"><button class="campus-menu" data-action="menu" aria-label="展开或收起导航">${icon("menu", 24)}</button><a class="campus-brand" href="#dashboard" data-page="dashboard"><span class="campus-seal">${icon("book", 25)}</span><span><strong>InnoGrad</strong><span class="campus-brand-title">研究生培养管理</span><small>上海智能教育研究院</small></span></a><nav class="campus-topnav" aria-label="主导航"><button data-page="dashboard" class="${page === "dashboard" ? "active" : ""}">我的首页</button>${role !== "operator" ? `<button data-page="portraits" class="${page === "portraits" ? "active" : ""}">学业生涯</button><button data-page="alerts" class="${page === "alerts" ? "active" : ""}">消息中心 ${notices ? `<em>${notices}</em>` : ""}</button><button data-page="tasks" class="${page === "tasks" ? "active" : ""}">培养任务</button>` : ""}</nav><form id="global-search" class="searchbox campus-search">${icon("search", 16)}<input aria-label="全局搜索" name="q" placeholder="搜索学生、任务、成果" autocomplete="off"></form><button class="campus-account" data-page="settings" aria-label="当前账号与系统设置"><span class="avatar">${esc(actor().slice(0, 1))}</span><span>${esc(actor())}<small>${roleName()}</small></span></button></header><div class="mobile-scrim" data-action="menu"></div><aside class="sidebar"><div class="campus-services">${icon("grid", 20)}<span>全部服务</span><span>›</span></div><nav aria-label="业务服务">${available.map((n) => `<button class="nav ${page === n[0] ? "active" : ""}" data-page="${n[0]}" title="${n[2]}"><span class="campus-nav-icon">${icon(n[1], 16)}</span><span class="nav-text">${role === "student" && n[0] === "papers" ? "我的论文成果" : n[2]}</span>${n[0] === "reviews" && pending().length ? `<span class="count">${pending().length}</span>` : '<span class="nav-chevron">›</span>'}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="campus-institute">上海智能教育研究院<br><small>InnoGrad 培养工作空间</small></div><button class="online" data-action="logout">${icon("logout", 16)}<span>退出登录</span></button></div></aside><div class="main"><header class="topbar"><button class="campus-home-tab" data-page="dashboard">首页</button><div class="campus-current-tab">${title}</div><div class="campus-tab-tools"><button data-action="refresh" aria-label="刷新当前页面">${icon("history", 15)}</button><span>${new Date().toLocaleDateString("zh-CN")}</span></div></header><main class="content">${views[page]()}<footer class="footer"><span>InnoGrad · 上海智能教育研究院</span><span>研究生培养与成长管理 · 服务端数据</span></footer></main></div></div>`;
+    `<div class="shell campus-shell ${menu ? "menu-open" : ""}"><header class="campus-masthead"><button class="campus-menu" data-action="menu" aria-label="展开或收起导航">${icon("menu", 20)}</button><a class="campus-brand" href="#dashboard" data-page="dashboard"><span class="campus-seal">${pmMark(28, 22)}</span><span><strong>InnoGrad</strong><span class="campus-brand-title">研究生培养管理</span><small>上海智能教育研究院</small></span></a><nav class="campus-topnav" aria-label="主导航"><button data-page="dashboard" class="${page === "dashboard" ? "active" : ""}">工作台</button>${role !== "operator" ? `<button data-page="portraits" class="${page === "portraits" ? "active" : ""}">成长画像</button><button data-page="alerts" class="${page === "alerts" ? "active" : ""}">提醒${notices ? `<em>${notices}</em>` : ""}</button><button data-page="tasks" class="${page === "tasks" ? "active" : ""}">培养任务</button>` : ""}</nav><form id="global-search" class="searchbox campus-search">${icon("search", 14)}<input aria-label="全局搜索" name="q" placeholder="搜索成果或任务" autocomplete="off"><span class="kbd">/</span></form><button class="campus-account" data-page="settings" aria-label="当前账号与系统设置"><span class="avatar">${esc(actor().slice(0, 1))}</span><span>${esc(actor())}<small>${roleName()}</small></span></button></header><div class="mobile-scrim" data-action="menu"></div><aside class="sidebar"><div class="pm-ws"><span class="tile tile--dark">研</span><span>上海智能教育研究院</span></div><nav aria-label="业务服务">${available
+      .map((n) => {
+        const cnt = navCount(n[0]);
+        return `<button class="nav ${page === n[0] ? "active" : ""}" data-page="${n[0]}" title="${n[2]}"><span class="campus-nav-icon">${icon(n[1], 15)}</span><span class="nav-text">${role === "student" && n[0] === "papers" ? "论文成果" : n[2]}</span>${cnt ? `<span class="count">${cnt}</span>` : ""}</button>`;
+      })
+      .join(
+        "",
+      )}</nav><div class="sidebar-bottom"><div class="campus-institute">InnoGrad · 培养工作空间</div><button class="online" data-action="logout">${icon("logout", 15)}<span>退出登录</span></button></div></aside><div class="main"><header class="topbar"><button class="campus-home-tab" data-page="dashboard">InnoGrad</button><div class="campus-current-tab">${title}</div><div class="campus-tab-tools"><button data-action="refresh" aria-label="刷新当前页面">${icon("history", 14)}</button><span>${new Date().toLocaleDateString("zh-CN")}</span></div></header><main class="content">${views[page]()}<footer class="footer"><span>InnoGrad · 上海智能教育研究院</span><span>研究生培养与成长管理 · 服务端持久化</span></footer></main></div></div>`;
   bind();
 }
 const heading = (title, sub, actions = "") =>
@@ -380,6 +412,18 @@ function listing(kind) {
           .toLowerCase()
           .includes(query.toLowerCase())),
   );
+  const archivedCount = allKind.filter((r) => r.status === "archived").length;
+  const tabDefs = [
+    ["all", "全部", allKind.length],
+    ["draft", "草稿", allKind.filter((r) => r.status === "draft").length],
+    ["pending", "待审核", allKind.filter((r) => r.status === "pending").length],
+    [
+      "returned",
+      "待补正",
+      allKind.filter((r) => r.status === "returned").length,
+    ],
+    ["archived", "已归档", archivedCount],
+  ];
   return (
     heading(
       meta.title,
@@ -389,16 +433,14 @@ function listing(kind) {
           ? btn(meta.action[0], meta.action[1], true, "plus")
           : ""),
     ) +
-    `<section class="card"><div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
-      statusLabels,
-    )
+    `<section class="card"><div class="pm-sheet-head"><div class="pm-sheet-title"><h2>${meta.title}清单</h2><span class="pm-sheet-meta">${allKind.length} 条记录 · ${archivedCount} 条已归档</span><span class="pm-tag">${roleName()}</span></div></div><div class="pm-ftabs"><div class="pm-ftabs-list">${tabDefs
       .map(
-        ([v, t]) =>
-          `<option value="${v}" ${filter === v ? "selected" : ""}>${t}</option>`,
+        ([val, label, count]) =>
+          `<button type="button" class="pm-ftab ${filter === val ? "active" : ""}" data-filter="${val}">${label}<span>${count}</span></button>`,
       )
       .join(
         "",
-      )}</select>${btn("查询", "search-list", true, "search")}</div>${recordTable(rr.slice((pageNum - 1) * 6, pageNum * 6))}<div class="table-footer"><span>共 ${rr.length} 条记录 · 当前角色：${roleName()}</span><div class="pagers">${Array.from({ length: Math.max(1, Math.ceil(rr.length / 6)) }, (_, i) => `<button data-pager="${i + 1}" class="${pageNum === i + 1 ? "active" : ""}">${i + 1}</button>`).join("")}</div></div></section>${kind === "archives" ? correctionPanel() : ""}`
+      )}</div><label class="pm-search">${icon("search", 14)}<input id="list-query" aria-label="筛选材料" placeholder="筛选名称或学生" value="${esc(query)}"><span class="kbd">/</span></label></div>${recordTable(rr.slice((pageNum - 1) * 6, pageNum * 6))}<div class="table-footer"><span>显示 ${rr.length ? (pageNum - 1) * 6 + 1 : 0}–${Math.min(pageNum * 6, rr.length)} / 共 ${rr.length} 条</span><div class="pagers">${Array.from({ length: Math.max(1, Math.ceil(rr.length / 6)) }, (_, i) => `<button data-pager="${i + 1}" class="${pageNum === i + 1 ? "active" : ""}">${i + 1}</button>`).join("")}</div></div></section>${kind === "archives" ? correctionPanel() : ""}`
   );
 }
 function correctionPanel() {
@@ -655,10 +697,50 @@ function bind(root = document) {
       pageNum = 1;
       render();
     };
-  if ($("#list-query"))
+  if ($("#list-query")) {
     $("#list-query").onkeydown = (e) => {
       if (e.key === "Enter") action("search-list");
+      if (e.key === "Escape") {
+        e.target.value = "";
+        action("search-list");
+      }
     };
+  }
+  if (
+    !window._pmShortcutBound &&
+    typeof window.addEventListener === "function"
+  ) {
+    window._pmShortcutBound = true;
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (
+          e.key !== "/" ||
+          e.ctrlKey ||
+          e.metaKey ||
+          e.altKey ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(
+            document.activeElement?.tagName,
+          )
+        )
+          return;
+        const target = $("#list-query") || $("#global-search input");
+        if (target) {
+          e.preventDefault();
+          target.focus();
+          const dropSlash = (ev) => {
+            if (ev.data === "/") ev.preventDefault();
+          };
+          target.addEventListener("beforeinput", dropSlash, { once: true });
+          setTimeout(
+            () => target.removeEventListener("beforeinput", dropSlash),
+            80,
+          );
+        }
+      },
+      true,
+    );
+  }
   if ($("#growth-period"))
     $("#growth-period").onchange = (e) => {
       growthPeriod = e.target.value;
@@ -1133,8 +1215,8 @@ async function editRecord(record) {
   const uploadHint = "PDF / DOCX / JPG / PNG · 单份 ≤ 50 MB";
   modal(
     "编辑" + (KIND_LABELS[raw.kind] || "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><span class="ach-section-title">${uploadTitle}</span></div><div class="full"><label class="upload-bar"><span class="upload-bar-cta">${icon("paper", 15)}<span>选择附件文件</span></span><small>${uploadHint}</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
-    `<button type="button" class="btn" data-close>取消</button><button type="submit" form="edit-form" class="btn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
+    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><span class="ach-section-title">${uploadTitle}</span></div><div class="full"><label class="upload-bar"><span class="upload-bar-cta">${icon("paper", 15)}<span>选择附件文件</span></span><small class="pm-mono">${uploadHint}</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
+    `<button type="button" class="btn pbtn--ghost" data-close>取消</button><button type="submit" form="edit-form" class="btn pbtn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
   );
   const editFormEl = $("#edit-form");
   if (isSoftware) bindSoftwareCopyrightForm(editFormEl);

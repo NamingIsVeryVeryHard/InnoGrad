@@ -112,7 +112,7 @@ export function renderResearchProjectFields(form, files, esc) {
     `<label class="full">${labelTag("本阶段完成的具体事项", true)}<textarea name="stage_deliverables" required rows="4" maxlength="4000" placeholder="说明本阶段完成的研究任务、实验结果或交付物">${esc(form.stage_deliverables || "")}</textarea></label>`,
     sectionHead(
       "按需关联材料（选填）",
-      '<button type="button" class="btn sm" id="add-artifact-btn">添加材料</button>',
+      '<button type="button" class="btn pbtn" id="add-artifact-btn">添加材料</button>',
     ),
     `<div class="full" id="artifact-list">${artifactBody}</div>`,
   ].join("");
@@ -268,7 +268,7 @@ function renderArtifactDetailList(artifacts, files, esc) {
         linkHtml || fileHtml
           ? `<div class="actions" style="margin-top:10px">${linkHtml}${fileHtml}</div>`
           : "";
-      return `<div class="ach-artifact-card"><div class="ach-artifact-head"><span class="ach-chip type-${esc(typeKey)}">${esc(typeLabel)}</span><strong>${esc(item.name)}</strong></div>${item.description ? `<p>${esc(item.description)}</p>` : ""}${actionsHtml}</div>`;
+      return `<div class="ach-artifact-card"><div class="ach-artifact-head"><span class="pm-field">${esc(typeLabel)}</span><strong>${esc(item.name)}</strong></div>${item.description ? `<p>${esc(item.description)}</p>` : ""}${actionsHtml}</div>`;
     })
     .join("");
 }

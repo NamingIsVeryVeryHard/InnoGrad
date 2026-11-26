@@ -37,17 +37,19 @@ textarea:focus-visible {
   width: 44px;
   height: 44px;
   margin-left: auto;
-  background: #141413;
-  color: #faf9f5;
-  border: 1px solid rgba(20, 20, 19, 0.14);
+  background: #171c1d;
+  color: #fcfefe;
+  border: 1px solid #cfd8d9;
   border-radius: 50%;
-  box-shadow: 0 4px 14px rgba(20, 20, 19, 0.16);
+  box-shadow:
+    0 1px 2px #171c1d0f,
+    0 12px 28px -10px #171c1d40;
   transition:
     transform 0.16s ease,
     background 0.16s ease;
 }
 .launcher:hover {
-  background: #2c2b29;
+  background: #2d3436;
   transform: translateY(-2px);
 }
 svg {
