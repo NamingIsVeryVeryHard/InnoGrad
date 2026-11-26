@@ -20,6 +20,7 @@ from .db import (
     uid,
     now,
 )
+from .achievement_forms import ACHIEVEMENT_KINDS
 from .policy import relation
 
 
@@ -199,8 +200,8 @@ def register(app, ctx):
         old, idem = replay(session, request, user, body.model_dump())
         if old is not None:
             return old
-        if sub.kind != "paper" or sub.status != "archived":
-            error(409, "仅已归档论文可发起正常进展更新")
+        if sub.kind not in ACHIEVEMENT_KINDS or sub.status != "archived":
+            error(409, "仅已归档成果可发起正常进展更新")
         if session.scalar(
             select(Correction).where(
                 Correction.submission_id == sub.id,
@@ -233,7 +234,7 @@ def register(app, ctx):
                 reason="进展更新：" + body.reason,
             )
         )
-        audit(session, user, "paper.update_opened", sub.id)
+        audit(session, user, f"{sub.kind}.update_opened", sub.id)
         return finish(
             session, idem, {"status": sub.status, "lock_version": sub.lock_version}
         )

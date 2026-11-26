@@ -1,0 +1,15 @@
+{
+  "expected_lock_version": 0,
+  "form": {
+    "metadata_version": 1,
+    "project_name": "国家自然科学基金智能教育知识追踪子课题",
+    "student_role": "core_member",
+    "role_description": "实验设计与评测分析",
+    "stage_deliverables": "完成 2 个基准数据集的对比实验与消融分析，输出阶段总结并完成组内汇报。",
+    "completion_date": "2026-11-12",
+    "linked_artifacts": [],
+    "period": "2026—2027学年"
+  },
+  "file_ids": [],
+  "file_roles": {}
+}

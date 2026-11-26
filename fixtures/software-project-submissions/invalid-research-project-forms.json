@@ -1,0 +1,43 @@
+[
+  {
+    "case": "unsafe_javascript_artifact_url",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "project_name": "科研课题测试",
+      "student_role": "core_member",
+      "stage_deliverables": "完成初版实验",
+      "completion_date": "2026-11-10",
+      "linked_artifacts": [
+        {
+          "artifact_type": "code",
+          "name": "非法协议链接",
+          "url": "javascript:alert(1)"
+        }
+      ]
+    }
+  },
+  {
+    "case": "other_role_missing_description",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "project_name": "科研课题测试",
+      "student_role": "other",
+      "role_description": "",
+      "stage_deliverables": "完成初版实验",
+      "completion_date": "2026-11-10"
+    }
+  },
+  {
+    "case": "invalid_completion_date",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "project_name": "科研课题测试",
+      "student_role": "participant",
+      "stage_deliverables": "完成初版实验",
+      "completion_date": "2026-02-31"
+    }
+  }
+]

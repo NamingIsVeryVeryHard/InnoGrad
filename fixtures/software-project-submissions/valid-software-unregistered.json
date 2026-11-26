@@ -1,0 +1,17 @@
+{
+  "expected_lock_version": 0,
+  "form": {
+    "metadata_version": 1,
+    "software_name": "多智能体课堂互动分析工具",
+    "version": "V0.8-beta",
+    "copyright_holders": [
+      "华东师范大学",
+      "林知远（模拟）"
+    ],
+    "development_work": "负责对话标注脚本、指标聚合接口与前端可视化界面原型开发。",
+    "registration_status": "applying",
+    "period": "2026—2027学年"
+  },
+  "file_ids": [],
+  "file_roles": {}
+}

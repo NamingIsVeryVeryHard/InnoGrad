@@ -1,5 +1,23 @@
 import { renderGrowth, renderWarnings } from "./growth-ui.js?v=campus-v1";
 import { fieldLabels, formatValue } from "../teacher-chat/field-labels.js";
+import {
+  ALL_FILE_ROLE_LABELS,
+  KIND_LABELS,
+  KIND_SHORT_TITLES,
+  achievementPrimaryText,
+  achievementStatusSummary,
+  achievementTitle,
+  bindResearchProjectForm,
+  bindSoftwareCopyrightForm,
+  extractResearchProjectForm,
+  extractSoftwareCopyrightForm,
+  fileRoleLabelsForKind,
+  renderAchievementDetail,
+  renderResearchProjectFields,
+  renderSoftwareCopyrightFields,
+  renderVersionStructuredFields,
+  syncResearchProjectFileOptions,
+} from "./achievements-ui.js";
 const $ = (s) => document.querySelector(s),
   esc = (v) =>
     String(v ?? "").replace(
@@ -14,7 +32,12 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 const authorNames = (authors) =>
-  Array.isArray(authors) ? authors.sort((a, b) => a.order - b.order).map((a) => a.name).join("\n") : String(authors || "");
+  Array.isArray(authors)
+    ? authors
+        .sort((a, b) => a.order - b.order)
+        .map((a) => a.name)
+        .join("\n")
+    : String(authors || "");
 const icons = {
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   users:
@@ -69,16 +92,7 @@ const statusLabels = {
   },
   badge = (s) =>
     `<span class="badge ${{ pending: "amber", returned: "red", draft: "gray", archived: "" }[s] || ""}">${statusLabels[s] || esc(s)}</span>`;
-const paperFileRoleLabels = {
-  paper_fulltext: "论文全文",
-  submission_proof: "投稿证明",
-  author_order_proof: "作者顺位证明",
-  acceptance_proof: "录用证明",
-  publication_proof: "发表证明",
-  article_page: "文章页面或 DOI 证明",
-  contribution_proof: "本人贡献证明",
-  other_proof: "其他证明材料",
-};
+const paperFileRoleLabels = ALL_FILE_ROLE_LABELS;
 let me = null,
   role = "",
   csrf = "",
@@ -139,6 +153,8 @@ const navs = [
   ["tasks", "task", "培养任务"],
   ["reviews", "spark", "Agent 审核"],
   ["papers", "paper", "论文成果"],
+  ["software", "shield", "软件著作权"],
+  ["projects", "book", "科研项目"],
   ["archives", "archive", "成果档案"],
   ["portraits", "chart", "成长画像"],
   ["alerts", "bell", "关注与提醒"],
@@ -228,7 +244,7 @@ function statCards() {
 function recordTable(rr, compact = false) {
   if (!rr.length)
     return empty("当前没有相关材料", "新的提交或状态变更会显示在这里。");
-  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "280"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? (r.kind === "paper" ? "论文成果申报" : "年度考核报告") : r.title)}</div><small style="display:block;margin-top:6px">${r.kind === "paper" ? "论文成果" : "培养材料"} · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td><button class="linkbtn" data-action="record:${r.id}">${role === "student" && ["draft", "returned"].includes(r.status) ? "继续填写" : r.status === "pending" && role === "teacher" && r.raw.reviewer_id === me.id ? "去审核" : "查看详情"} &nbsp;↗</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "280"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? KIND_SHORT_TITLES[r.kind] || r.title : r.title)}</div><small style="display:block;margin-top:6px">${esc(KIND_LABELS[r.kind] || "培养材料")} · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td><button class="linkbtn" data-action="record:${r.id}">${role === "student" && ["draft", "returned"].includes(r.status) ? "继续填写" : r.status === "pending" && role === "teacher" && r.raw.reviewer_id === me.id ? "去审核" : "查看详情"} &nbsp;↗</button></td></tr>`).join("")}</tbody></table></div>`;
 }
 function progress(t) {
   const ids = t.students.filter((s) =>
@@ -255,6 +271,10 @@ function dashboard() {
         : "研究生培养工作台",
       "培养进展、审核待办与学生成长，在这里一目了然。",
       btn("导出概览", "export:overview", false, "download") +
+        (role === "student"
+          ? btn("登记软著", "new-software", false, "plus") +
+            btn("登记科研项目", "new-project", false, "plus")
+          : "") +
         btn(
           role === "manager"
             ? "发布培养任务"
@@ -320,15 +340,38 @@ function distribution(rr) {
     .join("")}</svg>`;
 }
 function listing(kind) {
-  let rr = records().filter((r) =>
-    kind === "papers"
-      ? r.kind === "paper"
-      : kind === "archives"
-        ? !!r.effective
-        : role === "teacher"
-          ? r.raw.reviewer_id === me.id
-          : true,
-  );
+  const meta = {
+    papers: {
+      title: "论文成果",
+      sub: "记录每一次研究进展，保留成果事实与个人贡献。",
+      action: ["登记论文", "new-paper"],
+      match: (r) => r.kind === "paper",
+    },
+    software: {
+      title: "软件著作权",
+      sub: "登记软件全称、版本号、著作权人、个人开发工作及登记状态；已登记时补充登记号与登记日期。",
+      action: ["登记软著", "new-software"],
+      match: (r) => r.kind === "software_copyright",
+    },
+    projects: {
+      title: "科研项目",
+      sub: "记录科研项目或课题阶段成果，按需关联实验报告、数据集、代码或原型（关联材料非必填）。",
+      action: ["登记科研项目", "new-project"],
+      match: (r) => r.kind === "research_project",
+    },
+    archives: {
+      title: "成果档案",
+      sub: "正式认定与历史版本始终关联，更正期间原档案持续有效。",
+      action: null,
+      match: (r) => !!r.effective,
+    },
+  }[kind] || {
+    title: "审核工作台",
+    sub: "从提交材料到正式归档，让每项审核有据可循。",
+    action: null,
+    match: (r) => (role === "teacher" ? r.raw.reviewer_id === me.id : true),
+  };
+  let rr = records().filter(meta.match);
   rr = rr.filter(
     (r) =>
       (filter === "all" || r.status === filter) &&
@@ -339,19 +382,11 @@ function listing(kind) {
   );
   return (
     heading(
-      kind === "papers"
-        ? "论文成果"
-        : kind === "archives"
-          ? "成果档案"
-          : "审核工作台",
-      kind === "archives"
-        ? "正式认定与历史版本始终关联，更正期间原档案持续有效。"
-        : kind === "papers"
-          ? "记录每一次研究进展，保留成果事实与个人贡献。"
-          : "从提交材料到正式归档，让每项审核有据可循。",
+      meta.title,
+      meta.sub,
       btn("导出清单", "export:" + kind, false, "download") +
-        (kind === "papers" && role === "student"
-          ? btn("登记论文", "new-paper", true, "plus")
+        (meta.action && role === "student"
+          ? btn(meta.action[0], meta.action[1], true, "plus")
           : ""),
     ) +
     `<section class="card"><div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
@@ -468,6 +503,8 @@ const views = {
   tasks: taskView,
   reviews: agentReviewView,
   papers: () => listing("papers"),
+  software: () => listing("software"),
+  projects: () => listing("projects"),
   archives: () => listing("archives"),
   portraits,
   alerts: alertsView,
@@ -736,7 +773,7 @@ function normalize(r) {
     ? {
         id: r.effective_archive.id,
         number: r.effective_archive.number,
-        title: r.effective_archive.snapshot.form.title || "年度报告",
+        title: achievementTitle(r.kind, r.effective_archive.snapshot.form),
         time: r.effective_archive.created_at,
       }
     : null;
@@ -746,11 +783,12 @@ function normalize(r) {
     student: r.student_id,
     task: r.task_id,
     kind: r.kind,
+    form,
     status: r.status === "pending_review" ? "pending" : r.status,
-    title: form.title || (r.kind === "annual" ? "年度培养报告" : "未命名论文"),
+    title: achievementTitle(r.kind, form),
     summary: form.summary || "",
     plan: form.plan || "",
-    contribution: form.contribution || "",
+    contribution: achievementPrimaryText(r.kind, form),
     authors: form.authors || [],
     authorOrder: form.author_order || "",
     authorIdentity: form.author_identity || "",
@@ -939,15 +977,10 @@ function settingsView() {
   );
 }
 function versionFields(kind, form) {
-  if (kind !== "paper")
-    return `<pre>${esc(JSON.stringify(form, null, 2))}</pre>`;
-  const fields = Object.entries(form)
-    .filter(([key, value]) => Object.hasOwn(fieldLabels, key) && value)
-    .map(
-      ([key, value]) =>
-        `<div><dt>${esc(fieldLabels[key])}</dt><dd>${esc(formatValue(value))}</dd></div>`,
-    );
-  return `<dl class="facts">${fields.join("")}</dl>`;
+  return renderVersionStructuredFields(kind, form, esc, {
+    fieldLabels,
+    formatValue,
+  });
 }
 async function showRecord(record) {
   const raw = await api("/submissions/" + record.id),
@@ -977,9 +1010,16 @@ async function showRecord(record) {
       failed: "失败",
       cancelled: "已取消",
     };
+  const customDetail = renderAchievementDetail(r.kind, r.form, r.files, esc);
+  const taskPeriod = state.tasks.find((t) => t.id === r.task)?.period || "";
+  const isAchievement = [
+    "paper",
+    "software_copyright",
+    "research_project",
+  ].includes(r.kind);
   modal(
-    r.kind === "paper" ? "论文成果 · 材料详情" : "年度培养 · 材料详情",
-    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${r.kind === "paper" ? "论文成果" : "年度报告"}</dd></div><div><dt>当前状态</dt><dd>${r.kind === "paper" ? { submitted: "已投稿", accepted: "已录用", published: "已发表" }[r.publication] : esc(state.tasks.find((t) => t.id === r.task)?.period || "—")}</dd></div></dl><h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(ref.form.title)} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
+    (KIND_LABELS[r.kind] || "培养材料") + " · 材料详情",
+    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${esc(KIND_LABELS[r.kind] || "年度报告")}</dd></div><div><dt>当前状态</dt><dd>${esc(achievementStatusSummary(r.kind, r.form, taskPeriod))}</dd></div></dl>${customDetail || `<h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}`}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(achievementTitle(ref.kind || "paper", ref.form))} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
       ...r.versions,
     ]
       .reverse()
@@ -988,7 +1028,7 @@ async function showRecord(record) {
           `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary>${versionFields(r.kind, v.snapshot.form)}${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)} · ${esc(paperFileRoleLabels[raw.files.find((f) => f.id === fid)?.role] || "其他证明材料")}</button><br>`).join("")}</details>`,
       )
       .join("")}</div>`,
-    `${editable ? btn("编辑材料", "edit:" + r.id, true) : ""}${mine && r.status === "archived" && r.kind === "paper" ? btn("更新论文进展", "update:" + r.id) : ""}${r.effective ? btn("生成归档导出", "export-record:" + r.id) : ""}${r.status === "archived" ? btn("申请更正", "correct:" + r.id) : ""}${role === "manager" && ["pending", "returned"].includes(r.status) ? btn("调整复核教师", "reassign:" + r.id) : ""}<button class="btn" data-close>关闭</button>`,
+    `${editable ? btn("编辑材料", "edit:" + r.id, true) : ""}${mine && r.status === "archived" && isAchievement ? btn("更新成果进展", "update:" + r.id) : ""}${r.effective ? btn("生成归档导出", "export-record:" + r.id) : ""}${r.status === "archived" ? btn("申请更正", "correct:" + r.id) : ""}${role === "manager" && ["pending", "returned"].includes(r.status) ? btn("调整复核教师", "reassign:" + r.id) : ""}<button class="btn" data-close>关闭</button>`,
   );
   $("#dialog").dataset.record = JSON.stringify({
     id: r.id,
@@ -1015,57 +1055,101 @@ async function editRecord(record) {
     throw Error("当前记录不可编辑");
   const form = raw.draft?.form || {},
     isPaper = raw.kind === "paper",
+    isSoftware = raw.kind === "software_copyright",
+    isProject = raw.kind === "research_project",
     task = state.tasks.find((t) => t.id === raw.task_id),
-    required = task?.requirements.required_fields || ["summary"];
+    required = task?.requirements.required_fields || ["summary"],
+    roleLabels = fileRoleLabelsForKind(raw.kind);
   let lock = raw.lock_version,
     files = [
       ...(raw.files || []).filter((f) => raw.draft.file_ids.includes(f.id)),
     ],
     fileRoles = { ...(raw.draft.file_roles || {}) },
     uploading = false;
+  const formFieldsHtml = isSoftware
+    ? renderSoftwareCopyrightFields(form, esc)
+    : isProject
+      ? renderResearchProjectFields(form, files, esc)
+      : `${field("材料标题", "title", form.title || task?.title || "", "text", true)}${
+          isPaper
+            ? `<label>论文状态<select name="publication_status">${[
+                ["submitted", "已投稿"],
+                ["accepted", "已录用"],
+                ["published", "已发表"],
+              ]
+                .map(
+                  ([v, t]) =>
+                    `<option value="${v}" ${form.publication_status === v ? "selected" : ""}>${t}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label><label>期刊 / 会议（选填）<input name="journal" value="${esc(form.journal || "")}"></label>${[
+                ["submission_date", "投稿日期"],
+                ["acceptance_date", "录用日期"],
+                ["publication_date", "发表日期"],
+              ]
+                .map(
+                  ([n, l]) =>
+                    `<label>${l}<input name="${n}" type="date" value="${esc(form[n] || "")}"></label>`,
+                )
+                .join(
+                  "",
+                )}<label class="full">作者列表（按作者顺序，每行一名）<textarea name="authors" required rows="3" placeholder="张三\n李四">${esc(authorNames(form.authors))}</textarea></label><label>本人作者顺序<input name="author_order" type="number" min="1" required value="${esc(form.author_order || "")}"></label><label>本人身份<select name="author_identity" required><option value="">请选择</option>${[
+                ["first_author", "第一作者"],
+                ["co_first_author", "共同第一作者"],
+                ["corresponding_author", "通讯作者"],
+                ["other_author", "其他作者"],
+              ]
+                .map(
+                  ([v, t]) =>
+                    `<option value="${v}" ${form.author_identity === v ? "selected" : ""}>${t}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label><label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}" placeholder="10.xxxx/xxxxx"></label><label>文章链接（DOI 或链接至少填一项）<input name="article_url" type="url" value="${esc(form.article_url || "")}" placeholder="https://..."></label>${area("本人贡献", "contribution", form.contribution || "")}`
+            : `${task?.requirements.instructions ? `<div class="full callout">${esc(task.requirements.instructions)}</div>` : ""}${area("研究进展与总结", "summary", form.summary || "")}${area("下一阶段计划" + (required.includes("plan") ? "（必填）" : "（选填）"), "plan", form.plan || "", required.includes("plan"))}<div class="full"><p>引用本人已提交成果（待核验成果会明确标记）</p><div class="checklist">${
+                records()
+                  .filter(
+                    (p) =>
+                      [
+                        "paper",
+                        "software_copyright",
+                        "research_project",
+                      ].includes(p.kind) && p.raw.current_version_id,
+                  )
+                  .map(
+                    (p) =>
+                      `<label><input type="checkbox" name="reference_ids" value="${p.id}" ${(raw.draft.reference_ids || []).includes(p.id) ? "checked" : ""}>${esc(KIND_LABELS[p.kind])} · ${esc(p.effective?.title || p.title)} · ${p.effective ? "已认定" : "待核验"}</label>`,
+                  )
+                  .join("") || "<small>暂无可引用成果</small>"
+              }</div></div>`
+        }`;
+  const uploadHint = isProject
+    ? "证明或关联附件（选填，不作为必填项；PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）"
+    : isSoftware
+      ? "证明材料（已登记时需上传软著登记证书或证明附件；PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）"
+      : "证明材料（PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）";
   modal(
-    "编辑" + (isPaper ? "论文成果" : "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${field("材料标题", "title", form.title || task?.title || "", "text", true)}${
-      isPaper
-        ? `<label>论文状态<select name="publication_status">${[
-            ["submitted", "已投稿"],
-            ["accepted", "已录用"],
-            ["published", "已发表"],
-          ]
-            .map(
-              ([v, t]) =>
-                `<option value="${v}" ${form.publication_status === v ? "selected" : ""}>${t}</option>`,
-            )
-            .join(
-              "",
-            )}</select></label><label>期刊 / 会议（选填）<input name="journal" value="${esc(form.journal || "")}"></label>${[
-            ["submission_date", "投稿日期"],
-            ["acceptance_date", "录用日期"],
-            ["publication_date", "发表日期"],
-          ]
-            .map(
-              ([n, l]) =>
-                `<label>${l}<input name="${n}" type="date" value="${esc(form[n] || "")}"></label>`,
-            )
-            .join(
-              "",
-            )}<label class="full">作者列表（按作者顺序，每行一名）<textarea name="authors" required rows="3" placeholder="张三\n李四">${esc(authorNames(form.authors))}</textarea></label><label>本人作者顺序<input name="author_order" type="number" min="1" required value="${esc(form.author_order || "")}"></label><label>本人身份<select name="author_identity" required><option value="">请选择</option>${[["first_author", "第一作者"], ["co_first_author", "共同第一作者"], ["corresponding_author", "通讯作者"], ["other_author", "其他作者"]].map(([v, t]) => `<option value="${v}" ${form.author_identity === v ? "selected" : ""}>${t}</option>`).join("")}</select></label><label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}" placeholder="10.xxxx/xxxxx"></label><label>文章链接（DOI 或链接至少填一项）<input name="article_url" type="url" value="${esc(form.article_url || "")}" placeholder="https://..."></label>${area("本人贡献", "contribution", form.contribution || "")}`
-        : `${task?.requirements.instructions ? `<div class="full callout">${esc(task.requirements.instructions)}</div>` : ""}${area("研究进展与总结", "summary", form.summary || "")}${area("下一阶段计划" + (required.includes("plan") ? "（必填）" : "（选填）"), "plan", form.plan || "", required.includes("plan"))}<div class="full"><p>引用本人已提交论文（待核验成果会明确标记）</p><div class="checklist">${
-            records()
-              .filter((p) => p.kind === "paper" && p.raw.current_version_id)
-              .map(
-                (p) =>
-                  `<label><input type="checkbox" name="reference_ids" value="${p.id}" ${(raw.draft.reference_ids || []).includes(p.id) ? "checked" : ""}>${esc(p.effective?.title || p.title)} · ${p.effective ? "已认定" : "待核验"}</label>`,
-              )
-              .join("") || "<small>暂无可引用论文</small>"
-          }</div></div>`
-    }<label class="full">证明材料（PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）<input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label><div class="full" id="attached"></div></div><div class="actions" style="justify-content:flex-end;margin-top:22px"><button type="button" class="btn" data-close>取消</button><button class="btn" value="draft">保存草稿</button><button class="btn primary" value="submit">确认并提交</button></div></form>`,
+    "编辑" + (KIND_LABELS[raw.kind] || "年度报告"),
+    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<label class="full">${uploadHint}<input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label><div class="full" id="attached"></div></div><div class="actions" style="justify-content:flex-end;margin-top:22px"><button type="button" class="btn" data-close>取消</button><button class="btn" value="draft">保存草稿</button><button class="btn primary" value="submit">确认并提交</button></div></form>`,
   );
+  const editFormEl = $("#edit-form");
+  if (isSoftware) bindSoftwareCopyrightForm(editFormEl);
+  if (isProject) bindResearchProjectForm(editFormEl, () => files, esc);
   const renderFiles = () => {
     $("#attached").innerHTML = files
       .map(
         (f) =>
-          `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(paperFileRoleLabels).map(([value, label]) => `<option value="${value}" ${fileRoles[f.id] === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
+          `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(
+            roleLabels,
+          )
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${fileRoles[f.id] === value ? "selected" : ""}>${label}</option>`,
+            )
+            .join(
+              "",
+            )}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
       )
       .join("");
     $("#attached")
@@ -1084,6 +1168,7 @@ async function editRecord(record) {
             renderFiles();
           }),
       );
+    if (isProject) syncResearchProjectFileOptions(editFormEl, files, esc);
   };
   renderFiles();
   $("#attachments").onchange = async (e) => {
@@ -1117,17 +1202,24 @@ async function editRecord(record) {
     const b = e.submitter;
     b.disabled = true;
     try {
-      const data = new FormData(e.target),
+      const data = new FormData(e.target);
+      let values;
+      if (isSoftware) {
+        values = extractSoftwareCopyrightForm(data);
+      } else if (isProject) {
+        values = extractResearchProjectForm(editFormEl, data);
+      } else {
         values = Object.fromEntries(data);
-      delete values.reference_ids;
-      if (isPaper) {
-        values.paper_metadata_version = 2;
-        values.authors = String(values.authors || "")
-          .split(/[\r\n,，、]+/)
-          .map((name) => name.trim())
-          .filter(Boolean)
-          .map((name, index) => ({ name, order: index + 1 }));
-        values.author_order = Number(values.author_order);
+        delete values.reference_ids;
+        if (isPaper) {
+          values.paper_metadata_version = 2;
+          values.authors = String(values.authors || "")
+            .split(/[\r\n,，、]+/)
+            .map((name) => name.trim())
+            .filter(Boolean)
+            .map((name, index) => ({ name, order: index + 1 }));
+          values.author_order = Number(values.author_order);
+        }
       }
       const result = await patch("/submissions/" + raw.id + "/draft", {
         expected_lock_version: lock,
@@ -1221,7 +1313,12 @@ async function exportData(type) {
               archived: records().filter((r) => r.effective).length,
             }
           : records()
-              .filter((r) => type !== "papers" || r.kind === "paper")
+              .filter((r) => {
+                if (type === "papers") return r.kind === "paper";
+                if (type === "software") return r.kind === "software_copyright";
+                if (type === "projects") return r.kind === "research_project";
+                return true;
+              })
               .map((r) => r.raw);
   download("InnoGrad-" + type + "-" + date(new Date()) + ".json", data);
   toast("已导出当前授权数据");
@@ -1258,19 +1355,39 @@ async function action(raw) {
     growthPeriod = "";
     await go("portraits");
   } else if (a === "edit") await editRecord({ id: arg });
-  else if (a === "new-paper") {
+  else if (a === "new-paper" || a === "new-software" || a === "new-project") {
     const teachers = people.filter((p) => p.role === "teacher");
     if (!teachers.length) throw Error("尚无有效指导教师，请联系管理教师");
+    const kindCfg = {
+      "new-paper": {
+        kind: "paper",
+        title: "登记论文成果",
+        targetPage: "papers",
+        msg: "论文工作稿已创建，请从列表继续填写",
+      },
+      "new-software": {
+        kind: "software_copyright",
+        title: "登记软件著作权",
+        targetPage: "software",
+        msg: "软件著作权工作稿已创建，请从列表继续填写",
+      },
+      "new-project": {
+        kind: "research_project",
+        title: "登记科研项目阶段成果",
+        targetPage: "projects",
+        msg: "科研项目工作稿已创建，请从列表继续填写",
+      },
+    }[a];
     formModal(
-      "登记论文成果",
+      kindCfg.title,
       `<label class="full">复核教师<select name="reviewer_id">${teachers.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></label>`,
       async (d) => {
-        const r = await post("/submissions", {
-          kind: "paper",
+        await post("/submissions", {
+          kind: kindCfg.kind,
           reviewer_id: d.get("reviewer_id"),
         });
-        toast("论文工作稿已创建，请从列表继续填写");
-        page = "papers";
+        toast(kindCfg.msg);
+        page = kindCfg.targetPage;
         location.hash = page;
       },
       "创建工作稿",

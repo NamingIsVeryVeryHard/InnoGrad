@@ -121,10 +121,15 @@ function render() {
   );
   $("records").replaceChildren(
     ...records.map((r) => {
+      const form = r.draft?.form || r.versions.at(-1)?.snapshot.form || {};
+      const fallback =
+        {
+          annual: "年度报告",
+          software_copyright: "软件著作权申报",
+          research_project: "科研项目阶段成果",
+        }[r.kind] || "论文申报";
       const title =
-        r.draft?.form?.title ||
-        r.versions.at(-1)?.snapshot.form.title ||
-        (r.kind === "annual" ? "年度报告" : "论文申报");
+        form.software_name || form.project_name || form.title || fallback;
       const n = el(
         "button",
         title,
@@ -198,7 +203,12 @@ async function openRecord(id, fromChat = false) {
     el("span", states[r.status] || r.status, "pill"),
     el(
       "h2",
-      (r.kind === "paper" ? "论文成果申报" : "年度培养材料") +
+      ({
+        paper: "论文成果申报",
+        software_copyright: "软件著作权申报",
+        research_project: "科研项目阶段成果",
+        annual: "年度培养材料",
+      }[r.kind] || "培养材料") +
         " · " +
         person(r.student_id),
     ),

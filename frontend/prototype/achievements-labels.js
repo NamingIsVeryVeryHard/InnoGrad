@@ -1,0 +1,90 @@
+/**
+ * Domain label dictionaries and URL sanitizer for achievement submissions.
+ */
+
+export const KIND_LABELS = {
+  paper: "论文成果",
+  annual: "年度报告",
+  software_copyright: "软件著作权",
+  research_project: "科研项目",
+};
+
+export const KIND_SHORT_TITLES = {
+  paper: "论文成果申报",
+  annual: "年度考核报告",
+  software_copyright: "软件著作权申报",
+  research_project: "科研项目阶段成果",
+};
+
+export const REGISTRATION_STATUS_LABELS = {
+  unregistered: "未登记",
+  applying: "申请登记中",
+  registered: "已登记",
+};
+
+export const STUDENT_ROLE_LABELS = {
+  lead: "项目/子课题负责人",
+  core_member: "核心成员",
+  participant: "参与成员",
+  other: "其他",
+};
+
+export const ARTIFACT_TYPE_LABELS = {
+  experiment_report: "实验报告",
+  dataset: "数据集",
+  code: "代码",
+  prototype: "原型",
+};
+
+const PAPER_FILE_ROLES = {
+  paper_fulltext: "论文全文",
+  submission_proof: "投稿证明",
+  author_order_proof: "作者顺位证明",
+  acceptance_proof: "录用证明",
+  publication_proof: "发表证明",
+  article_page: "文章页面或 DOI 证明",
+  contribution_proof: "本人贡献证明",
+  other_proof: "其他证明材料",
+};
+
+const SOFTWARE_FILE_ROLES = {
+  copyright_certificate: "软件著作权登记证书",
+  registration_application: "登记申请或受理证明",
+  source_code_doc: "源代码或设计说明书",
+  development_proof: "个人开发工作证明",
+  other_proof: "其他证明材料",
+};
+
+const PROJECT_FILE_ROLES = {
+  experiment_report: "实验报告",
+  dataset_doc: "数据集说明或清单",
+  code_artifact: "代码文档或仓库说明",
+  prototype_doc: "原型设计或演示材料",
+  project_proof: "项目参与或结题证明",
+  other_proof: "其他证明材料",
+};
+
+export const ALL_FILE_ROLE_LABELS = {
+  ...PAPER_FILE_ROLES,
+  ...SOFTWARE_FILE_ROLES,
+  ...PROJECT_FILE_ROLES,
+};
+
+export function fileRoleLabelsForKind(kind) {
+  if (kind === "software_copyright") return SOFTWARE_FILE_ROLES;
+  if (kind === "research_project") return PROJECT_FILE_ROLES;
+  return PAPER_FILE_ROLES;
+}
+
+export function safeHttpUrl(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return "";
+  try {
+    const parsed = new URL(raw.trim());
+    const validScheme =
+      parsed.protocol === "http:" || parsed.protocol === "https:";
+    if (!validScheme || parsed.username || parsed.password) return "";
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}

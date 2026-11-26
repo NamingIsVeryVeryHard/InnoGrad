@@ -5,11 +5,16 @@ const fs = require("node:fs");
 const { webcrypto } = require("node:crypto");
 const { renderGrowth, renderWarnings } = require("../growth-ui.js");
 const { mountConversation } = require("../teacher-agent.js");
+const achievementsUi = require("../achievements-ui.js");
+const {
+  fieldLabels,
+  formatValue,
+} = require("../../teacher-chat/field-labels.js");
 const filename = require.resolve("../app.js");
 const src = fs.readFileSync(filename, "utf8");
 const model = new vm.Script(
   src
-    .replace(/^import\s*\{[^}]+\}\s*from\s*["'][^"']+["'];/gm, "")
+    .replace(/^import\s*\{[\s\S]*?\}\s*from\s*["'][^"']+["'];/gm, "")
     .split(/^try\s*\{\s*me\s*=\s*await\s+api\(\s*["']\/me["']\s*\)/m)[0],
   { filename },
 );
@@ -18,6 +23,9 @@ function setup(fetch = async () => ({ ok: true, json: async () => [] })) {
     renderGrowth,
     renderWarnings,
     mountConversation,
+    fieldLabels,
+    formatValue,
+    ...achievementsUi,
     AbortController,
     crypto: webcrypto,
     structuredClone,
@@ -162,6 +170,8 @@ test("all workspace renderers support empty real data and logged-in identities",
       "tasks",
       "reviews",
       "papers",
+      "software",
+      "projects",
       "archives",
       "portraits",
       "alerts",

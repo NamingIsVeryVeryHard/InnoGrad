@@ -48,14 +48,17 @@ export function renderGrowth(c) {
     );
   const tags = s.direction && s.direction !== "待补录" ? [s.direction] : [];
   html += `<div class="career-timeline"><section class="career-section"><div class="career-label"><h2>基本信息</h2><span>${icon("users", 17)}</span></div><div class="career-body"><section class="growth-banner"><div class="growth-id"><div class="growth-avatar">${e(s.name.replace(/（模拟）$/, "").slice(-2))}</div><div><div class="growth-overline">学生培养档案</div><h2>${e(s.name.replace(/（模拟）$/, ""))} <span>${e(s.year)}${s.degree && s.degree !== "未标注" ? " · " + e(s.degree) : ""}</span></h2><p>${e(s.number)} · ${e(s.major)}</p><div class="growth-tags">${s.name.endsWith("（模拟）") ? '<span class="badge amber">模拟数据</span>' : ""}${tags.map((t) => `<span>${e(t)}</span>`).join("") || "<span>研究方向待补录</span>"}</div></div></div><div class="growth-goal"><small>当前研究目标</small><h3>${e(latestGoal?.title || "让下一步研究计划更清晰")}</h3><p>${e(latestGoal?.body || "记录阶段目标、关键节点与支持需求，逐步积累研究过程。")}</p><button data-action="growth-new:goal" class="linkbtn">${icon("plus", 13)} ${latestGoal ? "新增阶段目标" : "记录研究目标"}</button></div><div class="growth-banner-status"><span class="badge ${warnings.length ? "amber" : ""}">${warnings.length ? `${warnings.length} 项需要跟进` : "暂无待处理预警"}</span><small>${period ? e(period) : "全部学年 · 当前有效档案"}</small><small>指导：${e(s.teacher)}</small></div></section>`;
+  const archiveParts = [
+    `${g.counts.papers || 0} 份论文`,
+    `${g.counts.annual || 0} 份年报`,
+  ];
+  if (g.counts.software_copyrights)
+    archiveParts.push(`${g.counts.software_copyrights} 份软著`);
+  if (g.counts.research_projects)
+    archiveParts.push(`${g.counts.research_projects} 份科研项目`);
   html += `<div class="growth-stats">${[
     ["paper", "可见材料记录", g.counts.materials, "已登记与正式归档分别统计"],
-    [
-      "archive",
-      "有效归档",
-      g.counts.archives,
-      `${g.counts.papers} 份论文申报 · ${g.counts.annual} 份年度报告`,
-    ],
+    ["archive", "有效归档", g.counts.archives, archiveParts.join(" · ")],
     ["chart", "材料覆盖", `${g.coverage} / 6`, "有来源依据的观察方向"],
     ["bell", "待跟进事项", warnings.length, "当前跨学年的材料与计划提醒"],
   ]
@@ -88,7 +91,28 @@ export function renderGrowth(c) {
       : '<div class="empty">尚无研究目标或里程碑。<p>添加第一个计划，把研究目标拆成可执行的步骤。</p></div>'
   }</div>${feedback.length ? `<div class="growth-feedback"><span>${icon("book", 15)} ${feedback[0].kind === "feedback" ? "阶段反馈" : "研究反思"}</span><h3>${e(feedback[0].title)}</h3><p>${e(feedback[0].body)}</p><small>${e(feedback[0].author)} · ${e(feedback[0].created_at.slice(0, 10))} · 学生与授权教师可见</small><button class="linkbtn" data-action="growth-history">全部成长记录 →</button></div>` : ""}</section><section class="card"><div class="card-head"><div><h2>材料与记录</h2><p>按有效档案的真实归档月份展示</p></div></div>${growthBars(g.trend, e)}<div class="growth-record-summary"><div><strong>${g.counts.pending}</strong><small>正在审核</small></div><div><strong>${g.counts.returned}</strong><small>需要补正</small></div><div><strong>${goals.filter((x) => x.status === "done").length}</strong><small>已完成计划</small></div></div><div class="growth-card-foot">更正只保留一份当前有效认定，曲线不代表能力变化。</div></section></div>`;
   html += "</div></section>";
-  html += `<section class="career-section"><div class="career-label"><h2>成果材料</h2><span>${icon("archive", 17)}</span></div><div class="career-body"><section class="card growth-evidence-section"><div class="card-head"><div><h2>成果与证据</h2><p>每项材料都关联明确版本，观察记录可补充研究情境</p></div><div class="actions">${role !== "student" ? btn("关联材料观察", "growth-new:observation", false, "plus") : ""}${btn("全部成长记录", "growth-history", false, "history")}</div></div><div class="growth-evidence-grid">${g.sources.map((r) => `<article class="growth-source"><span class="source-kind">${icon(r.kind === "paper" ? "paper" : "task", 17)} ${r.kind === "paper" ? "论文申报" : "年度报告"}<span>V${r.number}</span></span><h3>${e(r.title)}</h3><p>${e(String(r.form.contribution || r.form.summary || "").slice(0, 125))}${String(r.form.contribution || r.form.summary || "").length > 125 ? "…" : ""}</p><div><small>${e(r.archived_at.slice(0, 10))} · ${r.files.length} 份原件</small><button class="linkbtn" data-action="record:${r.submission_id}">查看依据 ↗</button></div></article>`).join("") || '<div class="empty">所选范围暂无已归档材料。<p>材料通过并归档后，会自动进入来源清单。</p></div>'}</div></section><div class="growth-disclosure">${icon("shield", 14)} ${e(g.notice)}${period && g.unassigned_period_count ? ` 另有 ${g.unassigned_period_count} 份未标注学年的档案，可在“全部记录”中查看。` : ""}</div>`;
+  const kindMeta = {
+    paper: ["paper", "论文申报"],
+    software_copyright: ["shield", "软件著作权"],
+    research_project: ["book", "科研项目"],
+    annual: ["task", "年度报告"],
+  };
+  html += `<section class="career-section"><div class="career-label"><h2>成果材料</h2><span>${icon("archive", 17)}</span></div><div class="career-body"><section class="card growth-evidence-section"><div class="card-head"><div><h2>成果与证据</h2><p>每项材料都关联明确版本，观察记录可补充研究情境</p></div><div class="actions">${role !== "student" ? btn("关联材料观察", "growth-new:observation", false, "plus") : ""}${btn("全部成长记录", "growth-history", false, "history")}</div></div><div class="growth-evidence-grid">${
+    g.sources
+      .map((r) => {
+        const [ico, label] = kindMeta[r.kind] || ["task", "培养材料"];
+        const snippet = String(
+          r.form.contribution ||
+            r.form.development_work ||
+            r.form.stage_deliverables ||
+            r.form.summary ||
+            "",
+        );
+        return `<article class="growth-source"><span class="source-kind">${icon(ico, 17)} ${label}<span>V${r.number}</span></span><h3>${e(r.title)}</h3><p>${e(snippet.slice(0, 125))}${snippet.length > 125 ? "…" : ""}</p><div><small>${e(r.archived_at.slice(0, 10))} · ${r.files.length} 份原件</small><button class="linkbtn" data-action="record:${r.submission_id}">查看依据 ↗</button></div></article>`;
+      })
+      .join("") ||
+    '<div class="empty">所选范围暂无已归档材料。<p>材料通过并归档后，会自动进入来源清单。</p></div>'
+  }</div></section><div class="growth-disclosure">${icon("shield", 14)} ${e(g.notice)}${period && g.unassigned_period_count ? ` 另有 ${g.unassigned_period_count} 份未标注学年的档案，可在“全部记录”中查看。` : ""}</div>`;
   return html + "</div></section></div>";
 }
 
@@ -124,9 +148,14 @@ function growthRadar(dimensions, e) {
 function growthBars(trend, e) {
   if (!trend.length)
     return '<div class="growth-chart-empty">尚无归档时间记录<br><small>不会用虚构历史补齐趋势</small></div>';
+  const monthTotal = (r) =>
+    (r.paper || 0) +
+    (r.annual || 0) +
+    (r.software_copyright || 0) +
+    (r.research_project || 0);
   const rows = trend.slice(-8),
-    max = Math.max(1, ...rows.map((r) => r.paper + r.annual));
-  return `<div class="growth-bars" role="img" aria-label="${rows.map((r) => e(r.month) + "归档" + (r.paper + r.annual) + "份").join("，")}">${rows.map((r) => `<div class="growth-bar"><span>${r.paper + r.annual}</span><div class="bar-column"><i style="height:${((r.paper + r.annual) / max) * 90}%"></i></div><small>${e(r.month)}</small></div>`).join("")}</div>`;
+    max = Math.max(1, ...rows.map(monthTotal));
+  return `<div class="growth-bars" role="img" aria-label="${rows.map((r) => e(r.month) + "归档" + monthTotal(r) + "份").join("，")}">${rows.map((r) => `<div class="growth-bar"><span>${monthTotal(r)}</span><div class="bar-column"><i style="height:${(monthTotal(r) / max) * 90}%"></i></div><small>${e(r.month)}</small></div>`).join("")}</div>`;
 }
 
 export function renderCohort(c) {

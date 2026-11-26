@@ -1,0 +1,23 @@
+{
+  "expected_lock_version": 0,
+  "form": {
+    "metadata_version": 1,
+    "software_name": "InnoGrad 研究生智能审核与成长管理辅助平台",
+    "version": "V1.0.0",
+    "copyright_holders": [
+      "华东师范大学",
+      "林知远（模拟）"
+    ],
+    "development_work": "负责软件著作权与科研项目表单边界校验引擎、不可变快照归档接入及单元测试编写。",
+    "registration_status": "registered",
+    "registration_number": "2026SR1234567",
+    "registration_date": "2026-10-18",
+    "period": "2026—2027学年"
+  },
+  "file_ids": [
+    "<UPLOADED_CERT_FILE_ID>"
+  ],
+  "file_roles": {
+    "<UPLOADED_CERT_FILE_ID>": "copyright_certificate"
+  }
+}

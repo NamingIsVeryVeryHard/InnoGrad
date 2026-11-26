@@ -26,6 +26,23 @@ FIELDS = {
         "contribution",
     ),
     "annual": ("summary", "plan"),
+    "software_copyright": (
+        "software_name",
+        "version",
+        "copyright_holders",
+        "development_work",
+        "registration_status",
+        "registration_number",
+        "registration_date",
+    ),
+    "research_project": (
+        "project_name",
+        "student_role",
+        "role_description",
+        "stage_deliverables",
+        "completion_date",
+        "linked_artifacts",
+    ),
 }
 
 
@@ -206,6 +223,12 @@ def register(app, db, authenticated):
                 "counts": {
                     "paper_records": sum(r["kind"] == "paper" for r in records),
                     "annual_records": sum(r["kind"] == "annual" for r in records),
+                    "software_copyright_records": sum(
+                        r["kind"] == "software_copyright" for r in records
+                    ),
+                    "research_project_records": sum(
+                        r["kind"] == "research_project" for r in records
+                    ),
                 },
                 "ability_assessment": "待评价",
                 "inferences": [],

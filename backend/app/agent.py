@@ -12,6 +12,8 @@ import xml.etree.ElementTree as ET
 from pydantic import BaseModel, ConfigDict, Field
 import httpx
 
+from .achievement_forms import missing_required_fields
+
 PROMPT_VERSION = "review-assistant-2"
 PARSER_VERSION = "native-text-2"
 
@@ -266,8 +268,15 @@ def analyze(pack, config, root):
         except Exception:
             limitations.append(f"{meta['name']}: 解析失败，需人工核对")
     form = pack["snapshot"]["form"]
-    checks = [
-        Check(
+    if not pack["files"]:
+        readability_check = Check(
+            rule_id="ATTACHMENT_READABILITY",
+            conclusion="not_applicable",
+            severity="info",
+            explanation="本次申报未附上传文件，请结合表单内容与可选关联材料核验",
+        )
+    else:
+        readability_check = Check(
             rule_id="ATTACHMENT_READABILITY",
             conclusion="unable_to_determine" if limitations else "compliant",
             severity="info",
@@ -275,8 +284,8 @@ def analyze(pack, config, root):
             if limitations
             else "原生文本解析完成，尚不代表事实核验通过",
             limitations=limitations[:20],
-        ).model_dump()
-    ]
+        )
+    checks = [readability_check.model_dump()]
     if config["mode"] != "rules":
         for batch in review_batches(blocks):
             payload = {
@@ -309,16 +318,7 @@ def analyze(pack, config, root):
                 suggestion="由复核教师对照原件核验事实",
             ).model_dump()
         )
-    required = pack["snapshot"]["requirements"].get("required_fields") or (
-        ["title", "contribution", "publication_status"]
-        if "title" in form
-        else ["summary"]
-    )
-    missing = [
-        key
-        for key in required
-        if not isinstance(form.get(key), str) or not form[key].strip()
-    ]
+    missing = missing_required_fields(form, pack["snapshot"]["requirements"])
     checks.append(
         Check(
             rule_id="FORM_COMPLETENESS",

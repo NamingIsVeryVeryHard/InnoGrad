@@ -22,6 +22,7 @@ from .db import (
     uid,
     now,
 )
+from .achievement_forms import submission_display_title
 from .workspace import scope_ids
 from .policy import relation
 from .auto_review import assess
@@ -34,6 +35,25 @@ DIMENSIONS = [
     ("exchange", "学术交流", "组会、报告、讲座及交流反思"),
     ("practice", "实践落地", "原型、系统、数据与应用验证"),
 ]
+
+
+_ARCHIVE_DIM_FIELDS = {
+    ("training", "paper"): "publication_status",
+    ("contribution", "paper"): "contribution",
+    ("contribution", "software_copyright"): "development_work",
+    ("contribution", "research_project"): "stage_deliverables",
+    ("practice", "software_copyright"): "software_name",
+    ("practice", "research_project"): "project_name",
+}
+
+
+def _archive_dimension_field(key, source):
+    form = source["form"]
+    if key == "goals":
+        if form.get("plan"):
+            return "plan"
+        return "summary" if source["kind"] == "annual" else None
+    return _ARCHIVE_DIM_FIELDS.get((key, source["kind"]))
 
 
 def authorized(session, user, student_id):
@@ -296,7 +316,7 @@ def dashboard_data(session, user, student_id, period=None):
                 version_id=version.id,
                 number=version.number,
                 kind=sub.kind,
-                title=version.snapshot["form"].get("title") or "年度培养报告",
+                title=submission_display_title(sub.kind, version.snapshot["form"]),
                 form=version.snapshot["form"],
                 period=version.snapshot.get("period"),
                 archived_at=archive.created_at,
@@ -309,17 +329,7 @@ def dashboard_data(session, user, student_id, period=None):
         evidence = []
         for source in sources:
             form = source["form"]
-            field = (
-                "plan"
-                if key == "goals" and form.get("plan")
-                else "summary"
-                if key == "goals" and source["kind"] == "annual"
-                else "publication_status"
-                if key == "training" and source["kind"] == "paper"
-                else "contribution"
-                if key == "contribution" and source["kind"] == "paper"
-                else None
-            )
+            field = _archive_dimension_field(key, source)
             if field and form.get(field):
                 evidence.append(
                     dict(
@@ -368,9 +378,17 @@ def dashboard_data(session, user, student_id, period=None):
             .astimezone(ZoneInfo("Asia/Shanghai"))
             .strftime("%Y-%m")
         )
-        months.setdefault(month, {"month": month, "paper": 0, "annual": 0})[
-            source["kind"]
-        ] += 1
+        bucket = months.setdefault(
+            month,
+            {
+                "month": month,
+                "paper": 0,
+                "annual": 0,
+                "software_copyright": 0,
+                "research_project": 0,
+            },
+        )
+        bucket[source["kind"]] = bucket.get(source["kind"], 0) + 1
     visible_subs = session.scalars(
         select(Submission).where(Submission.student_id == student_id)
     ).all()
@@ -382,7 +400,7 @@ def dashboard_data(session, user, student_id, period=None):
         def in_period(sub):
             if sub.task_id in task_ids:
                 return True
-            if sub.kind != "paper":
+            if sub.kind == "annual":
                 return False
             archive = (
                 session.get(Archive, sub.effective_archive_id)
@@ -421,6 +439,10 @@ def dashboard_data(session, user, student_id, period=None):
             archives=len(sources),
             papers=sum(s["kind"] == "paper" for s in sources),
             annual=sum(s["kind"] == "annual" for s in sources),
+            software_copyrights=sum(
+                s["kind"] == "software_copyright" for s in sources
+            ),
+            research_projects=sum(s["kind"] == "research_project" for s in sources),
             pending=sum(s.status == "pending_review" for s in visible_subs),
             returned=sum(s.status == "returned" for s in visible_subs),
             tasks=len(assignments),

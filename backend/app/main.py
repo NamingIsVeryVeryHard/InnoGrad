@@ -20,6 +20,8 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
@@ -46,8 +48,13 @@ from .db import (
     uid,
     now,
 )
-from .paper_form import canonicalize_paper_form
-from .paper_materials import PaperAttachmentRole, normalize_file_roles
+from .achievement_forms import (
+    ACHIEVEMENT_KINDS,
+    SubmissionKind,
+    default_requirements_for_kind,
+    validate_submission_form,
+)
+from .paper_materials import AttachmentRole, normalize_file_roles
 
 
 def password_hash(password, salt=None):
@@ -72,7 +79,7 @@ class Login(Input):
 
 
 class CreateSubmission(Input):
-    kind: Literal["paper", "annual"]
+    kind: SubmissionKind
     task_id: str | None = None
     reviewer_id: str | None = None
 
@@ -81,7 +88,7 @@ class Draft(Input):
     expected_lock_version: int = Field(ge=0)
     form: dict
     file_ids: list[str] = Field(default_factory=list, max_length=30)
-    file_roles: dict[str, PaperAttachmentRole] = Field(default_factory=dict)
+    file_roles: dict[str, AttachmentRole] = Field(default_factory=dict)
     reference_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -104,12 +111,35 @@ class TaskInput(Input):
     rule_id: str = "annual-1"
 
 
+class _SecurityHeaders:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        is_api = scope["path"].startswith("/api/v1/")
+
+        async def send_with_headers(message: Message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Referrer-Policy", "no-referrer")
+                if is_api:
+                    headers.setdefault("Cache-Control", "no-store")
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 def create_app(database_url=None, storage=None):
     app = FastAPI(title="InnoGrad · 上海智能教育研究院", version="0.3.0")
     engine, factory = connect(database_url)
     app.state.engine, app.state.sessions = engine, factory
     root = Path(storage or os.getenv("FILE_ROOT", "runtime/files"))
     root.mkdir(parents=True, exist_ok=True)
+    app.add_middleware(_SecurityHeaders)
 
     def db():
         with factory() as session:
@@ -558,7 +588,12 @@ def create_app(database_url=None, storage=None):
             reviewer = task.reviewer_id
         else:
             if body.task_id:
-                error(422, "论文申报不绑定年度任务")
+                error(
+                    422,
+                    "论文申报不绑定年度任务"
+                    if body.kind == "paper"
+                    else "成果申报不绑定年度任务",
+                )
             reviewer = body.reviewer_id
             teacher = session.get(User, reviewer) if reviewer else None
             if (
@@ -623,7 +658,9 @@ def create_app(database_url=None, storage=None):
         if len(json.dumps(body.form, ensure_ascii=False)) > 100000:
             error(422, "表单内容过大")
         try:
-            file_roles = normalize_file_roles(body.file_ids, body.file_roles)
+            file_roles = normalize_file_roles(
+                body.file_ids, body.file_roles, kind=sub.kind
+            )
         except ValueError as exc:
             error(422, str(exc))
         draft_payload = body.model_dump(exclude={"expected_lock_version"})
@@ -738,39 +775,13 @@ def create_app(database_url=None, storage=None):
         draft = sub.draft
         form = draft.get("form", {})
         task = session.get(Task, sub.task_id) if sub.task_id else None
-        required = (
-            ["title", "contribution", "publication_status"]
-            if sub.kind == "paper"
-            else list(
-                dict.fromkeys(
-                    ["summary"] + task.requirements.get("required_fields", [])
-                )
-            )
-        )
-        if any(
-            not isinstance(form.get(k), str) or not form[k].strip() for k in required
-        ):
-            error(422, "缺少必填信息：" + "、".join(required))
-        if sub.kind == "paper":
-            try:
-                form = canonicalize_paper_form(form)
-            except ValueError as exc:
-                error(422, str(exc))
-            state = form["publication_status"]
-            if state not in ("submitted", "accepted", "published"):
-                error(422, "论文状态无效")
-            key = {
-                "submitted": "submission_date",
-                "accepted": "acceptance_date",
-                "published": "publication_date",
-            }[state]
-            try:
-                datetime.strptime(form.get(key, ""), "%Y-%m-%d")
-            except (ValueError, TypeError):
-                error(422, f"请填写有效的 {key}")
         ids = list(dict.fromkeys(draft.get("file_ids", [])))
-        if not ids:
-            error(422, "至少提供一份证明或报告附件")
+        try:
+            form = validate_submission_form(
+                sub.kind, form, ids, task.requirements if task else None
+            )
+        except (ValueError, TypeError) as exc:
+            error(422, str(exc))
         for fid in ids:
             row = session.get(File, fid)
             if (
@@ -784,8 +795,8 @@ def create_app(database_url=None, storage=None):
         refs = []
         for ref_id in dict.fromkeys(draft.get("reference_ids", [])):
             ref = get_sub(session, user, ref_id, owner=True)
-            if ref.kind != "paper" or not ref.current_version_id:
-                error(422, "只能引用本人已提交的论文")
+            if ref.kind not in ACHIEVEMENT_KINDS or not ref.current_version_id:
+                error(422, "只能引用本人已提交的成果")
             version_id = ref.current_version_id
             if ref.effective_archive_id:
                 version_id = session.get(Archive, ref.effective_archive_id).version_id
@@ -793,6 +804,7 @@ def create_app(database_url=None, storage=None):
             refs.append(
                 {
                     "submission_id": ref.id,
+                    "kind": ref.kind,
                     "version_id": version.id,
                     "recognition": "archived"
                     if ref.effective_archive_id
@@ -800,11 +812,8 @@ def create_app(database_url=None, storage=None):
                     "form": version.snapshot["form"],
                 }
             )
-        task = session.get(Task, sub.task_id) if sub.task_id else None
         requirements = (
-            task.requirements
-            if task
-            else {"version": "paper-1", "review_policy": "manual_all"}
+            task.requirements if task else default_requirements_for_kind(sub.kind)
         )
         from .db import Correction
 
@@ -828,10 +837,12 @@ def create_app(database_url=None, storage=None):
                 "correction_id": correction.id if correction else None,
                 "form": form,
                 "file_ids": ids,
-                "file_roles": normalize_file_roles(ids, draft.get("file_roles")),
+                "file_roles": normalize_file_roles(
+                    ids, draft.get("file_roles"), kind=sub.kind
+                ),
                 "references": refs,
                 "requirements": requirements,
-                "period": task.period if task else None,
+                "period": task.period if task else form.get("period") or None,
                 "late": bool(task and now() > task.deadline),
             },
         )

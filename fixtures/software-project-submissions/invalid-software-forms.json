@@ -1,0 +1,39 @@
+[
+  {
+    "case": "registered_missing_number_and_date",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "software_name": "测试软件",
+      "version": "V1.0",
+      "copyright_holders": ["华东师范大学"],
+      "development_work": "后端开发",
+      "registration_status": "registered"
+    }
+  },
+  {
+    "case": "unregistered_with_registration_number",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "software_name": "测试软件",
+      "version": "V1.0",
+      "copyright_holders": ["华东师范大学"],
+      "development_work": "后端开发",
+      "registration_status": "unregistered",
+      "registration_number": "2026SR0000001"
+    }
+  },
+  {
+    "case": "invalid_version_chars",
+    "expected_status": 422,
+    "form": {
+      "metadata_version": 1,
+      "software_name": "测试软件",
+      "version": "V1.0 <script>",
+      "copyright_holders": ["华东师范大学"],
+      "development_work": "后端开发",
+      "registration_status": "unregistered"
+    }
+  }
+]

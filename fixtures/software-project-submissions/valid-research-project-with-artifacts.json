@@ -1,0 +1,44 @@
+{
+  "expected_lock_version": 0,
+  "form": {
+    "metadata_version": 1,
+    "project_name": "面向研究生培养过程的多智能体证据审核原型研究",
+    "student_role": "lead",
+    "role_description": "子课题研发负责人",
+    "stage_deliverables": "完成软著与科研项目材料提交全流程设计、FastAPI 后端接口实现、React/JS 前端表单与等保三级边界校验。",
+    "completion_date": "2026-11-24",
+    "linked_artifacts": [
+      {
+        "artifact_type": "experiment_report",
+        "name": "第 2 阶段边界校验与回归测试报告",
+        "file_id": "<UPLOADED_REPORT_FILE_ID>",
+        "description": "覆盖正常、边界与越权异常路径"
+      },
+      {
+        "artifact_type": "dataset",
+        "name": "合成验收样本集 v1",
+        "url": "https://example.org/datasets/innograd-synthetic-v1",
+        "description": "不含真实学生敏感信息"
+      },
+      {
+        "artifact_type": "code",
+        "name": "InnoGrad 成果表单实现分支",
+        "url": "https://github.com/NamingIsVeryVeryHard/InnoGrad",
+        "description": "开源代码仓库"
+      },
+      {
+        "artifact_type": "prototype",
+        "name": "工作台演示入口",
+        "url": "https://example.org/innograd/prototype-demo",
+        "description": "可交互演示界面"
+      }
+    ],
+    "period": "2026—2027学年"
+  },
+  "file_ids": [
+    "<UPLOADED_REPORT_FILE_ID>"
+  ],
+  "file_roles": {
+    "<UPLOADED_REPORT_FILE_ID>": "experiment_report"
+  }
+}

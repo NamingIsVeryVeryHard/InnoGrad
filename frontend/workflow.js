@@ -29,6 +29,25 @@ const factLabels = {
   publication_date: "发表日期",
   contribution: "本人贡献",
   summary: "年度总结",
+  software_name: "软件全称",
+  version: "版本号",
+  copyright_holders: "著作权人",
+  development_work: "学生承担的开发工作",
+  registration_status: "登记状态",
+  registration_number: "登记号",
+  registration_date: "登记日期",
+  project_name: "项目或课题名称",
+  student_role: "学生本人角色",
+  role_description: "角色补充说明",
+  stage_deliverables: "本阶段完成的具体事项",
+  completion_date: "完成时间",
+  linked_artifacts: "关联材料",
+};
+const recordKindLabels = {
+  paper: "论文申报",
+  annual: "年度材料",
+  software_copyright: "软件著作权",
+  research_project: "科研项目",
 };
 export function renderPortrait(data) {
   const section = el("section", null, "version");
@@ -63,7 +82,7 @@ export function renderPortrait(data) {
     item.append(
       el(
         "summary",
-        (record.kind === "paper" ? "论文申报" : "年度材料") +
+        (recordKindLabels[record.kind] || "培养材料") +
           " · 版本 " +
           record.version_number +
           " · " +
