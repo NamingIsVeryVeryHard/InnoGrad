@@ -88,3 +88,57 @@ export function safeHttpUrl(raw) {
     return "";
   }
 }
+
+export function achievementTitle(kind, form) {
+  if (kind === "software_copyright") {
+    return form.software_name || form.title || "未命名软件著作权";
+  }
+  if (kind === "research_project") {
+    return form.project_name || form.title || "未命名科研项目";
+  }
+  if (kind === "annual") return form.title || "年度培养报告";
+  return form.title || "未命名论文";
+}
+
+export function achievementPrimaryText(kind, form) {
+  if (kind === "software_copyright") return form.development_work || "";
+  if (kind === "research_project") return form.stage_deliverables || "";
+  if (kind === "paper") return form.contribution || "";
+  return form.summary || "";
+}
+
+export function achievementStatusSummary(kind, form, taskPeriod = "") {
+  if (kind === "software_copyright") {
+    const status =
+      REGISTRATION_STATUS_LABELS[form.registration_status] || "未登记";
+    return form.registration_status === "registered" && form.registration_number
+      ? `${status} · ${form.registration_number}`
+      : status;
+  }
+  if (kind === "research_project") {
+    const roleLabel =
+      STUDENT_ROLE_LABELS[form.student_role] || form.student_role || "—";
+    return form.completion_date
+      ? `${roleLabel} · ${form.completion_date}`
+      : roleLabel;
+  }
+  if (kind === "paper") {
+    return (
+      { submitted: "已投稿", accepted: "已录用", published: "已发表" }[
+        form.publication_status || "submitted"
+      ] || "已投稿"
+    );
+  }
+  return taskPeriod || "—";
+}
+
+export function renderAchievementSummaryBar(items) {
+  const archived = items.filter((r) => r.status === "archived").length;
+  const reviewing = items.filter((r) =>
+    ["pending", "approved"].includes(r.status),
+  ).length;
+  const editing = items.filter((r) =>
+    ["draft", "returned"].includes(r.status),
+  ).length;
+  return `<div class="ach-summary-bar"><div class="ach-kpi is-brand"><span>全部记录</span><strong>${items.length}</strong></div><div class="ach-kpi is-ok"><span>已归档认定</span><strong>${archived}</strong></div><div class="ach-kpi is-warn"><span>审核流转中</span><strong>${reviewing}</strong></div><div class="ach-kpi"><span>草稿与待补正</span><strong>${editing}</strong></div></div>`;
+}

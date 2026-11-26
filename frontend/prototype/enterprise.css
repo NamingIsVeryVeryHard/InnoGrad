@@ -1,0 +1,398 @@
+/* Enterprise UI polish for InnoGrad workbench: typography, modals, forms & detail views. */
+:root {
+  --font-sans:
+    "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system,
+    BlinkMacSystemFont, "HarmonyOS Sans SC", "MiSans", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --ent-bg: #f4f6fa;
+  --ent-surface: #ffffff;
+  --ent-subtle: #f8fafc;
+  --ent-hover: #f1f5f9;
+  --ent-ink: #0f172a;
+  --ent-body: #334155;
+  --ent-muted: #64748b;
+  --ent-placeholder: #94a3b8;
+  --ent-border: #e2e8f0;
+  --ent-border-strong: #cbd5e1;
+  --ent-brand: #a51f35;
+  --ent-brand-hover: #89182b;
+  --ent-brand-soft: #fdf2f4;
+  --ent-brand-ring: rgba(165, 31, 53, 0.14);
+  --shadow-card:
+    0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03);
+  --shadow-modal:
+    0 24px 64px -12px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  font-family: var(--font-sans);
+  color: var(--ent-body);
+  background: var(--ent-bg);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ent-body);
+  background: var(--ent-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1 {
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ent-ink);
+}
+h2 {
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ent-ink);
+}
+h3 {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--ent-ink);
+}
+small,
+.muted {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ent-muted);
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--ent-hover);
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--ent-ink);
+}
+td,
+th,
+time,
+.badge,
+.stat-value,
+.facts dd,
+.ach-kpi strong,
+input[type="date"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Masthead, sidebar & topbar refinement */
+.campus-masthead {
+  background: linear-gradient(90deg, #96192e 0%, #ab223a 55%, #9c1c33 100%);
+  box-shadow: 0 2px 12px rgba(103, 18, 35, 0.18);
+}
+.campus-brand strong {
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+.campus-brand small {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+}
+.campus-account > span:last-child {
+  font-size: 13px;
+  font-weight: 500;
+}
+.campus-account small {
+  font-size: 11px;
+  margin-top: 2px;
+}
+.campus-search {
+  border-radius: 8px;
+  padding: 7px 12px;
+  width: 210px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.campus-search:focus-within {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.sidebar {
+  background: var(--ent-surface);
+  border-right: 1px solid var(--ent-border);
+  box-shadow: 1px 0 6px rgba(15, 23, 42, 0.03);
+}
+.campus-services {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ent-ink);
+  padding: 16px 18px 14px;
+}
+.sidebar .nav {
+  margin: 2px 10px;
+  width: calc(100% - 20px);
+  padding: 10px 12px;
+  min-height: 42px;
+  border-radius: 8px;
+  border-left: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ent-body);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.sidebar .nav:hover {
+  background: var(--ent-hover);
+  color: var(--ent-ink);
+}
+.sidebar .nav.active {
+  background: var(--ent-brand-soft);
+  color: var(--ent-brand);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--ent-brand);
+}
+.nav[data-page="software"] .campus-nav-icon {
+  background: #3b6fd8;
+}
+.nav[data-page="projects"] .campus-nav-icon {
+  background: #179b8a;
+}
+.topbar {
+  height: 46px;
+  border-bottom: 1px solid var(--ent-border);
+}
+.campus-home-tab,
+.campus-current-tab {
+  font-size: 13px;
+}
+.campus-tab-tools {
+  font-size: 12px;
+  color: var(--ent-muted);
+}
+
+/* Page headers, cards, buttons & badges */
+.page-heading {
+  margin-bottom: 20px;
+}
+.page-heading p {
+  font-size: 13.5px;
+  color: var(--ent-muted);
+  margin-top: 6px;
+  line-height: 1.55;
+}
+.card,
+.stat,
+.growth-stat {
+  background: var(--ent-surface);
+  border: 1px solid var(--ent-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+.btn {
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 8px;
+  border: 1px solid var(--ent-border-strong);
+  background: var(--ent-surface);
+  color: var(--ent-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.06s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--ent-subtle);
+  border-color: #94a3b8;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.btn.primary {
+  background: linear-gradient(180deg, #b5243d 0%, #991b31 100%);
+  border-color: #8f182d;
+  color: #fff;
+  box-shadow:
+    0 1px 2px rgba(137, 24, 43, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #a51f35 0%, #841528 100%);
+  border-color: #7c1325;
+}
+.btn.sm {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12.5px;
+  border-radius: 7px;
+}
+.linkbtn {
+  color: var(--ent-brand);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.linkbtn:hover {
+  background: var(--ent-brand-soft);
+  color: var(--ent-brand-hover);
+  text-decoration: none;
+}
+.linkbtn.danger-link {
+  color: #dc2626;
+}
+.linkbtn.danger-link:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+.badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.badge.amber {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+.badge.red {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.badge.blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.badge.gray {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+/* Tables & toolbars */
+.toolbar {
+  padding: 14px 20px;
+  background: var(--ent-subtle);
+  border-bottom: 1px solid var(--ent-border);
+}
+table {
+  font-size: 13.5px;
+}
+th {
+  background: var(--ent-subtle);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ent-border);
+}
+td {
+  padding: 13px 14px;
+  color: var(--ent-body);
+  border-bottom: 1px solid #f1f5f9;
+}
+.table-wrap th:last-child,
+.table-wrap td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--ent-surface);
+  box-shadow: -6px 0 10px -8px rgba(15, 23, 42, 0.14);
+}
+.table-wrap th:last-child {
+  background: var(--ent-subtle);
+}
+tbody tr:hover,
+tbody tr:hover td:last-child {
+  background: #f8fafc;
+}
+.cell-title {
+  color: var(--ent-ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: normal;
+  display: inline-block;
+  max-width: 260px;
+}
+.table-footer {
+  font-size: 12px;
+  color: var(--ent-muted);
+  padding: 12px 20px;
+  background: var(--ent-subtle);
+}
+
+/* Form controls */
+.field,
+input,
+select,
+textarea {
+  border: 1px solid var(--ent-border-strong);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-height: 38px;
+  font-size: 14px;
+  color: var(--ent-ink);
+  background: var(--ent-surface);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--ent-placeholder);
+}
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) {
+  border-color: #94a3b8;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ent-brand);
+  box-shadow: 0 0 0 3px var(--ent-brand-ring);
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--ent-hover);
+  color: var(--ent-muted);
+  cursor: not-allowed;
+}
+textarea {
+  min-height: 92px;
+  line-height: 1.65;
+}
+.form-grid {
+  gap: 16px 18px;
+}
+.form-grid label {
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ent-ink);
+}

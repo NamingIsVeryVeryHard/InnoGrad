@@ -13,6 +13,7 @@ import {
   extractSoftwareCopyrightForm,
   fileRoleLabelsForKind,
   renderAchievementDetail,
+  renderAchievementSummaryBar,
   renderResearchProjectFields,
   renderSoftwareCopyrightFields,
   renderVersionStructuredFields,
@@ -371,8 +372,8 @@ function listing(kind) {
     action: null,
     match: (r) => (role === "teacher" ? r.raw.reviewer_id === me.id : true),
   };
-  let rr = records().filter(meta.match);
-  rr = rr.filter(
+  const allKind = records().filter(meta.match);
+  let rr = allKind.filter(
     (r) =>
       (filter === "all" || r.status === filter) &&
       (!query ||
@@ -380,6 +381,9 @@ function listing(kind) {
           .toLowerCase()
           .includes(query.toLowerCase())),
   );
+  const summaryHtml = ["software", "projects", "papers"].includes(kind)
+    ? renderAchievementSummaryBar(allKind)
+    : "";
   return (
     heading(
       meta.title,
@@ -389,6 +393,7 @@ function listing(kind) {
           ? btn(meta.action[0], meta.action[1], true, "plus")
           : ""),
     ) +
+    summaryHtml +
     `<section class="card"><div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
       statusLabels,
     )
@@ -524,7 +529,8 @@ function modal(title, body, foot = "") {
 function formModal(title, fields, save, submit = "保存") {
   modal(
     title,
-    `<form id="modal-form"><div class="form-grid">${fields}</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:25px"><button type="button" class="btn" data-close>取消</button><button class="btn primary">${submit}</button></div></form>`,
+    `<form id="modal-form"><div class="form-grid">${fields}</div></form>`,
+    `<button type="button" class="btn" data-close>取消</button><button type="submit" form="modal-form" class="btn primary">${submit}</button>`,
   );
   $("#modal-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -1124,14 +1130,20 @@ async function editRecord(record) {
                   .join("") || "<small>暂无可引用成果</small>"
               }</div></div>`
         }`;
-  const uploadHint = isProject
-    ? "证明或关联附件（选填，不作为必填项；PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）"
+  const uploadTitle = isProject
+    ? "证明或关联附件（选填）"
     : isSoftware
-      ? "证明材料（已登记时需上传软著登记证书或证明附件；PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）"
-      : "证明材料（PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）";
+      ? "证明材料（已登记必传）"
+      : "证明材料";
+  const uploadHint = isProject
+    ? "不作为必填项；支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB"
+    : isSoftware
+      ? "已登记时须上传软著登记证书或证明附件；支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB"
+      : "支持 PDF / DOCX / JPG / PNG，单份不超过 50 MB";
   modal(
     "编辑" + (KIND_LABELS[raw.kind] || "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<label class="full">${uploadHint}<input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label><div class="full" id="attached"></div></div><div class="actions" style="justify-content:flex-end;margin-top:22px"><button type="button" class="btn" data-close>取消</button><button class="btn" value="draft">保存草稿</button><button class="btn primary" value="submit">确认并提交</button></div></form>`,
+    `<form id="edit-form"><div class="form-grid">${formFieldsHtml}<div class="ach-section-head"><div><div class="ach-section-title">${uploadTitle}</div><div class="ach-section-sub">${uploadHint}</div></div></div><div class="full"><label class="upload-dropzone">${icon("download", 20)}<strong>点击选择或拖入上传文件</strong><small>支持多选 · PDF / DOCX / JPG / PNG · 单份 ≤ 50 MB</small><input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label></div><div class="full" id="attached"></div></div></form>`,
+    `<button type="button" class="btn" data-close>取消</button><button type="submit" form="edit-form" class="btn" value="draft">保存草稿</button><button type="submit" form="edit-form" class="btn primary" value="submit">确认并提交</button>`,
   );
   const editFormEl = $("#edit-form");
   if (isSoftware) bindSoftwareCopyrightForm(editFormEl);
@@ -1140,7 +1152,7 @@ async function editRecord(record) {
     $("#attached").innerHTML = files
       .map(
         (f) =>
-          `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(
+          `<div class="file"><span>${icon("paper", 15)} <strong>${esc(f.name)}</strong>${f.size ? ` <small>· ${Math.ceil(f.size / 1024)} KB</small>` : ""}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(
             roleLabels,
           )
             .map(
@@ -1149,7 +1161,7 @@ async function editRecord(record) {
             )
             .join(
               "",
-            )}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
+            )}</select></label><button type="button" class="linkbtn danger-link" data-remove="${f.id}">移除</button></div>`,
       )
       .join("");
     $("#attached")
@@ -1173,7 +1185,7 @@ async function editRecord(record) {
   renderFiles();
   $("#attachments").onchange = async (e) => {
     uploading = true;
-    const buttons = $("#edit-form").querySelectorAll("button");
+    const buttons = $("#dialog").querySelectorAll("button");
     buttons.forEach((b) => (b.disabled = true));
     try {
       for (const f of e.target.files) {
