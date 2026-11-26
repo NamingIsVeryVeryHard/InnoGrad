@@ -1,23 +1,15 @@
-/* Self-hosted SIL OFL variable fonts matching Proofmark's typographic system. */
+/* Self-hosted SIL OFL variable fonts matching DesignPrompts Software (SaaS) theme. */
 @font-face {
-  font-family: "Sora";
+  font-family: "Host Grotesk";
   font-style: normal;
-  font-weight: 100 800;
+  font-weight: 300 800;
   font-display: swap;
-  src: url("./sora-latin.woff2") format("woff2");
+  src: url("./host-grotesk-latin.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Schibsted Grotesk";
+  font-family: "Instrument Sans";
   font-style: normal;
-  font-weight: 400 900;
+  font-weight: 400 700;
   font-display: swap;
-  src: url("./schibsted-grotesk-latin.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Martian Mono";
-  font-style: normal;
-  font-weight: 100 800;
-  font-stretch: 75% 112.5%;
-  font-display: swap;
-  src: url("./martian-mono-latin.woff2") format("woff2");
+  src: url("./instrument-sans-latin.woff2") format("woff2");
 }
