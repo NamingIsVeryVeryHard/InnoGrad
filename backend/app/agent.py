@@ -175,6 +175,10 @@ def invoke_model(config, payload):
         "论文按 publication_status 核对相应阶段日期。发表日期检查统一使用 "
         "publication_date_recorded。submitted 或 accepted 且未申报发表日期时，"
         "该项为 not_applicable；若材料与申报阶段矛盾，单独报告状态一致性问题。"
+        "竞赛与获奖核对竞赛名称、主办方、奖项、获奖日期、团队成员及本人角色与原件是否一致；"
+        "不访问外部公示链接，若仅提供链接而无附件证据则输出 unable_to_determine。"
+        "学术交流按 participation_mode（attend/talk/poster/practice_task）核对会议或实践项目名称、"
+        "日期、报告或海报题目或具体实践任务与证明原件是否一致。"
         "对适用的检查，无证据时输出 unable_to_determine，不编造来源。"
     )
     key = os.getenv("AI_API_KEY", "")
@@ -256,6 +260,42 @@ def review_batches(blocks, limit=60000):
     yield batch
 
 
+def _missing_form_fields(form, requirements, has_files):
+    required = requirements.get("required_fields") or (
+        ["title", "contribution", "publication_status"]
+        if "title" in form
+        else ["summary"]
+    )
+    missing = [
+        key
+        for key in required
+        if not isinstance(form.get(key), str) or not form[key].strip()
+    ]
+    version = requirements.get("version")
+    if version == "competition-1":
+        members = form.get("team_members")
+        if not isinstance(members, list) or not members:
+            missing.append("team_members")
+        if not has_files and not (
+            isinstance(form.get("publicity_url"), str)
+            and form["publicity_url"].strip()
+        ):
+            missing.append("proof_attachment_or_publicity_url")
+    elif version == "exchange-1":
+        mode = form.get("participation_mode")
+        if mode in ("talk", "poster") and (
+            not isinstance(form.get("presentation_title"), str)
+            or not form["presentation_title"].strip()
+        ):
+            missing.append("presentation_title")
+        if mode == "practice_task" and (
+            not isinstance(form.get("practice_task_description"), str)
+            or not form["practice_task_description"].strip()
+        ):
+            missing.append("practice_task_description")
+    return missing
+
+
 def analyze(pack, config, root):
     blocks, limitations = [], []
     for meta in pack["files"]:
@@ -266,6 +306,8 @@ def analyze(pack, config, root):
         except Exception:
             limitations.append(f"{meta['name']}: 解析失败，需人工核对")
     form = pack["snapshot"]["form"]
+    if not pack["files"]:
+        limitations.append("未上传原件附件，仅提供外部公示链接，需人工核验")
     checks = [
         Check(
             rule_id="ATTACHMENT_READABILITY",
@@ -309,16 +351,9 @@ def analyze(pack, config, root):
                 suggestion="由复核教师对照原件核验事实",
             ).model_dump()
         )
-    required = pack["snapshot"]["requirements"].get("required_fields") or (
-        ["title", "contribution", "publication_status"]
-        if "title" in form
-        else ["summary"]
+    missing = _missing_form_fields(
+        form, pack["snapshot"]["requirements"], bool(pack["files"])
     )
-    missing = [
-        key
-        for key in required
-        if not isinstance(form.get(key), str) or not form[key].strip()
-    ]
     checks.append(
         Check(
             rule_id="FORM_COMPLETENESS",

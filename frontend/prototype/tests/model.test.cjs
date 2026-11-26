@@ -1,10 +1,21 @@
-const { test } = require("node:test");
+const { before, test } = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 const fs = require("node:fs");
 const { webcrypto } = require("node:crypto");
-const { renderGrowth, renderWarnings } = require("../growth-ui.js");
-const { mountConversation } = require("../teacher-agent.js");
+
+let renderGrowth;
+let renderWarnings;
+let fieldLabels;
+let formatValue;
+
+before(async () => {
+  ({ renderGrowth, renderWarnings } = await import("../growth-ui.js"));
+  ({ fieldLabels, formatValue } = await import(
+    "../../teacher-chat/field-labels.js"
+  ));
+});
+
 const filename = require.resolve("../app.js");
 const src = fs.readFileSync(filename, "utf8");
 const model = new vm.Script(
@@ -17,7 +28,8 @@ function setup(fetch = async () => ({ ok: true, json: async () => [] })) {
   const context = vm.createContext({
     renderGrowth,
     renderWarnings,
-    mountConversation,
+    fieldLabels,
+    formatValue,
     AbortController,
     crypto: webcrypto,
     structuredClone,
@@ -162,6 +174,8 @@ test("all workspace renderers support empty real data and logged-in identities",
       "tasks",
       "reviews",
       "papers",
+      "competitions",
+      "exchanges",
       "archives",
       "portraits",
       "alerts",
@@ -250,4 +264,333 @@ test("warning view separates cleared history from active support items", () => {
   assert.ok(!run("alertsView()").includes("真实事项"));
   run("filter='closed'");
   assert.ok(run("alertsView()").includes("条件已消除"));
+});
+test("competition and exchange submissions normalize, filter, format versions, and render safely", () => {
+  const run = setup();
+  run("me={id:'t1',name:'Teacher',role:'teacher'};role='teacher';people=[{id:'t1',name:'Teacher'}]");
+  const compSub = {
+    id: "c1",
+    student_id: "s1",
+    reviewer_id: "t1",
+    kind: "competition",
+    task_id: null,
+    status: "archived",
+    lock_version: 2,
+    current_version_id: "cv1",
+    effective_archive_id: "ca1",
+    effective_archive: {
+      id: "ca1",
+      number: 1,
+      snapshot: { form: { competition_name: "全国数模<script>" } },
+      created_at: "2026-11-10T00:00:00Z",
+    },
+    versions: [
+      {
+        id: "cv1",
+        number: 1,
+        created_at: "2026-11-10T00:00:00Z",
+        snapshot: {
+          form: {
+            competition_name: "全国数模<script>",
+            organizer: "学会",
+            award_level: "一等奖",
+            award_date: "2026-10-15",
+            team_members: [
+              { name: "张三", order: 1 },
+              { name: "李四", order: 2 },
+            ],
+            my_role: "队长",
+            publicity_url: "https://example.org/awards",
+          },
+          file_ids: [],
+          references: [],
+        },
+      },
+    ],
+    files: [],
+    decisions: [],
+    reviewer_changes: [],
+    corrections: [],
+    created_at: "2026-11-10T00:00:00Z",
+  };
+  const exchSub = {
+    id: "e1",
+    student_id: "s1",
+    reviewer_id: "t1",
+    kind: "exchange",
+    task_id: null,
+    status: "pending_review",
+    lock_version: 1,
+    current_version_id: "ev1",
+    versions: [
+      {
+        id: "ev1",
+        number: 1,
+        created_at: "2026-11-11T00:00:00Z",
+        snapshot: {
+          form: {
+            activity_name: "智能教育论坛",
+            activity_date: "2026-11-05",
+            participation_mode: "practice_task",
+            practice_task_description: "承担数据集清洗与评测",
+          },
+          file_ids: ["ef1"],
+          references: [],
+        },
+      },
+    ],
+    files: [{ id: "ef1", name: "task.pdf", size: 1024, role: "practice_task_proof" }],
+    decisions: [],
+    reviewer_changes: [],
+    corrections: [],
+    created_at: "2026-11-11T00:00:00Z",
+  };
+  const compNorm = run(`normalize(${JSON.stringify(compSub)})`);
+  const exchNorm = run(`normalize(${JSON.stringify(exchSub)})`);
+  assert.equal(compNorm.title, "全国数模<script>");
+  assert.equal(compNorm.awardLevel, "一等奖");
+  assert.equal(exchNorm.participationMode, "practice_task");
+
+  const compHtml = run(`versionFields('competition', ${JSON.stringify(compSub.versions[0].snapshot.form)})`);
+  assert.ok(compHtml.includes("竞赛名称"));
+  assert.ok(compHtml.includes("1. 张三、2. 李四"));
+  assert.ok(!compHtml.includes("<script>"));
+
+  const exchHtml = run(`versionFields('exchange', ${JSON.stringify(exchSub.versions[0].snapshot.form)})`);
+  assert.ok(exchHtml.includes("承担具体实践任务"));
+  assert.ok(exchHtml.includes("承担数据集清洗与评测"));
+
+  run(`state.students=[{id:'s1',name:'Student',year:'2026',major:'研究',number:'001',teacher:'T'}];state.records=[normalize(${JSON.stringify(compSub)}), normalize(${JSON.stringify(exchSub)})]`);
+  assert.ok(run("listing('competitions')").includes("竞赛与获奖"));
+  assert.ok(run("listing('competitions')").includes("一等奖"));
+  assert.ok(!run("listing('competitions')").includes("智能教育论坛"));
+  assert.ok(run("listing('exchanges')").includes("学术交流"));
+  assert.ok(run("listing('exchanges')").includes("承担具体实践任务"));
+  assert.ok(!run("listing('exchanges')").includes("全国数模"));
+
+  const growthData = {
+    periods: ["2026"],
+    warnings: [],
+    entries: [],
+    counts: {
+      materials: 2,
+      archives: 2,
+      papers: 0,
+      annual: 0,
+      competitions: 1,
+      exchanges: 1,
+      pending: 0,
+      returned: 0,
+    },
+    coverage: 2,
+    dimensions: ["goals", "training", "contribution", "education", "exchange", "practice"].map(
+      (key) => ({ key, label: key, count: 1, evidence: [], score: null }),
+    ),
+    sources: [
+      {
+        submission_id: "c1",
+        title: "全国数模",
+        kind: "competition",
+        number: 1,
+        archived_at: "2026-11-10T00:00:00Z",
+        form: { award_level: "一等奖", my_role: "队长" },
+        files: [],
+      },
+      {
+        submission_id: "e1",
+        title: "智能教育论坛",
+        kind: "exchange",
+        number: 1,
+        archived_at: "2026-11-10T00:00:00Z",
+        form: { practice_task_description: "承担数据集清洗与评测" },
+        files: [],
+      },
+    ],
+    trend: [{ month: "2026-11", paper: 0, annual: 0, competition: 1, exchange: 1 }],
+    notice: "材料观察",
+  };
+  run(`selectedStudent='s1';growthCache['s1|']=${JSON.stringify(growthData)}`);
+  const portraitHtml = run("portraits()");
+  assert.ok(portraitHtml.includes("1 项竞赛获奖"));
+  assert.ok(portraitHtml.includes("1 项学术交流"));
+  assert.ok(portraitHtml.includes("2026-11归档2份"));
+});
+test("subFilter, summary strips, detail views, and duplicate detection work for competition & exchange", () => {
+  const run = setup();
+  run("me={id:'t1',name:'Teacher',role:'teacher'};role='teacher';people=[{id:'t1',name:'Teacher'}]");
+  const compCertAndLink = {
+    id: "c1",
+    student_id: "s1",
+    reviewer_id: "t1",
+    kind: "competition",
+    status: "archived",
+    lock_version: 1,
+    current_version_id: "cv1",
+    effective_archive_id: "ca1",
+    effective_archive: {
+      id: "ca1",
+      number: 1,
+      snapshot: { form: { competition_name: "数模竞赛" } },
+      created_at: "2026-11-10T00:00:00Z",
+    },
+    versions: [
+      {
+        id: "cv1",
+        number: 1,
+        created_at: "2026-11-10T00:00:00Z",
+        snapshot: {
+          form: {
+            competition_name: "数模竞赛",
+            organizer: "学会",
+            award_level: "国家级一等奖",
+            award_date: "2026-10-15",
+            team_members: [
+              { name: "张三", order: 1, is_self: true },
+              { name: "李四", order: 2 },
+            ],
+            team_size: 2,
+            my_role: "队长",
+            proof_mode: "certificate_and_link",
+            publicity_url: "https://example.org/award",
+            competition_key: "dup-comp-key",
+          },
+          file_ids: ["cf1"],
+          references: [],
+        },
+      },
+    ],
+    files: [{ id: "cf1", name: "cert.pdf", size: 100, role: "award_certificate" }],
+    decisions: [],
+    reviewer_changes: [],
+    corrections: [],
+    created_at: "2026-11-10T00:00:00Z",
+  };
+  const compLinkOnlyDup = {
+    ...structuredClone(compCertAndLink),
+    id: "c2",
+    status: "pending_review",
+    effective_archive_id: null,
+    effective_archive: null,
+    files: [],
+    versions: [
+      {
+        id: "cv2",
+        number: 1,
+        created_at: "2026-11-12T00:00:00Z",
+        snapshot: {
+          form: {
+            competition_name: "数模竞赛（重复）",
+            organizer: "学会",
+            award_level: "国家级一等奖",
+            award_date: "2026-10-15",
+            team_members: [{ name: "张三", order: 1 }],
+            my_role: "队长",
+            proof_mode: "link_only",
+            publicity_url: "javascript:alert(1)",
+            competition_key: "dup-comp-key",
+          },
+          file_ids: [],
+          references: [],
+        },
+      },
+    ],
+  };
+  const compOtherStudent = {
+    ...structuredClone(compCertAndLink),
+    id: "c3",
+    student_id: "s2",
+  };
+  const exchTalk = {
+    id: "e1",
+    student_id: "s1",
+    reviewer_id: "t1",
+    kind: "exchange",
+    status: "archived",
+    lock_version: 1,
+    current_version_id: "ev1",
+    versions: [
+      {
+        id: "ev1",
+        number: 1,
+        created_at: "2026-11-05T00:00:00Z",
+        snapshot: {
+          form: {
+            activity_name: "教育AI论坛",
+            activity_date: "2026-11-01",
+            end_date: "2026-11-03",
+            participation_mode: "talk",
+            presentation_title: "可追溯画像方法",
+            reference_url: "https://example.org/talk",
+            exchange_key: "k-talk",
+          },
+          file_ids: ["ef1"],
+          references: [],
+        },
+      },
+    ],
+    files: [{ id: "ef1", name: "talk.pdf", size: 100, role: "presentation_proof" }],
+    decisions: [],
+    reviewer_changes: [],
+    corrections: [],
+    created_at: "2026-11-05T00:00:00Z",
+  };
+  const exchPractice = {
+    ...structuredClone(exchTalk),
+    id: "e2",
+    versions: [
+      {
+        id: "ev2",
+        number: 1,
+        created_at: "2026-11-06T00:00:00Z",
+        snapshot: {
+          form: {
+            activity_name: "智慧课堂试点",
+            activity_date: "2026-11-04",
+            participation_mode: "practice_task",
+            practice_task_description: "负责数据清洗与模型验证",
+            exchange_key: "k-practice",
+          },
+          file_ids: ["ef2"],
+          references: [],
+        },
+      },
+    ],
+  };
+
+  run(
+    `state.students=[{id:'s1',name:'甲同学',number:'001'},{id:'s2',name:'乙同学',number:'002'}];` +
+      `state.records=[${JSON.stringify(compCertAndLink)},${JSON.stringify(compLinkOnlyDup)},${JSON.stringify(compOtherStudent)},${JSON.stringify(exchTalk)},${JSON.stringify(exchPractice)}].map(normalize);`,
+  );
+
+  run("subFilter='link_only';filter='all'");
+  const linkOnlyHtml = run("listing('competitions')");
+  assert.ok(linkOnlyHtml.includes("竞赛总数"));
+  assert.ok(linkOnlyHtml.includes("数模竞赛（重复）"));
+  assert.ok(!linkOnlyHtml.includes("<td><div class=\"cell-title\" style=\"max-width:280px;overflow:hidden;text-overflow:ellipsis\">数模竞赛</div>"));
+
+  run("subFilter='talk'");
+  const talkHtml = run("listing('exchanges')");
+  assert.ok(talkHtml.includes("教育AI论坛"));
+  assert.ok(!talkHtml.includes("智慧课堂试点"));
+
+  const compDetail = run("recordDetailBody(state.records[0])");
+  assert.ok(compDetail.includes("member-chips"));
+  assert.ok(compDetail.includes("团队赛 · 2 人"));
+  assert.ok(compDetail.includes("证书+公示链接"));
+  assert.ok(compDetail.includes('href="https://example.org/award"'));
+
+  const unsafeDetail = run("recordDetailBody(state.records[1])");
+  assert.ok(!unsafeDetail.includes('href="javascript:'));
+
+  const talkDetail = run("recordDetailBody(state.records[3])");
+  assert.ok(talkDetail.includes("画像归入：学术交流"));
+  assert.ok(talkDetail.includes("报告题目"));
+  assert.ok(talkDetail.includes("2026-11-01 至 2026-11-03"));
+
+  const practiceDetail = run("recordDetailBody(state.records[4])");
+  assert.ok(practiceDetail.includes("画像归入：实践落地"));
+  assert.ok(practiceDetail.includes("负责数据清洗与模型验证"));
+
+  const dupIds = run("findDuplicateRecords(state.records[0]).map((r) => r.id)");
+  assert.deepEqual(Array.from(dupIds), ["c2"]);
 });

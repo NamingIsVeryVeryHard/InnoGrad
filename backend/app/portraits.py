@@ -26,6 +26,29 @@ FIELDS = {
         "contribution",
     ),
     "annual": ("summary", "plan"),
+    "competition": (
+        "competition_name",
+        "organizer",
+        "award_level",
+        "award_date",
+        "team_members",
+        "team_size",
+        "my_role",
+        "proof_mode",
+        "publicity_url",
+        "description",
+    ),
+    "exchange": (
+        "activity_name",
+        "activity_date",
+        "end_date",
+        "participation_mode",
+        "location_or_organizer",
+        "presentation_title",
+        "practice_task_description",
+        "participation_summary",
+        "reference_url",
+    ),
 }
 
 
@@ -206,6 +229,10 @@ def register(app, db, authenticated):
                 "counts": {
                     "paper_records": sum(r["kind"] == "paper" for r in records),
                     "annual_records": sum(r["kind"] == "annual" for r in records),
+                    "competition_records": sum(
+                        r["kind"] == "competition" for r in records
+                    ),
+                    "exchange_records": sum(r["kind"] == "exchange" for r in records),
                 },
                 "ability_assessment": "待评价",
                 "inferences": [],

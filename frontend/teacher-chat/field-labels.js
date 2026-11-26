@@ -7,7 +7,30 @@ const fieldLabels = {
   status_date: "状态日期",
   journal: "期刊 / 会议",
   doi: "DOI",
+  article_url: "文章链接",
+  authors: "作者列表",
+  author_order: "本人作者顺序",
+  author_identity: "本人身份",
   contribution: "本人贡献",
+  competition_name: "竞赛名称",
+  organizer: "主办方",
+  award_level: "奖项",
+  award_date: "获奖日期",
+  team_members: "团队成员",
+  team_size: "团队人数",
+  my_role: "本人角色",
+  proof_mode: "证明方式",
+  publicity_url: "公示链接",
+  description: "补充说明",
+  activity_name: "会议或实践项目名称",
+  activity_date: "活动日期",
+  end_date: "结束日期",
+  participation_mode: "参与方式",
+  location_or_organizer: "主办单位 / 地点",
+  presentation_title: "报告 / 海报题目",
+  practice_task_description: "承担的具体实践任务",
+  participation_summary: "参与说明",
+  reference_url: "活动链接",
   review_status: "审核状态",
   review_actor_type: "审核方式",
   degree: "培养层次",
@@ -50,7 +73,20 @@ const enumLabels = {
   portrait: "学生画像",
   paper: "论文成果",
   annual: "年度报告",
+  competition: "竞赛与获奖",
+  exchange: "学术交流",
   scholarship: "奖学金",
+  attend: "参会",
+  talk: "作报告",
+  poster: "展示海报",
+  practice_task: "承担具体实践任务",
+  certificate_and_link: "证书附件 + 公示链接",
+  certificate_only: "仅证书附件",
+  link_only: "仅公示链接",
+  first_author: "第一作者",
+  co_first_author: "共同第一作者",
+  corresponding_author: "通讯作者",
+  other_author: "其他作者",
   human: "人工审核",
   agent: "智能审核",
   simulation: "模拟审核",
@@ -92,7 +128,19 @@ export function formatValue(value) {
     if (/^\d{4}-\d{2}-\d{2}/.test(value)) return formatDate(value);
     return Object.hasOwn(enumLabels, value) ? enumLabels[value] : value;
   }
-  if (Array.isArray(value)) return value.map(formatValue).join("、");
+  if (Array.isArray(value)) {
+    if (!value.length) return "—";
+    return value
+      .map((item) => {
+        if (item && typeof item === "object" && "name" in item) {
+          const prefix = item.order ? `${item.order}. ` : "";
+          const selfTag = item.is_self ? "（本人）" : "";
+          return `${prefix}${item.name}${selfTag}`;
+        }
+        return formatValue(item);
+      })
+      .join("、");
+  }
   return String(value);
 }
 

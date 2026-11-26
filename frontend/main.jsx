@@ -82,8 +82,14 @@ function DevelopmentConsole() {
             <aside>
               <section className="card">
                 <h2>材料记录</h2>
-                <div id="newPaper" hidden>
+                <div id="newPaper" hidden className="actions">
                   <button id="createPaper">新建论文申报</button>
+                  <button id="createCompetition" className="secondary">
+                    新建竞赛获奖
+                  </button>
+                  <button id="createExchange" className="secondary">
+                    新建学术交流
+                  </button>
                 </div>
                 <div id="records"></div>
               </section>

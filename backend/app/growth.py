@@ -257,6 +257,44 @@ def serialize_entry(session, row):
     )
 
 
+_DEFAULT_SOURCE_TITLES = {
+    "paper": "论文成果",
+    "annual": "年度培养报告",
+    "competition": "竞赛与获奖",
+    "exchange": "学术交流",
+}
+
+
+def _dimension_field(key, source):
+    form = source["form"]
+    kind = source["kind"]
+    if key == "goals":
+        if form.get("plan"):
+            return "plan"
+        return "summary" if kind == "annual" else None
+    if key == "training":
+        if kind == "paper":
+            return "publication_status"
+        return "award_level" if kind == "competition" else None
+    if key == "contribution":
+        if kind == "paper":
+            return "contribution"
+        return "my_role" if kind == "competition" else None
+    if key == "exchange" and kind == "exchange":
+        if form.get("participation_mode") in ("attend", "talk", "poster"):
+            return (
+                "presentation_title"
+                if form.get("presentation_title")
+                else "activity_name"
+            )
+        return None
+    if key == "practice" and kind == "exchange":
+        if form.get("participation_mode") == "practice_task":
+            return "practice_task_description"
+        return None
+    return None
+
+
 def dashboard_data(session, user, student_id, period=None):
     entries = [
         serialize_entry(session, e)
@@ -296,7 +334,8 @@ def dashboard_data(session, user, student_id, period=None):
                 version_id=version.id,
                 number=version.number,
                 kind=sub.kind,
-                title=version.snapshot["form"].get("title") or "年度培养报告",
+                title=version.snapshot["form"].get("title")
+                or _DEFAULT_SOURCE_TITLES.get(sub.kind, "材料记录"),
                 form=version.snapshot["form"],
                 period=version.snapshot.get("period"),
                 archived_at=archive.created_at,
@@ -309,17 +348,7 @@ def dashboard_data(session, user, student_id, period=None):
         evidence = []
         for source in sources:
             form = source["form"]
-            field = (
-                "plan"
-                if key == "goals" and form.get("plan")
-                else "summary"
-                if key == "goals" and source["kind"] == "annual"
-                else "publication_status"
-                if key == "training" and source["kind"] == "paper"
-                else "contribution"
-                if key == "contribution" and source["kind"] == "paper"
-                else None
-            )
+            field = _dimension_field(key, source)
             if field and form.get(field):
                 evidence.append(
                     dict(
@@ -368,9 +397,10 @@ def dashboard_data(session, user, student_id, period=None):
             .astimezone(ZoneInfo("Asia/Shanghai"))
             .strftime("%Y-%m")
         )
-        months.setdefault(month, {"month": month, "paper": 0, "annual": 0})[
-            source["kind"]
-        ] += 1
+        months.setdefault(
+            month,
+            {"month": month, "paper": 0, "annual": 0, "competition": 0, "exchange": 0},
+        )[source["kind"]] += 1
     visible_subs = session.scalars(
         select(Submission).where(Submission.student_id == student_id)
     ).all()
@@ -382,7 +412,7 @@ def dashboard_data(session, user, student_id, period=None):
         def in_period(sub):
             if sub.task_id in task_ids:
                 return True
-            if sub.kind != "paper":
+            if sub.kind == "annual":
                 return False
             archive = (
                 session.get(Archive, sub.effective_archive_id)
@@ -421,6 +451,8 @@ def dashboard_data(session, user, student_id, period=None):
             archives=len(sources),
             papers=sum(s["kind"] == "paper" for s in sources),
             annual=sum(s["kind"] == "annual" for s in sources),
+            competitions=sum(s["kind"] == "competition" for s in sources),
+            exchanges=sum(s["kind"] == "exchange" for s in sources),
             pending=sum(s.status == "pending_review" for s in visible_subs),
             returned=sum(s.status == "returned" for s in visible_subs),
             tasks=len(assignments),

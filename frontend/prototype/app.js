@@ -14,7 +14,14 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 const authorNames = (authors) =>
-  Array.isArray(authors) ? authors.sort((a, b) => a.order - b.order).map((a) => a.name).join("\n") : String(authors || "");
+  Array.isArray(authors) ? [...authors].sort((a, b) => a.order - b.order).map((a) => a.name).join("\n") : String(authors || "");
+const memberNames = (members) =>
+  Array.isArray(members)
+    ? [...members]
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((m) => (typeof m === "string" ? m : m.name))
+        .join("\n")
+    : String(members || "");
 const icons = {
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   users:
@@ -40,10 +47,24 @@ const icons = {
   menu: "M3 6h18 M3 12h18 M3 18h18",
   history: "M3 11a9 9 0 1 1 2 7 M3 3v8h8 M12 7v6l4 2",
   spark: "M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z",
+  trophy:
+    "M6 9H4.5a2.5 2.5 0 0 1 0-5H6 M18 9h1.5a2.5 2.5 0 0 0 0-5H18 M4 22h16 M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22 M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22 M18 2H6v7a6 6 0 0 0 12 0V2z",
+  globe:
+    "M12 2a10 10 0 1 0 0 20a10 10 0 0 0 0-20 M2 12h20 M12 2a15.3 15.3 0 0 1 4 10a15.3 15.3 0 0 1-4 10a15.3 15.3 0 0 1-4-10a15.3 15.3 0 0 1 4-10z",
 };
 const icon = (n, size = 18) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[n] || icons.paper}"/></svg>`;
-const id = () => crypto.randomUUID(),
+const randomId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const b = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (v) => v.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
+const id = () => randomId(),
   stamp = () =>
     new Date().toLocaleString("zh-CN", {
       timeZone: "Asia/Shanghai",
@@ -79,6 +100,111 @@ const paperFileRoleLabels = {
   contribution_proof: "本人贡献证明",
   other_proof: "其他证明材料",
 };
+const competitionFileRoleLabels = {
+  award_certificate: "获奖证书",
+  publicity_proof: "公示页面或获奖名单证明",
+  team_role_proof: "团队成员与本人角色证明",
+  other_proof: "其他证明材料",
+};
+const exchangeFileRoleLabels = {
+  attendance_proof: "参会证明 / 邀请函",
+  presentation_proof: "作报告证明 / 议程 / PPT",
+  poster_proof: "海报展示证明 / 海报原件",
+  practice_task_proof: "实践任务证明 / 结项或考核材料",
+  other_proof: "其他证明材料",
+};
+const fileRoleLabelsByKind = {
+  paper: paperFileRoleLabels,
+  annual: paperFileRoleLabels,
+  competition: competitionFileRoleLabels,
+  exchange: exchangeFileRoleLabels,
+};
+const allFileRoleLabels = {
+  ...paperFileRoleLabels,
+  ...competitionFileRoleLabels,
+  ...exchangeFileRoleLabels,
+};
+const exchangeModeLabels = {
+  attend: "参会",
+  talk: "作报告",
+  poster: "展示海报",
+  practice_task: "承担具体实践任务",
+};
+const exchangeModeMeta = [
+  {
+    value: "attend",
+    label: "参会",
+    summary: "参加学术会议、论坛或专题研讨",
+    proofHint: "请上传参会证明、注册确认函或会议日程",
+    portraitTarget: "学术交流",
+  },
+  {
+    value: "talk",
+    label: "作报告",
+    summary: "在会议或学术活动中做口头报告",
+    proofHint: "请填写报告题目，并上传议程、邀请函或报告 PPT",
+    portraitTarget: "学术交流",
+  },
+  {
+    value: "poster",
+    label: "展示海报",
+    summary: "在学术会议上展示研究成果海报",
+    proofHint: "请填写海报题目，并上传海报原件或现场展示证明",
+    portraitTarget: "学术交流",
+  },
+  {
+    value: "practice_task",
+    label: "承担具体实践任务",
+    summary: "在科研实践项目或联合应用中承担明确任务",
+    proofHint: "请详述承担的具体实践任务，并上传结项、考核或实践证明",
+    portraitTarget: "实践落地",
+  },
+];
+const proofModeLabels = {
+  certificate_and_link: "证书+公示链接",
+  certificate_only: "证书附件",
+  link_only: "仅公示链接",
+};
+const exchangeModeFileRoles = {
+  attend: "attendance_proof",
+  talk: "presentation_proof",
+  poster: "poster_proof",
+  practice_task: "practice_task_proof",
+};
+const kindMeta = {
+  paper: {
+    label: "论文成果",
+    short: "论文申报",
+    detailTitle: "论文成果 · 材料详情",
+    editTitle: "编辑论文成果",
+    emptyTitle: "未命名论文",
+  },
+  annual: {
+    label: "年度报告",
+    short: "培养材料",
+    detailTitle: "年度培养 · 材料详情",
+    editTitle: "编辑年度报告",
+    emptyTitle: "年度培养报告",
+  },
+  competition: {
+    label: "竞赛与获奖",
+    short: "竞赛获奖",
+    detailTitle: "竞赛与获奖 · 材料详情",
+    editTitle: "编辑竞赛与获奖",
+    emptyTitle: "未命名竞赛",
+  },
+  exchange: {
+    label: "学术交流",
+    short: "学术交流",
+    detailTitle: "学术交流 · 材料详情",
+    editTitle: "编辑学术交流",
+    emptyTitle: "未命名学术交流",
+  },
+};
+const safeExternalLink = (url) =>
+  /^https?:\/\//i.test(String(url || "").trim())
+    ? `<a href="${esc(url.trim())}" target="_blank" rel="noopener noreferrer">${esc(url.trim())} ↗</a>`
+    : esc(url || "—");
 let me = null,
   role = "",
   csrf = "",
@@ -98,6 +224,7 @@ let me = null,
   reviewQueue = [];
 let page = location.hash.slice(1) || "dashboard",
   filter = "all",
+  subFilter = "all",
   query = "",
   pageNum = 1,
   selectedStudent = "",
@@ -132,6 +259,11 @@ const student = (s) =>
 const visibleStudents = () => state.students,
   records = () => state.records,
   tasks = () => state.tasks;
+const studentNavLabels = {
+  papers: "我的论文成果",
+  competitions: "我的竞赛与获奖",
+  exchanges: "我的学术交流",
+};
 const pending = () => records().filter((r) => r.status === "pending");
 const navs = [
   ["dashboard", "grid", "工作概览"],
@@ -139,6 +271,8 @@ const navs = [
   ["tasks", "task", "培养任务"],
   ["reviews", "spark", "Agent 审核"],
   ["papers", "paper", "论文成果"],
+  ["competitions", "trophy", "竞赛与获奖"],
+  ["exchanges", "globe", "学术交流"],
   ["archives", "archive", "成果档案"],
   ["portraits", "chart", "成长画像"],
   ["alerts", "bell", "关注与提醒"],
@@ -150,6 +284,7 @@ async function go(p) {
   $("#dialog").close();
   page = p;
   filter = p === "alerts" ? "active" : "all";
+  subFilter = "all";
   query = "";
   pageNum = 1;
   menu = false;
@@ -180,7 +315,7 @@ function render() {
   );
   const notices = visibleAlerts().filter((a) => a.status === "open").length;
   $("#app").innerHTML =
-    `<div class="shell campus-shell ${menu ? "menu-open" : ""}"><header class="campus-masthead"><button class="campus-menu" data-action="menu" aria-label="展开或收起导航">${icon("menu", 24)}</button><a class="campus-brand" href="#dashboard" data-page="dashboard"><span class="campus-seal">${icon("book", 25)}</span><span><strong>InnoGrad</strong><span class="campus-brand-title">研究生培养管理</span><small>上海智能教育研究院</small></span></a><nav class="campus-topnav" aria-label="主导航"><button data-page="dashboard" class="${page === "dashboard" ? "active" : ""}">我的首页</button>${role !== "operator" ? `<button data-page="portraits" class="${page === "portraits" ? "active" : ""}">学业生涯</button><button data-page="alerts" class="${page === "alerts" ? "active" : ""}">消息中心 ${notices ? `<em>${notices}</em>` : ""}</button><button data-page="tasks" class="${page === "tasks" ? "active" : ""}">培养任务</button>` : ""}</nav><form id="global-search" class="searchbox campus-search">${icon("search", 16)}<input aria-label="全局搜索" name="q" placeholder="搜索学生、任务、成果" autocomplete="off"></form><button class="campus-account" data-page="settings" aria-label="当前账号与系统设置"><span class="avatar">${esc(actor().slice(0, 1))}</span><span>${esc(actor())}<small>${roleName()}</small></span></button></header><div class="mobile-scrim" data-action="menu"></div><aside class="sidebar"><div class="campus-services">${icon("grid", 20)}<span>全部服务</span><span>›</span></div><nav aria-label="业务服务">${available.map((n) => `<button class="nav ${page === n[0] ? "active" : ""}" data-page="${n[0]}" title="${n[2]}"><span class="campus-nav-icon">${icon(n[1], 16)}</span><span class="nav-text">${role === "student" && n[0] === "papers" ? "我的论文成果" : n[2]}</span>${n[0] === "reviews" && pending().length ? `<span class="count">${pending().length}</span>` : '<span class="nav-chevron">›</span>'}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="campus-institute">上海智能教育研究院<br><small>InnoGrad 培养工作空间</small></div><button class="online" data-action="logout">${icon("logout", 16)}<span>退出登录</span></button></div></aside><div class="main"><header class="topbar"><button class="campus-home-tab" data-page="dashboard">首页</button><div class="campus-current-tab">${title}</div><div class="campus-tab-tools"><button data-action="refresh" aria-label="刷新当前页面">${icon("history", 15)}</button><span>${new Date().toLocaleDateString("zh-CN")}</span></div></header><main class="content">${views[page]()}<footer class="footer"><span>InnoGrad · 上海智能教育研究院</span><span>研究生培养与成长管理 · 服务端数据</span></footer></main></div></div>`;
+    `<div class="shell campus-shell ${menu ? "menu-open" : ""}"><header class="campus-masthead"><button class="campus-menu" data-action="menu" aria-label="展开或收起导航">${icon("menu", 24)}</button><a class="campus-brand" href="#dashboard" data-page="dashboard"><span class="campus-seal">${icon("book", 25)}</span><span><strong>InnoGrad</strong><span class="campus-brand-title">研究生培养管理</span><small>上海智能教育研究院</small></span></a><nav class="campus-topnav" aria-label="主导航"><button data-page="dashboard" class="${page === "dashboard" ? "active" : ""}">我的首页</button>${role !== "operator" ? `<button data-page="portraits" class="${page === "portraits" ? "active" : ""}">学业生涯</button><button data-page="alerts" class="${page === "alerts" ? "active" : ""}">消息中心 ${notices ? `<em>${notices}</em>` : ""}</button><button data-page="tasks" class="${page === "tasks" ? "active" : ""}">培养任务</button>` : ""}</nav><form id="global-search" class="searchbox campus-search">${icon("search", 16)}<input aria-label="全局搜索" name="q" placeholder="搜索学生、任务、成果" autocomplete="off"></form><button class="campus-account" data-page="settings" aria-label="当前账号与系统设置"><span class="avatar">${esc(actor().slice(0, 1))}</span><span>${esc(actor())}<small>${roleName()}</small></span></button></header><div class="mobile-scrim" data-action="menu"></div><aside class="sidebar"><div class="campus-services">${icon("grid", 20)}<span>全部服务</span><span>›</span></div><nav aria-label="业务服务">${available.map((n) => `<button class="nav ${page === n[0] ? "active" : ""}" data-page="${n[0]}" title="${n[2]}"><span class="campus-nav-icon">${icon(n[1], 16)}</span><span class="nav-text">${role === "student" && studentNavLabels[n[0]] ? studentNavLabels[n[0]] : n[2]}</span>${n[0] === "reviews" && pending().length ? `<span class="count">${pending().length}</span>` : '<span class="nav-chevron">›</span>'}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="campus-institute">上海智能教育研究院<br><small>InnoGrad 培养工作空间</small></div><button class="online" data-action="logout">${icon("logout", 16)}<span>退出登录</span></button></div></aside><div class="main"><header class="topbar"><button class="campus-home-tab" data-page="dashboard">首页</button><div class="campus-current-tab">${title}</div><div class="campus-tab-tools"><button data-action="refresh" aria-label="刷新当前页面">${icon("history", 15)}</button><span>${new Date().toLocaleDateString("zh-CN")}</span></div></header><main class="content">${views[page]()}<footer class="footer"><span>InnoGrad · 上海智能教育研究院</span><span>研究生培养与成长管理 · 服务端数据</span></footer></main></div></div>`;
   bind();
 }
 const heading = (title, sub, actions = "") =>
@@ -228,7 +363,22 @@ function statCards() {
 function recordTable(rr, compact = false) {
   if (!rr.length)
     return empty("当前没有相关材料", "新的提交或状态变更会显示在这里。");
-  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "280"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? (r.kind === "paper" ? "论文成果申报" : "年度考核报告") : r.title)}</div><small style="display:block;margin-top:6px">${r.kind === "paper" ? "论文成果" : "培养材料"} · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td><button class="linkbtn" data-action="record:${r.id}">${role === "student" && ["draft", "returned"].includes(r.status) ? "继续填写" : r.status === "pending" && role === "teacher" && r.raw.reviewer_id === me.id ? "去审核" : "查看详情"} &nbsp;↗</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>学生</th><th>材料类型 / 名称</th>${compact ? "" : "<th>复核教师</th><th>更新时间</th>"}<th>状态</th><th>操作</th></tr></thead><tbody>${rr.map((r) => {
+    const meta = kindMeta[r.kind] || { label: "培养材料", short: "培养材料" };
+    const compactTitle =
+      r.kind === "paper"
+        ? "论文成果申报"
+        : r.kind === "annual"
+          ? "年度考核报告"
+          : r.title;
+    const subBadges =
+      r.kind === "competition"
+        ? `${r.awardLevel ? `<span class="award-pill">${esc(r.awardLevel)}</span>` : ""}${r.proofMode ? `<span class="mode-pill mode-proof">${esc(proofModeLabels[r.proofMode] || r.proofMode)}</span>` : ""}`
+        : r.kind === "exchange" && r.participationMode
+          ? `<span class="mode-pill mode-${esc(r.participationMode)}">${esc(exchangeModeLabels[r.participationMode] || r.participationMode)}</span>`
+          : "";
+    return `<tr><td>${person(r.student)}</td><td><div class="cell-title" style="max-width:${compact ? "190" : "280"}px;overflow:hidden;text-overflow:ellipsis">${esc(compact ? compactTitle : r.title)}</div><small style="display:block;margin-top:6px">${esc(meta.label)}${subBadges ? " " + subBadges : ""} · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</small></td>${compact ? "" : `<td>${esc(r.reviewer)}</td><td>${esc(date(r.updated))}</td>`}<td>${badge(r.status)}</td><td><button class="linkbtn" data-action="record:${r.id}">${role === "student" && ["draft", "returned"].includes(r.status) ? "继续填写" : r.status === "pending" && role === "teacher" && r.raw.reviewer_id === me.id ? "去审核" : "查看详情"} &nbsp;↗</button></td></tr>`;
+  }).join("")}</tbody></table></div>`;
 }
 function progress(t) {
   const ids = t.students.filter((s) =>
@@ -255,20 +405,13 @@ function dashboard() {
         : "研究生培养工作台",
       "培养进展、审核待办与学生成长，在这里一目了然。",
       btn("导出概览", "export:overview", false, "download") +
-        btn(
-          role === "manager"
-            ? "发布培养任务"
-            : role === "student"
-              ? "登记论文成果"
-              : "Agent 审核",
-          role === "manager"
-            ? "new-task"
-            : role === "student"
-              ? "new-paper"
-              : "navigate:reviews",
-          true,
-          "plus",
-        ),
+        (role === "manager"
+          ? btn("发布培养任务", "new-task", true, "plus")
+          : role === "student"
+            ? btn("竞赛获奖", "new-competition", false, "trophy") +
+              btn("学术交流", "new-exchange", false, "globe") +
+              btn("登记论文成果", "new-paper", true, "plus")
+            : btn("Agent 审核", "navigate:reviews", true, "plus")),
     ) +
     `<section class="hero"><div class="hero-copy"><div class="eyebrow">EVERY STEP COUNTS</div><h2>每一份积累，都通向更远的未来</h2><p>当前有 ${tasks().length} 项培养任务，${pending().length} 份材料待审核。<br>关注研究进展，让审核有依据，让成长被看见。</p><button class="hero-link" data-page="tasks">查看本学年培养任务 ${icon("arrow", 15)}</button></div>${heroArt}<span class="hero-tag">GROWTH, WITH EVIDENCE.</span></section>${statCards()}<div class="dashboard-grid"><div class="stack" style="display:block"><section class="card"><div class="card-head"><h2>我的待办 <span class="badge amber">${todo.length} 项</span></h2><button class="linkbtn" data-page="${role === "student" ? "papers" : "reviews"}">查看全部 →</button></div><div class="tabs">${[
       ["all", "全部待办"],
@@ -320,41 +463,144 @@ function distribution(rr) {
     .join("")}</svg>`;
 }
 function listing(kind) {
-  let rr = records().filter((r) =>
+  const kindRecords = records().filter((r) =>
     kind === "papers"
       ? r.kind === "paper"
-      : kind === "archives"
-        ? !!r.effective
-        : role === "teacher"
-          ? r.raw.reviewer_id === me.id
-          : true,
+      : kind === "competitions"
+        ? r.kind === "competition"
+        : kind === "exchanges"
+          ? r.kind === "exchange"
+          : kind === "archives"
+            ? !!r.effective
+            : role === "teacher"
+              ? r.raw.reviewer_id === me.id
+              : true,
   );
-  rr = rr.filter(
+  let rr = kindRecords.filter(
     (r) =>
       (filter === "all" || r.status === filter) &&
+      (kind !== "competitions" ||
+        subFilter === "all" ||
+        r.proofMode === subFilter) &&
+      (kind !== "exchanges" ||
+        subFilter === "all" ||
+        r.participationMode === subFilter) &&
       (!query ||
-        (r.title + student(r.student).name + student(r.student).number)
+        (
+          r.title +
+          " " +
+          (r.searchText || "") +
+          " " +
+          student(r.student).name +
+          " " +
+          student(r.student).number
+        )
           .toLowerCase()
           .includes(query.toLowerCase())),
   );
+  const [title, subtitle, createAction] =
+    {
+      papers: [
+        "论文成果",
+        "记录每一次研究进展，保留成果事实与个人贡献。",
+        role === "student" ? btn("登记论文", "new-paper", true, "plus") : "",
+      ],
+      competitions: [
+        "竞赛与获奖",
+        "登记竞赛名称、主办方、奖项、团队成员及本人角色，附证书或公示链接。",
+        role === "student"
+          ? btn("登记竞赛获奖", "new-competition", true, "plus")
+          : "",
+      ],
+      exchanges: [
+        "学术交流",
+        "区分参会、作报告、展示海报及承担具体实践任务，上传对应证明材料。",
+        role === "student"
+          ? btn("登记学术交流", "new-exchange", true, "plus")
+          : "",
+      ],
+      archives: [
+        "成果档案",
+        "正式认定与历史版本始终关联，更正期间原档案持续有效。",
+        "",
+      ],
+    }[kind] || [
+      "审核工作台",
+      "从提交材料到正式归档，让每项审核有据可循。",
+      "",
+    ];
+  const summaryStrip =
+    kind === "competitions"
+      ? `<div class="summary-strip">${[
+          ["竞赛总数", kindRecords.length],
+          ["已归档", kindRecords.filter((r) => r.effective).length],
+          ["待审核", kindRecords.filter((r) => r.status === "pending").length],
+          [
+            "附证书附件",
+            kindRecords.filter((r) =>
+              ["certificate_only", "certificate_and_link"].includes(
+                r.proofMode,
+              ),
+            ).length,
+          ],
+          [
+            "附公示链接",
+            kindRecords.filter((r) =>
+              ["link_only", "certificate_and_link"].includes(r.proofMode),
+            ).length,
+          ],
+        ]
+          .map(
+            ([label, count]) =>
+              `<div class="summary-chip"><span>${label}</span><strong>${count}</strong></div>`,
+          )
+          .join("")}</div>`
+      : kind === "exchanges"
+        ? `<div class="summary-strip">${[
+            ["交流总数", kindRecords.length],
+            ...exchangeModeMeta.map((m) => [
+              m.label,
+              kindRecords.filter((r) => r.participationMode === m.value).length,
+            ]),
+          ]
+            .map(
+              ([label, count]) =>
+                `<div class="summary-chip"><span>${esc(label)}</span><strong>${count}</strong></div>`,
+            )
+            .join("")}</div>`
+        : "";
+  const subTabs =
+    kind === "competitions"
+      ? `<div class="tabs sub-tabs">${[
+          ["all", "全部证明方式"],
+          ["certificate_and_link", "证书+公示链接"],
+          ["certificate_only", "仅证书附件"],
+          ["link_only", "仅公示链接"],
+        ]
+          .map(
+            ([v, t]) =>
+              `<button class="tab ${subFilter === v ? "active" : ""}" data-subfilter="${v}">${t}<span>${v === "all" ? kindRecords.length : kindRecords.filter((r) => r.proofMode === v).length}</span></button>`,
+          )
+          .join("")}</div>`
+      : kind === "exchanges"
+        ? `<div class="tabs sub-tabs">${[
+            ["all", "全部方式"],
+            ...exchangeModeMeta.map((m) => [m.value, m.label]),
+          ]
+            .map(
+              ([v, t]) =>
+                `<button class="tab ${subFilter === v ? "active" : ""}" data-subfilter="${v}">${esc(t)}<span>${v === "all" ? kindRecords.length : kindRecords.filter((r) => r.participationMode === v).length}</span></button>`,
+            )
+            .join("")}</div>`
+        : "";
   return (
     heading(
-      kind === "papers"
-        ? "论文成果"
-        : kind === "archives"
-          ? "成果档案"
-          : "审核工作台",
-      kind === "archives"
-        ? "正式认定与历史版本始终关联，更正期间原档案持续有效。"
-        : kind === "papers"
-          ? "记录每一次研究进展，保留成果事实与个人贡献。"
-          : "从提交材料到正式归档，让每项审核有据可循。",
-      btn("导出清单", "export:" + kind, false, "download") +
-        (kind === "papers" && role === "student"
-          ? btn("登记论文", "new-paper", true, "plus")
-          : ""),
+      title,
+      subtitle,
+      btn("导出清单", "export:" + kind, false, "download") + createAction,
     ) +
-    `<section class="card"><div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
+    summaryStrip +
+    `<section class="card">${subTabs}<div class="toolbar"><input id="list-query" aria-label="筛选材料" placeholder="搜索学生姓名、学号或材料标题" value="${esc(query)}"><select id="status-filter" aria-label="材料状态"><option value="all">全部状态</option>${Object.entries(
       statusLabels,
     )
       .map(
@@ -468,6 +714,8 @@ const views = {
   tasks: taskView,
   reviews: agentReviewView,
   papers: () => listing("papers"),
+  competitions: () => listing("competitions"),
+  exchanges: () => listing("exchanges"),
   archives: () => listing("archives"),
   portraits,
   alerts: alertsView,
@@ -498,6 +746,7 @@ function formModal(title, fields, save, submit = "保存") {
       $("#dialog").close();
       await refresh().catch(showError);
       if (result?.created) credentialsDialog(result.created);
+      if (result?.openEdit) await editRecord({ id: result.openEdit });
     } catch (err) {
       toast(err.message);
     } finally {
@@ -600,6 +849,14 @@ function bind(root = document) {
         render();
       }),
   );
+  root.querySelectorAll("[data-subfilter]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        subFilter = b.dataset.subfilter;
+        pageNum = 1;
+        render();
+      }),
+  );
   root.querySelectorAll("[data-pager]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -671,7 +928,7 @@ async function api(path, options = {}) {
   if (options.body && !(options.body instanceof FormData))
     headers["Content-Type"] = "application/json";
   if (options.method === "POST")
-    headers["Idempotency-Key"] = options.key || crypto.randomUUID();
+    headers["Idempotency-Key"] = options.key || id();
   let response;
   try {
     response = await fetch("/api/v1" + path, {
@@ -736,7 +993,11 @@ function normalize(r) {
     ? {
         id: r.effective_archive.id,
         number: r.effective_archive.number,
-        title: r.effective_archive.snapshot.form.title || "年度报告",
+        title:
+          r.effective_archive.snapshot.form.title ||
+          r.effective_archive.snapshot.form.competition_name ||
+          r.effective_archive.snapshot.form.activity_name ||
+          "年度报告",
         time: r.effective_archive.created_at,
       }
     : null;
@@ -747,7 +1008,12 @@ function normalize(r) {
     task: r.task_id,
     kind: r.kind,
     status: r.status === "pending_review" ? "pending" : r.status,
-    title: form.title || (r.kind === "annual" ? "年度培养报告" : "未命名论文"),
+    title:
+      form.title ||
+      form.competition_name ||
+      form.activity_name ||
+      kindMeta[r.kind]?.emptyTitle ||
+      "未命名材料",
     summary: form.summary || "",
     plan: form.plan || "",
     contribution: form.contribution || "",
@@ -758,6 +1024,55 @@ function normalize(r) {
     journal: form.journal || "",
     doi: form.doi || "",
     articleUrl: form.article_url || "",
+    competitionName: form.competition_name || form.title || "",
+    organizer: form.organizer || "",
+    awardLevel: form.award_level || "",
+    awardDate: form.award_date || "",
+    teamMembers: form.team_members || [],
+    myRole: form.my_role || "",
+    proofMode:
+      form.proof_mode ||
+      (fileIds.length && form.publicity_url
+        ? "certificate_and_link"
+        : fileIds.length
+          ? "certificate_only"
+          : form.publicity_url
+            ? "link_only"
+            : ""),
+    teamSize:
+      form.team_size ||
+      (Array.isArray(form.team_members) ? form.team_members.length : 0),
+    dedupeKey:
+      form.competition_key ||
+      form.exchange_key ||
+      form.external_article_key ||
+      "",
+    publicityUrl: form.publicity_url || "",
+    description: form.description || "",
+    activityName: form.activity_name || form.title || "",
+    activityDate: form.activity_date || "",
+    endDate: form.end_date || "",
+    participationMode: form.participation_mode || "",
+    locationOrOrganizer: form.location_or_organizer || "",
+    presentationTitle: form.presentation_title || "",
+    practiceTaskDescription: form.practice_task_description || "",
+    participationSummary: form.participation_summary || "",
+    referenceUrl: form.reference_url || "",
+    searchText: [
+      form.title,
+      form.competition_name,
+      form.organizer,
+      form.award_level,
+      form.my_role,
+      form.activity_name,
+      form.location_or_organizer,
+      form.presentation_title,
+      form.practice_task_description,
+      form.journal,
+      form.doi,
+    ]
+      .filter(Boolean)
+      .join(" "),
     reviewer: personName(r.reviewer_id),
     effective,
     updated: v?.created_at || r.created_at,
@@ -939,7 +1254,7 @@ function settingsView() {
   );
 }
 function versionFields(kind, form) {
-  if (kind !== "paper")
+  if (!["paper", "competition", "exchange"].includes(kind))
     return `<pre>${esc(JSON.stringify(form, null, 2))}</pre>`;
   const fields = Object.entries(form)
     .filter(([key, value]) => Object.hasOwn(fieldLabels, key) && value)
@@ -948,6 +1263,43 @@ function versionFields(kind, form) {
         `<div><dt>${esc(fieldLabels[key])}</dt><dd>${esc(formatValue(value))}</dd></div>`,
     );
   return `<dl class="facts">${fields.join("")}</dl>`;
+}
+function findDuplicateRecords(r) {
+  if (!r.dedupeKey) return [];
+  return records().filter(
+    (other) =>
+      other.id !== r.id &&
+      other.student === r.student &&
+      other.kind === r.kind &&
+      other.dedupeKey === r.dedupeKey,
+  );
+}
+function recordDetailBody(r) {
+  if (r.kind === "competition") {
+    const memberChips =
+      Array.isArray(r.teamMembers) && r.teamMembers.length
+        ? `<div class="member-chips">${r.teamMembers
+            .map(
+              (m) =>
+                `<span class="member-chip">${m.order ? `<em>${m.order}</em>` : ""}${esc(typeof m === "string" ? m : m.name)}${m.is_self ? "（本人）" : ""}</span>`,
+            )
+            .join("")}</div>`
+        : "—";
+    const teamTag = r.teamSize
+      ? `${r.teamSize > 1 ? `团队赛 · ${r.teamSize} 人` : "个人赛 · 1 人"}`
+      : "—";
+    return `<dl class="facts"><div><dt>材料类别</dt><dd>竞赛与获奖</dd></div><div><dt>获奖等级</dt><dd><span class="award-pill">${esc(r.awardLevel || "—")}</span></dd></div><div><dt>主办方</dt><dd>${esc(r.organizer || "—")}</dd></div><div><dt>获奖日期</dt><dd>${esc(r.awardDate || "—")}</dd></div><div><dt>本人角色</dt><dd>${esc(r.myRole || "—")}</dd></div><div><dt>团队规模</dt><dd>${esc(teamTag)}</dd></div><div><dt>证明方式</dt><dd><span class="mode-pill mode-proof">${esc(proofModeLabels[r.proofMode] || "—")}</span></dd></div><div><dt>公示链接</dt><dd>${r.publicityUrl ? safeExternalLink(r.publicityUrl) : "未填写"}</dd></div><div class="full"><dt>团队成员</dt><dd>${memberChips}</dd></div></dl>${r.description ? `<h3>补充说明</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.description)}</p>` : ""}`;
+  }
+  if (r.kind === "exchange") {
+    const modeLabel = exchangeModeLabels[r.participationMode] || "—";
+    const portraitTarget =
+      r.participationMode === "practice_task" ? "实践落地" : "学术交流";
+    const dateRange = r.endDate
+      ? `${r.activityDate} 至 ${r.endDate}`
+      : r.activityDate || "—";
+    return `<dl class="facts"><div><dt>材料类别</dt><dd>学术交流</dd></div><div><dt>参与方式</dt><dd><span class="mode-pill mode-${esc(r.participationMode || "attend")}">${esc(modeLabel)}</span> <span class="mode-pill mode-target">画像归入：${portraitTarget}</span></dd></div><div><dt>活动日期</dt><dd>${esc(dateRange)}</dd></div><div><dt>主办单位 / 地点</dt><dd>${esc(r.locationOrOrganizer || "—")}</dd></div>${r.presentationTitle ? `<div><dt>${r.participationMode === "talk" ? "报告题目" : "海报题目"}</dt><dd>${esc(r.presentationTitle)}</dd></div>` : ""}<div><dt>活动链接</dt><dd>${r.referenceUrl ? safeExternalLink(r.referenceUrl) : "—"}</dd></div></dl>${r.practiceTaskDescription ? `<h3>承担的具体实践任务</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.practiceTaskDescription)}</p>` : ""}${r.participationSummary ? `<h3>参与说明</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.participationSummary)}</p>` : ""}`;
+  }
+  return `<dl class="facts"><div><dt>材料类别</dt><dd>${r.kind === "paper" ? "论文成果" : "年度报告"}</dd></div><div><dt>当前状态</dt><dd>${r.kind === "paper" ? { submitted: "已投稿", accepted: "已录用", published: "已发表" }[r.publication] : esc(state.tasks.find((t) => t.id === r.task)?.period || "—")}</dd></div></dl><h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}`;
 }
 async function showRecord(record) {
   const raw = await api("/submissions/" + record.id),
@@ -964,6 +1316,10 @@ async function showRecord(record) {
     ai = job ? await api("/ai-jobs/" + job.id) : null;
   const canConfirm =
     review && (capabilities.workflow !== "agent" || ai?.institution_required);
+  const duplicates = findDuplicateRecords(r);
+  const duplicateBanner = duplicates.length
+    ? `<div class="callout amber" style="margin-top:14px">检测到同学生存在 ${duplicates.length} 条相同标识的申报记录：${duplicates.map((d) => `<button class="linkbtn" data-action="record:${d.id}">${esc(d.title)}（${esc(statusLabels[d.status] || d.status)}）↗</button>`).join("、")}。</div>`
+    : "";
   const conclusions = {
       compliant: "符合",
       non_compliant: "不符合",
@@ -978,14 +1334,14 @@ async function showRecord(record) {
       cancelled: "已取消",
     };
   modal(
-    r.kind === "paper" ? "论文成果 · 材料详情" : "年度培养 · 材料详情",
-    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}<dl class="facts"><div><dt>材料类别</dt><dd>${r.kind === "paper" ? "论文成果" : "年度报告"}</dd></div><div><dt>当前状态</dt><dd>${r.kind === "paper" ? { submitted: "已投稿", accepted: "已录用", published: "已发表" }[r.publication] : esc(state.tasks.find((t) => t.id === r.task)?.period || "—")}</dd></div></dl><h3>${r.kind === "paper" ? "本人贡献" : "研究进展"}</h3><p style="white-space:pre-wrap;margin:12px 0;color:#70816c">${esc(r.kind === "paper" ? r.contribution : r.summary)}</p>${r.plan ? `<h3>下一阶段计划</h3><p>${esc(r.plan)}</p>` : ""}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(ref.form.title)} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(paperFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || '<p class="muted">尚无附件。</p>'}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
+    kindMeta[r.kind]?.detailTitle || "材料详情",
+    `<div class="actions" style="margin-bottom:18px">${badge(r.status)}<span class="muted">${esc(student(r.student).name)} · ${esc(r.reviewer)}复核 · ${r.versions.length ? "V" + r.versions.length : "工作稿"}</span></div><h2>${esc(r.title)}</h2>${r.effective ? `<div class="callout" style="margin-top:17px">有效认定 V${r.effective.number} · ${esc(r.effective.title)} · ${date(r.effective.time)}。新版本归档前，此认定持续有效。</div>` : ""}${r.status === "approved" ? '<div class="callout amber" style="margin-top:17px">审核已通过，正在自动归档并更新画像。点击“刷新详情”查看真实处理状态。</div>' : ""}${duplicateBanner}${recordDetailBody(r)}${r.refs.length ? `<h3>引用成果</h3>${r.refs.map((ref) => `<div class="evidence">${esc(ref.form.title)} · ${ref.recognition === "archived" ? "已认定" : "待核验"}<small> · 固定版本 ${esc(ref.version_id.slice(0, 8))}</small></div>`).join("")}` : ""}<h3>证明材料</h3>${r.files.map((f) => `<div class="file"><span>${icon("paper", 15)} ${esc(f.name)} <small>${esc(allFileRoleLabels[f.role] || "其他证明材料")} · ${Math.ceil(f.size / 1024)} KB</small></span><button class="linkbtn" data-action="file:${f.id}">下载原件</button></div>`).join("") || (r.kind === "competition" && r.publicityUrl ? `<p class="muted">本次未上传证书附件，已提供公示链接：${safeExternalLink(r.publicityUrl)}</p>` : '<p class="muted">尚无附件。</p>')}<div class="evidence" style="margin-top:23px"><h4>${icon("spark")} Agent 材料审核 · ${ai?.result?.simulation ? "模拟报告 · 未调用真实 Agent" : !capabilities.model_configured ? "待配置" : ai ? esc(jobNames[ai.status] || ai.status) : "尚未启动"}</h4><p>${ai ? "运行模式：" + esc(ai.mode) : "正式提交后自动进入 Agent 审核队列。"} ${ai?.historical_only ? "此结果仅供历史参考。" : ""}</p>${ai?.institution_required ? `<div class="callout amber">已转交机构处理：${esc(ai.material_review.label)}</div>` : ""}${ai?.error ? `<p class="warn">${esc(ai.error)}</p>` : ""}${(ai?.result?.checks || []).map((c) => `<div style="border-top:1px solid #dfe8d9;margin-top:10px;padding-top:10px"><strong>${esc(conclusions[c.conclusion] || c.conclusion)} · ${esc(c.rule_id)}</strong><p>${esc(c.explanation)}</p>${c.suggestion ? `<p>建议：${esc(c.suggestion)}</p>` : ""}${(c.evidence || []).map((e) => `<blockquote>${esc(e.quote)}</blockquote><button class="linkbtn" data-action="file:${e.file_id}">原件 ${e.page_number ? "第 " + e.page_number + " 页" : "段落 " + esc(e.paragraph_id)}</button>`).join("")}${(c.limitations || []).map((l) => `<p class="muted">${esc(l)}</p>`).join("")}</div>`).join("")}<div class="actions" style="margin-top:12px">${raw.current_version_id ? btn(capabilities.model_configured ? "启动 / 重试 Agent" : "查看 Agent 配置", "ai:" + r.id) : ""}${ai && ["queued", "running"].includes(ai.status) ? btn("取消 Agent 任务", "cancel-ai:" + ai.id + ":" + r.id) : ""}${btn("刷新详情", "record:" + r.id)}</div></div>${canConfirm ? `<h3 style="margin-top:20px">机构异常处理意见</h3><textarea id="opinion" aria-label="机构异常处理意见" style="width:100%;margin:12px 0" placeholder="填写复核依据或明确的补正要求"></textarea><label style="display:flex;gap:8px;margin-bottom:15px"><input id="confirm-evidence" type="checkbox">我已核对异常项与原件，确认此次处理意见</label><div class="actions">${btn("退回补正", "decide:" + r.id + ":returned")}${btn("异常核验通过并归档", "decide:" + r.id + ":approved", true, "check")}</div>` : ""}<h3 style="margin-top:25px">流转记录</h3><div class="timeline">${r.history.map((h) => `<div class="timeline-item"><p>${esc(h.text)}</p><small>${esc(new Date(h.time).toLocaleString("zh-CN"))}</small></div>`).join("")}</div><div class="version-list">${[
       ...r.versions,
     ]
       .reverse()
       .map(
         (v) =>
-          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary>${versionFields(r.kind, v.snapshot.form)}${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)} · ${esc(paperFileRoleLabels[raw.files.find((f) => f.id === fid)?.role] || "其他证明材料")}</button><br>`).join("")}</details>`,
+          `<details><summary>冻结版本 V${v.number} · ${date(v.created_at)}</summary>${versionFields(r.kind, v.snapshot.form)}${v.snapshot.file_ids.map((fid) => `<button class="linkbtn" data-action="file:${fid}">下载原件 · ${esc(raw.files.find((f) => f.id === fid)?.name || fid)} · ${esc(allFileRoleLabels[raw.files.find((f) => f.id === fid)?.role] || "其他证明材料")}</button><br>`).join("")}</details>`,
       )
       .join("")}</div>`,
     `${editable ? btn("编辑材料", "edit:" + r.id, true) : ""}${mine && r.status === "archived" && r.kind === "paper" ? btn("更新论文进展", "update:" + r.id) : ""}${r.effective ? btn("生成归档导出", "export-record:" + r.id) : ""}${r.status === "archived" ? btn("申请更正", "correct:" + r.id) : ""}${role === "manager" && ["pending", "returned"].includes(r.status) ? btn("调整复核教师", "reassign:" + r.id) : ""}<button class="btn" data-close>关闭</button>`,
@@ -1015,42 +1371,82 @@ async function editRecord(record) {
     throw Error("当前记录不可编辑");
   const form = raw.draft?.form || {},
     isPaper = raw.kind === "paper",
+    isCompetition = raw.kind === "competition",
+    isExchange = raw.kind === "exchange",
     task = state.tasks.find((t) => t.id === raw.task_id),
-    required = task?.requirements.required_fields || ["summary"];
+    required = task?.requirements.required_fields || ["summary"],
+    roleOptions = fileRoleLabelsByKind[raw.kind] || paperFileRoleLabels;
   let lock = raw.lock_version,
     files = [
       ...(raw.files || []).filter((f) => raw.draft.file_ids.includes(f.id)),
     ],
     fileRoles = { ...(raw.draft.file_roles || {}) },
+    customizedRoles = new Set(Object.keys(raw.draft.file_roles || {})),
     uploading = false;
-  modal(
-    "编辑" + (isPaper ? "论文成果" : "年度报告"),
-    `<form id="edit-form"><div class="form-grid">${field("材料标题", "title", form.title || task?.title || "", "text", true)}${
-      isPaper
-        ? `<label>论文状态<select name="publication_status">${[
-            ["submitted", "已投稿"],
-            ["accepted", "已录用"],
-            ["published", "已发表"],
-          ]
+  const activeExchangeMode = () =>
+    $("#edit-form input[name='participation_mode']:checked")?.value ||
+    form.participation_mode ||
+    "attend";
+  const defaultFileRole = () =>
+    isCompetition
+      ? "award_certificate"
+      : isExchange
+        ? exchangeModeFileRoles[activeExchangeMode()] || "attendance_proof"
+        : "other_proof";
+  const selectedExchangeMode = form.participation_mode || "attend";
+  const formBody = isPaper
+    ? field("材料标题", "title", form.title || "", "text", true) +
+      `<label>论文状态<select name="publication_status">${[
+        ["submitted", "已投稿"],
+        ["accepted", "已录用"],
+        ["published", "已发表"],
+      ]
+        .map(
+          ([v, t]) =>
+            `<option value="${v}" ${form.publication_status === v ? "selected" : ""}>${t}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>期刊 / 会议（选填）<input name="journal" value="${esc(form.journal || "")}"></label>${[
+        ["submission_date", "投稿日期"],
+        ["acceptance_date", "录用日期"],
+        ["publication_date", "发表日期"],
+      ]
+        .map(
+          ([n, l]) =>
+            `<label>${l}<input name="${n}" type="date" value="${esc(form[n] || "")}"></label>`,
+        )
+        .join(
+          "",
+        )}<label class="full">作者列表（按作者顺序，每行一名）<textarea name="authors" required rows="3" placeholder="张三\n李四">${esc(authorNames(form.authors))}</textarea></label><label>本人作者顺序<input name="author_order" type="number" min="1" required value="${esc(form.author_order || "")}"></label><label>本人身份<select name="author_identity" required><option value="">请选择</option>${[
+        ["first_author", "第一作者"],
+        ["co_first_author", "共同第一作者"],
+        ["corresponding_author", "通讯作者"],
+        ["other_author", "其他作者"],
+      ]
+        .map(
+          ([v, t]) =>
+            `<option value="${v}" ${form.author_identity === v ? "selected" : ""}>${t}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}" placeholder="10.xxxx/xxxxx"></label><label>文章链接（DOI 或链接至少填一项）<input name="article_url" type="url" value="${esc(form.article_url || "")}" placeholder="https://..."></label>${area("本人贡献", "contribution", form.contribution || "")}`
+    : isCompetition
+      ? field("竞赛名称", "competition_name", form.competition_name || form.title || "", "text", true) +
+        field("主办方", "organizer", form.organizer || "") +
+        `<label>奖项（可选预设或自由输入）<input name="award_level" list="award-level-presets" value="${esc(form.award_level || "")}" placeholder="如：国家级一等奖" required></label><datalist id="award-level-presets"><option value="国家级特等奖"><option value="国家级一等奖"><option value="国家级二等奖"><option value="国家级三等奖"><option value="省级一等奖"><option value="省级二等奖"><option value="校级一等奖"></datalist>` +
+        field("获奖日期", "award_date", form.award_date || "", "date") +
+        `<label>本人角色（可选预设或自由输入）<input name="my_role" list="competition-role-presets" value="${esc(form.my_role || "")}" placeholder="如：队长 / 核心算法" required></label><datalist id="competition-role-presets"><option value="队长"><option value="核心成员"><option value="算法设计与实现"><option value="系统研发与测试"><option value="实验与数据分析"><option value="独立参赛"></datalist>` +
+        `<label class="full">团队成员（按顺序列出，每行或逗号分隔一名）<textarea name="team_members" required rows="3" placeholder="张三\n李四">${esc(memberNames(form.team_members))}</textarea><small class="form-hint" id="competition-member-count"></small></label><label class="full">公示链接（上传证书或填写公示链接至少提供一项）<input name="publicity_url" type="url" value="${esc(form.publicity_url || "")}" placeholder="https://..."></label><div class="full proof-status" id="competition-proof-status"></div>${area("补充说明（选填）", "description", form.description || "", false)}`
+      : isExchange
+        ? `<div class="full"><span class="field-heading">参与方式（请严格区分）</span><div class="mode-cards">${exchangeModeMeta
             .map(
-              ([v, t]) =>
-                `<option value="${v}" ${form.publication_status === v ? "selected" : ""}>${t}</option>`,
+              (m) =>
+                `<label class="mode-card ${selectedExchangeMode === m.value ? "active" : ""}"><input type="radio" name="participation_mode" value="${m.value}" ${selectedExchangeMode === m.value ? "checked" : ""} required><div><strong>${esc(m.label)}</strong><small>${esc(m.summary)}</small><span class="mode-target">画像归入：${esc(m.portraitTarget)}</span></div></label>`,
             )
-            .join(
-              "",
-            )}</select></label><label>期刊 / 会议（选填）<input name="journal" value="${esc(form.journal || "")}"></label>${[
-            ["submission_date", "投稿日期"],
-            ["acceptance_date", "录用日期"],
-            ["publication_date", "发表日期"],
-          ]
-            .map(
-              ([n, l]) =>
-                `<label>${l}<input name="${n}" type="date" value="${esc(form[n] || "")}"></label>`,
-            )
-            .join(
-              "",
-            )}<label class="full">作者列表（按作者顺序，每行一名）<textarea name="authors" required rows="3" placeholder="张三\n李四">${esc(authorNames(form.authors))}</textarea></label><label>本人作者顺序<input name="author_order" type="number" min="1" required value="${esc(form.author_order || "")}"></label><label>本人身份<select name="author_identity" required><option value="">请选择</option>${[["first_author", "第一作者"], ["co_first_author", "共同第一作者"], ["corresponding_author", "通讯作者"], ["other_author", "其他作者"]].map(([v, t]) => `<option value="${v}" ${form.author_identity === v ? "selected" : ""}>${t}</option>`).join("")}</select></label><label>DOI（选填）<input name="doi" value="${esc(form.doi || "")}" placeholder="10.xxxx/xxxxx"></label><label>文章链接（DOI 或链接至少填一项）<input name="article_url" type="url" value="${esc(form.article_url || "")}" placeholder="https://..."></label>${area("本人贡献", "contribution", form.contribution || "")}`
-        : `${task?.requirements.instructions ? `<div class="full callout">${esc(task.requirements.instructions)}</div>` : ""}${area("研究进展与总结", "summary", form.summary || "")}${area("下一阶段计划" + (required.includes("plan") ? "（必填）" : "（选填）"), "plan", form.plan || "", required.includes("plan"))}<div class="full"><p>引用本人已提交论文（待核验成果会明确标记）</p><div class="checklist">${
+            .join("")}</div><div class="callout" id="exchange-mode-guide" style="margin-top:10px"></div></div><label class="full"><span id="exchange-name-label">${selectedExchangeMode === "practice_task" ? "实践项目名称" : "会议 / 学术活动名称"}</span><input name="activity_name" value="${esc(form.activity_name || form.title || "")}" required></label><label class="full">主办单位 / 地点（选填）<input name="location_or_organizer" value="${esc(form.location_or_organizer || "")}" placeholder="如：华东师范大学 · 上海"></label>${field("活动 / 开始日期", "activity_date", form.activity_date || "", "date")}<label>结束日期（选填）<input name="end_date" type="date" value="${esc(form.end_date || "")}"></label><label id="exchange-presentation-wrap" class="full"><span id="exchange-presentation-label">${selectedExchangeMode === "talk" ? "报告题目" : "海报题目"}</span><input id="exchange-presentation-input" name="presentation_title" value="${esc(form.presentation_title || "")}" placeholder="作报告或展示海报时必填"></label><label id="exchange-practice-wrap" class="full">承担的具体实践任务<textarea id="exchange-practice-input" name="practice_task_description" rows="3" placeholder="承担具体实践任务时必填，说明具体任务分工与交付内容">${esc(form.practice_task_description || "")}</textarea></label><label class="full">活动 / 会议链接（选填）<input name="reference_url" type="url" value="${esc(form.reference_url || "")}" placeholder="https://..."></label>${area("参与说明（选填）", "participation_summary", form.participation_summary || "", false)}`
+        : field("材料标题", "title", form.title || task?.title || "", "text", true) +
+          `${task?.requirements.instructions ? `<div class="full callout">${esc(task.requirements.instructions)}</div>` : ""}${area("研究进展与总结", "summary", form.summary || "")}${area("下一阶段计划" + (required.includes("plan") ? "（必填）" : "（选填）"), "plan", form.plan || "", required.includes("plan"))}<div class="full"><p>引用本人已提交论文（待核验成果会明确标记）</p><div class="checklist">${
             records()
               .filter((p) => p.kind === "paper" && p.raw.current_version_id)
               .map(
@@ -1058,20 +1454,62 @@ async function editRecord(record) {
                   `<label><input type="checkbox" name="reference_ids" value="${p.id}" ${(raw.draft.reference_ids || []).includes(p.id) ? "checked" : ""}>${esc(p.effective?.title || p.title)} · ${p.effective ? "已认定" : "待核验"}</label>`,
               )
               .join("") || "<small>暂无可引用论文</small>"
-          }</div></div>`
-    }<label class="full">证明材料（PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）<input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label><div class="full" id="attached"></div></div><div class="actions" style="justify-content:flex-end;margin-top:22px"><button type="button" class="btn" data-close>取消</button><button class="btn" value="draft">保存草稿</button><button class="btn primary" value="submit">确认并提交</button></div></form>`,
+          }</div></div>`;
+  const uploadPrompt = isCompetition
+    ? "证明材料（获奖证书 PDF / DOCX / JPG / PNG，与公示链接至少提供一项，单份 ≤ 50 MB）"
+    : isExchange
+      ? "参与证明材料（参会 / 报告 / 海报 / 实践任务证明，PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）"
+      : "证明材料（PDF / DOCX / JPG / PNG，单份 ≤ 50 MB）";
+  modal(
+    kindMeta[raw.kind]?.editTitle || "编辑材料",
+    `<form id="edit-form"><div class="form-grid">${formBody}<label class="full">${uploadPrompt}<input type="file" id="attachments" multiple accept=".pdf,.docx,.jpg,.jpeg,.png"></label><div class="full" id="attached"></div></div><div class="actions" style="justify-content:flex-end;margin-top:22px"><button type="button" class="btn" data-close>取消</button><button class="btn" value="draft" formnovalidate>保存草稿</button><button class="btn primary" value="submit">确认并提交</button></div></form>`,
   );
+  const syncCompetitionHints = () => {
+    if (!isCompetition) return;
+    const membersText =
+      $("#edit-form textarea[name='team_members']")?.value || "";
+    const memberCount = membersText
+      .split(/[\r\n,，、]+/)
+      .map((n) => n.trim())
+      .filter(Boolean).length;
+    const countNode = $("#competition-member-count");
+    if (countNode) {
+      countNode.textContent = memberCount
+        ? `当前已识别 ${memberCount} 名成员 · ${memberCount > 1 ? "团队赛" : "个人赛"}`
+        : "尚未填写成员（支持换行、逗号或顿号分隔）";
+    }
+    const urlVal =
+      $("#edit-form input[name='publicity_url']")?.value.trim() || "";
+    const statusNode = $("#competition-proof-status");
+    if (statusNode) {
+      const hasFiles = files.length > 0;
+      const hasUrl = Boolean(urlVal);
+      statusNode.className = `full proof-status ${hasFiles || hasUrl ? "ok" : "warn"}`;
+      statusNode.textContent =
+        hasFiles && hasUrl
+          ? `已上传 ${files.length} 份附件并填写公示链接（完整双证）`
+          : hasFiles
+            ? `已上传 ${files.length} 份证明附件（满足提交条件）`
+            : hasUrl
+              ? "已填写公示链接（未上传附件时，提交后将由教师人工核对链接）"
+              : "请至少上传一份获奖证书附件，或填写有效的公示链接";
+    }
+  };
   const renderFiles = () => {
+    const fallbackRole = defaultFileRole();
     $("#attached").innerHTML = files
-      .map(
-        (f) =>
-          `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(paperFileRoleLabels).map(([value, label]) => `<option value="${value}" ${fileRoles[f.id] === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`,
-      )
+      .map((f) => {
+        const activeRole = Object.hasOwn(roleOptions, fileRoles[f.id])
+          ? fileRoles[f.id]
+          : fallbackRole;
+        return `<div class="file"><span>${esc(f.name)}</span><label class="file-role">材料类型<select data-role="${f.id}">${Object.entries(roleOptions).map(([value, label]) => `<option value="${value}" ${activeRole === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><button type="button" class="linkbtn" data-remove="${f.id}">移除关联</button></div>`;
+      })
       .join("");
     $("#attached")
       .querySelectorAll("[data-role]")
       .forEach((select) => {
         select.onchange = () => {
+          customizedRoles.add(select.dataset.role);
           fileRoles[select.dataset.role] = select.value;
         };
       });
@@ -1084,7 +1522,60 @@ async function editRecord(record) {
             renderFiles();
           }),
       );
+    syncCompetitionHints();
   };
+  const syncExchangeMode = () => {
+    if (!isExchange) return;
+    const mode = activeExchangeMode();
+    const meta =
+      exchangeModeMeta.find((item) => item.value === mode) ||
+      exchangeModeMeta[0];
+    const needPresentation = mode === "talk" || mode === "poster";
+    const needPractice = mode === "practice_task";
+    $("#exchange-name-label").textContent =
+      mode === "practice_task" ? "实践项目名称" : "会议 / 学术活动名称";
+    $("#exchange-mode-guide").textContent =
+      `${meta.proofHint}（归档后将归入成长画像「${meta.portraitTarget}」维度）。`;
+    $("#exchange-presentation-wrap").hidden = !needPresentation;
+    $("#exchange-presentation-input").required = needPresentation;
+    $("#exchange-presentation-label").textContent =
+      mode === "talk" ? "报告题目" : "海报题目";
+    $("#exchange-practice-wrap").hidden = !needPractice;
+    $("#exchange-practice-input").required = needPractice;
+    $("#edit-form")
+      .querySelectorAll(".mode-card")
+      .forEach((card) => {
+        const input = card.querySelector("input[type='radio']");
+        card.classList.toggle("active", Boolean(input?.checked));
+      });
+  };
+  if (isCompetition) {
+    $("#edit-form textarea[name='team_members']")?.addEventListener(
+      "input",
+      syncCompetitionHints,
+    );
+    $("#edit-form input[name='publicity_url']")?.addEventListener(
+      "input",
+      syncCompetitionHints,
+    );
+    syncCompetitionHints();
+  }
+  if (isExchange) {
+    syncExchangeMode();
+    $("#edit-form")
+      .querySelectorAll("input[name='participation_mode']")
+      .forEach((radio) => {
+        radio.onchange = () => {
+          const nextDefault =
+            exchangeModeFileRoles[activeExchangeMode()] || "attendance_proof";
+          for (const f of files) {
+            if (!customizedRoles.has(f.id)) fileRoles[f.id] = nextDefault;
+          }
+          syncExchangeMode();
+          renderFiles();
+        };
+      });
+  }
   renderFiles();
   $("#attachments").onchange = async (e) => {
     uploading = true;
@@ -1128,13 +1619,50 @@ async function editRecord(record) {
           .filter(Boolean)
           .map((name, index) => ({ name, order: index + 1 }));
         values.author_order = Number(values.author_order);
+      } else if (isCompetition) {
+        values.competition_metadata_version = 1;
+        values.title = values.competition_name;
+        values.team_members = String(values.team_members || "")
+          .split(/[\r\n,，、]+/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name, index) => ({ name, order: index + 1 }));
+      } else if (isExchange) {
+        values.exchange_metadata_version = 1;
+        values.title = values.activity_name;
+        if (!["talk", "poster"].includes(values.participation_mode))
+          values.presentation_title = "";
+        if (values.participation_mode !== "practice_task")
+          values.practice_task_description = "";
       }
+      if (b.value === "submit") {
+        if (
+          isCompetition &&
+          !files.length &&
+          !String(values.publicity_url || "").trim()
+        )
+          throw Error(
+            "竞赛与获奖申报需上传证书等证明附件，或填写有效的公示链接（至少提供一项）",
+          );
+        if (isExchange) {
+          if (values.end_date && values.end_date < values.activity_date)
+            throw Error("结束日期不能早于活动日期");
+          if (!files.length)
+            throw Error("学术交流申报至少需要上传一份参与证明附件");
+        }
+      }
+      const fallbackRole = defaultFileRole();
       const result = await patch("/submissions/" + raw.id + "/draft", {
         expected_lock_version: lock,
         form: values,
         file_ids: files.map((f) => f.id),
         file_roles: Object.fromEntries(
-          files.map((f) => [f.id, fileRoles[f.id] || "other_proof"]),
+          files.map((f) => [
+            f.id,
+            Object.hasOwn(roleOptions, fileRoles[f.id])
+              ? fileRoles[f.id]
+              : fallbackRole,
+          ]),
         ),
         reference_ids: data.getAll("reference_ids"),
       });
@@ -1221,7 +1749,14 @@ async function exportData(type) {
               archived: records().filter((r) => r.effective).length,
             }
           : records()
-              .filter((r) => type !== "papers" || r.kind === "paper")
+              .filter((r) => {
+                const targetKind = {
+                  papers: "paper",
+                  competitions: "competition",
+                  exchanges: "exchange",
+                }[type];
+                return !targetKind || r.kind === targetKind;
+              })
               .map((r) => r.raw);
   download("InnoGrad-" + type + "-" + date(new Date()) + ".json", data);
   toast("已导出当前授权数据");
@@ -1258,20 +1793,45 @@ async function action(raw) {
     growthPeriod = "";
     await go("portraits");
   } else if (a === "edit") await editRecord({ id: arg });
-  else if (a === "new-paper") {
+  else if (
+    a === "new-paper" ||
+    a === "new-competition" ||
+    a === "new-exchange"
+  ) {
     const teachers = people.filter((p) => p.role === "teacher");
     if (!teachers.length) throw Error("尚无有效指导教师，请联系管理教师");
+    const spec = {
+      "new-paper": {
+        kind: "paper",
+        title: "登记论文成果",
+        page: "papers",
+        message: "论文工作稿已创建，请从列表继续填写",
+      },
+      "new-competition": {
+        kind: "competition",
+        title: "登记竞赛与获奖",
+        page: "competitions",
+        message: "竞赛与获奖工作稿已创建，请从列表继续填写",
+      },
+      "new-exchange": {
+        kind: "exchange",
+        title: "登记学术交流",
+        page: "exchanges",
+        message: "学术交流工作稿已创建，请从列表继续填写",
+      },
+    }[a];
     formModal(
-      "登记论文成果",
+      spec.title,
       `<label class="full">复核教师<select name="reviewer_id">${teachers.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></label>`,
       async (d) => {
-        const r = await post("/submissions", {
-          kind: "paper",
+        const created = await post("/submissions", {
+          kind: spec.kind,
           reviewer_id: d.get("reviewer_id"),
         });
-        toast("论文工作稿已创建，请从列表继续填写");
-        page = "papers";
+        toast(spec.message);
+        page = spec.page;
         location.hash = page;
+        return { openEdit: created.id };
       },
       "创建工作稿",
     );
@@ -1626,7 +2186,7 @@ async function growthAction(a, arg, extra) {
   if (a === "growth-method") {
     modal(
       "材料观察的指标口径",
-      `<div class="callout">参考页的六类方向用于组织材料，不替代历史八维量表，也不计算隐性能力分。</div><p>雷达图展示每类方向的可追溯来源条数。年度报告中的研究总结/计划关联“年度目标”；论文状态关联“科研训练”；本人贡献关联“课题与贡献”。其他方向由授权教师引用已归档字段原文添加观察记录。</p><p style="margin-top:14px">相同版本、字段和引用文字只计一次；更正后的旧版本仍可追溯，但不继续计入当前覆盖。学年仅使用任务或记录中明确填写的周期，未标注学年的材料不自动推断。</p><p style="margin-top:14px">归档月份分布仅表示有效记录的归档时间。它不表示科研能力提升，也不用于学生排名。</p>`,
+      `<div class="callout">参考页的六类方向用于组织材料，不替代历史八维量表，也不计算隐性能力分。</div><p>雷达图展示每类方向的可追溯来源条数。年度报告中的研究总结/计划关联“年度目标”；论文状态与竞赛奖项关联“科研训练”；论文个人贡献与竞赛本人角色关联“课题与贡献”；学术交流的参会/作报告/展示海报关联“学术交流”，承担具体实践任务关联“实践落地”。其他方向由授权教师引用已归档字段原文添加观察记录。</p><p style="margin-top:14px">相同版本、字段和引用文字只计一次；更正后的旧版本仍可追溯，但不继续计入当前覆盖。学年仅使用任务或记录中明确填写的周期，未标注学年的材料不自动推断。</p><p style="margin-top:14px">归档月份分布仅表示有效记录的归档时间。它不表示科研能力提升，也不用于学生排名。</p>`,
     );
     return;
   }
@@ -1722,7 +2282,7 @@ async function growthAction(a, arg, extra) {
       const fields = Object.entries(source.form).filter(
         ([k, v]) => typeof v === "string" && v.trim(),
       );
-      box.innerHTML = `<label style="display:block;margin-bottom:10px">引用字段<select id="growth-source-field" name="source_field" style="width:100%;margin-top:8px">${fields.map(([k, v]) => `<option value="${esc(k)}">${esc({ title: "标题", summary: "研究总结", plan: "下一阶段计划", contribution: "本人贡献", publication_status: "论文状态" }[k] || k)}</option>`).join("")}</select></label><label>原文摘录（须与所选字段原文一致）<textarea id="growth-source-quote" name="source_quote" required style="width:100%;margin-top:8px">${esc(fields[0]?.[1].slice(0, 4000) || "")}</textarea></label>`;
+      box.innerHTML = `<label style="display:block;margin-bottom:10px">引用字段<select id="growth-source-field" name="source_field" style="width:100%;margin-top:8px">${fields.map(([k, v]) => `<option value="${esc(k)}">${esc(fieldLabels[k] || { title: "标题", summary: "研究总结", plan: "下一阶段计划" }[k] || k)}</option>`).join("")}</select></label><label>原文摘录（须与所选字段原文一致）<textarea id="growth-source-quote" name="source_quote" required style="width:100%;margin-top:8px">${esc(fields[0]?.[1].slice(0, 4000) || "")}</textarea></label>`;
       $("#growth-source-field").onchange = (e) => {
         $("#growth-source-quote").value = source.form[e.target.value].slice(
           0,
@@ -1788,6 +2348,7 @@ window.addEventListener("hashchange", () => {
   if (next !== page) {
     page = next;
     filter = "all";
+    subFilter = "all";
     query = "";
     pageNum = 1;
     refresh().catch(showError);

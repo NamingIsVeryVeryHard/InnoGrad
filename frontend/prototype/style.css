@@ -2293,3 +2293,180 @@ dialog::backdrop {
 .file-role select {
   min-width: 150px;
 }
+.summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.summary-chip {
+  flex: 1 1 130px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.summary-chip span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.summary-chip strong {
+  font-size: 20px;
+  color: var(--ink);
+}
+.sub-tabs {
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfa;
+}
+.award-pill,
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.award-pill {
+  background: #fff4df;
+  color: #9e6514;
+}
+.mode-pill {
+  background: #eef3f0;
+  color: #3f5c52;
+}
+.mode-pill.mode-attend {
+  background: #eaf3fd;
+  color: #245c9c;
+}
+.mode-pill.mode-talk {
+  background: #ede9fe;
+  color: #5b3ca8;
+}
+.mode-pill.mode-poster {
+  background: #e6f6f2;
+  color: #166a55;
+}
+.mode-pill.mode-practice_task {
+  background: #fff0e5;
+  color: #a54a18;
+}
+.mode-pill.mode-target,
+.mode-pill.mode-proof {
+  background: #f2f4f7;
+  color: #526171;
+}
+.field-heading {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.mode-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #d9e2dc;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.mode-card input[type="radio"] {
+  width: auto;
+  margin: 3px 0 0;
+  flex: none;
+}
+.mode-card strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+}
+.mode-card small {
+  display: block;
+  margin-top: 3px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.mode-card .mode-target {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f3;
+  color: #466157;
+  font-size: 10px;
+  font-weight: 600;
+}
+.mode-card.active {
+  border-color: var(--green);
+  background: #f3f9f6;
+  box-shadow: 0 0 0 2px #dceee5;
+}
+.member-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f1f5f3;
+  color: #2c473e;
+  font-size: 12px;
+}
+.member-chip em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--green);
+}
+.form-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.proof-status {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.proof-status.ok {
+  background: #eaf5ef;
+  border: 1px solid #cde6d7;
+  color: #1c654d;
+}
+.proof-status.warn {
+  background: #fff6eb;
+  border: 1px solid #f2dec0;
+  color: #9b5c14;
+}
+@media (max-width: 700px) {
+  .mode-cards {
+    grid-template-columns: 1fr;
+  }
+  .summary-chip {
+    flex: 1 1 45%;
+  }
+}

@@ -29,7 +29,48 @@ const factLabels = {
   publication_date: "发表日期",
   contribution: "本人贡献",
   summary: "年度总结",
+  competition_name: "竞赛名称",
+  organizer: "主办方",
+  award_level: "奖项",
+  award_date: "获奖日期",
+  team_members: "团队成员",
+  my_role: "本人角色",
+  publicity_url: "公示链接",
+  description: "补充说明",
+  activity_name: "会议或实践项目名称",
+  activity_date: "活动日期",
+  end_date: "结束日期",
+  participation_mode: "参与方式",
+  location_or_organizer: "主办单位 / 地点",
+  presentation_title: "报告 / 海报题目",
+  practice_task_description: "承担的具体实践任务",
+  participation_summary: "参与说明",
+  reference_url: "活动链接",
 };
+const modeLabels = {
+  attend: "参会",
+  talk: "作报告",
+  poster: "展示海报",
+  practice_task: "承担具体实践任务",
+};
+const recordKindLabels = {
+  paper: "论文申报",
+  annual: "年度材料",
+  competition: "竞赛与获奖",
+  exchange: "学术交流",
+};
+function formatFactValue(value) {
+  if (Array.isArray(value))
+    return value
+      .map((item) =>
+        item && typeof item === "object" && "name" in item
+          ? `${item.order ? item.order + ". " : ""}${item.name}`
+          : String(item),
+      )
+      .join("、");
+  if (typeof value === "string" && modeLabels[value]) return modeLabels[value];
+  return String(value ?? "");
+}
 export function renderPortrait(data) {
   const section = el("section", null, "version");
   section.dataset.testid = "evidence-portrait";
@@ -44,7 +85,11 @@ export function renderPortrait(data) {
       "有效论文申报记录 " +
         data.counts.paper_records +
         " · 年度记录 " +
-        data.counts.annual_records,
+        data.counts.annual_records +
+        " · 竞赛获奖 " +
+        (data.counts.competition_records || 0) +
+        " · 学术交流 " +
+        (data.counts.exchange_records || 0),
     ),
   );
   if (data.pending_snapshot_count)
@@ -63,7 +108,7 @@ export function renderPortrait(data) {
     item.append(
       el(
         "summary",
-        (record.kind === "paper" ? "论文申报" : "年度材料") +
+        (recordKindLabels[record.kind] || "培养材料") +
           " · 版本 " +
           record.version_number +
           " · " +
@@ -81,7 +126,12 @@ export function renderPortrait(data) {
     );
     for (const fact of record.facts)
       item.append(
-        el("p", (factLabels[fact.field] || fact.field) + "：" + fact.value),
+        el(
+          "p",
+          (factLabels[fact.field] || fact.field) +
+            "：" +
+            formatFactValue(fact.value),
+        ),
         el(
           "small",
           "来源版本 " + fact.source.version_id + " " + fact.source.pointer,

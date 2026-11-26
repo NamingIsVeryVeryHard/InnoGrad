@@ -46,8 +46,9 @@ from .db import (
     uid,
     now,
 )
+from .achievement_forms import canonicalize_competition_form, canonicalize_exchange_form
 from .paper_form import canonicalize_paper_form
-from .paper_materials import PaperAttachmentRole, normalize_file_roles
+from .paper_materials import SubmissionAttachmentRole, normalize_file_roles
 
 
 def password_hash(password, salt=None):
@@ -72,7 +73,7 @@ class Login(Input):
 
 
 class CreateSubmission(Input):
-    kind: Literal["paper", "annual"]
+    kind: Literal["paper", "annual", "competition", "exchange"]
     task_id: str | None = None
     reviewer_id: str | None = None
 
@@ -81,7 +82,7 @@ class Draft(Input):
     expected_lock_version: int = Field(ge=0)
     form: dict
     file_ids: list[str] = Field(default_factory=list, max_length=30)
-    file_roles: dict[str, PaperAttachmentRole] = Field(default_factory=dict)
+    file_roles: dict[str, SubmissionAttachmentRole] = Field(default_factory=dict)
     reference_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -102,6 +103,108 @@ class TaskInput(Input):
     reviewer_id: str
     student_ids: list[str] = Field(min_length=1, max_length=500)
     rule_id: str = "annual-1"
+
+
+def _prepare_paper_submission(form, ids, _task):
+    required = ["title", "contribution", "publication_status"]
+    if any(not isinstance(form.get(k), str) or not form[k].strip() for k in required):
+        raise HTTPException(422, "缺少必填信息：" + "、".join(required))
+    try:
+        form = canonicalize_paper_form(form)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    state = form["publication_status"]
+    if state not in ("submitted", "accepted", "published"):
+        raise HTTPException(422, "论文状态无效")
+    key = {
+        "submitted": "submission_date",
+        "accepted": "acceptance_date",
+        "published": "publication_date",
+    }[state]
+    try:
+        datetime.strptime(form.get(key, ""), "%Y-%m-%d")
+    except (ValueError, TypeError):
+        raise HTTPException(422, f"请填写有效的 {key}")
+    if not ids:
+        raise HTTPException(422, "至少提供一份证明或报告附件")
+    return form, {"version": "paper-1", "review_policy": "manual_all"}
+
+
+def _prepare_competition_submission(form, ids, _task):
+    try:
+        form = canonicalize_competition_form(form)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    if not ids and not form.get("publicity_url"):
+        raise HTTPException(
+            422,
+            "竞赛与获奖申报需上传证书等证明附件，或填写有效的公示链接（至少提供一项）",
+        )
+    form["proof_mode"] = (
+        "certificate_and_link"
+        if ids and form.get("publicity_url")
+        else "certificate_only"
+        if ids
+        else "link_only"
+    )
+    return form, {
+        "version": "competition-1",
+        "required_fields": [
+            "competition_name",
+            "organizer",
+            "award_level",
+            "award_date",
+            "my_role",
+        ],
+        "review_policy": "manual_all",
+    }
+
+
+def _prepare_exchange_submission(form, ids, _task):
+    try:
+        form = canonicalize_exchange_form(form)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    if not ids:
+        raise HTTPException(422, "至少提供一份参与证明附件")
+    return form, {
+        "version": "exchange-1",
+        "required_fields": [
+            "activity_name",
+            "activity_date",
+            "participation_mode",
+        ],
+        "review_policy": "manual_all",
+    }
+
+
+def _prepare_annual_submission(form, ids, task):
+    required = list(
+        dict.fromkeys(
+            ["summary"] + (task.requirements.get("required_fields", []) if task else [])
+        )
+    )
+    if any(not isinstance(form.get(k), str) or not form[k].strip() for k in required):
+        raise HTTPException(422, "缺少必填信息：" + "、".join(required))
+    if not ids:
+        raise HTTPException(422, "至少提供一份证明或报告附件")
+    return form, (
+        task.requirements
+        if task
+        else {"version": "annual-1", "review_policy": "manual_all"}
+    )
+
+
+_SUBMISSION_PREPARERS = {
+    "paper": _prepare_paper_submission,
+    "competition": _prepare_competition_submission,
+    "exchange": _prepare_exchange_submission,
+    "annual": _prepare_annual_submission,
+}
+
+
+def _prepare_submission(sub, form, ids, task):
+    return _SUBMISSION_PREPARERS[sub.kind](form, ids, task)
 
 
 def create_app(database_url=None, storage=None):
@@ -558,7 +661,12 @@ def create_app(database_url=None, storage=None):
             reviewer = task.reviewer_id
         else:
             if body.task_id:
-                error(422, "论文申报不绑定年度任务")
+                error(
+                    422,
+                    "论文申报不绑定年度任务"
+                    if body.kind == "paper"
+                    else "此类材料申报不绑定年度任务",
+                )
             reviewer = body.reviewer_id
             teacher = session.get(User, reviewer) if reviewer else None
             if (
@@ -623,7 +731,9 @@ def create_app(database_url=None, storage=None):
         if len(json.dumps(body.form, ensure_ascii=False)) > 100000:
             error(422, "表单内容过大")
         try:
-            file_roles = normalize_file_roles(body.file_ids, body.file_roles)
+            file_roles = normalize_file_roles(
+                body.file_ids, body.file_roles, kind=sub.kind
+            )
         except ValueError as exc:
             error(422, str(exc))
         draft_payload = body.model_dump(exclude={"expected_lock_version"})
@@ -738,39 +848,8 @@ def create_app(database_url=None, storage=None):
         draft = sub.draft
         form = draft.get("form", {})
         task = session.get(Task, sub.task_id) if sub.task_id else None
-        required = (
-            ["title", "contribution", "publication_status"]
-            if sub.kind == "paper"
-            else list(
-                dict.fromkeys(
-                    ["summary"] + task.requirements.get("required_fields", [])
-                )
-            )
-        )
-        if any(
-            not isinstance(form.get(k), str) or not form[k].strip() for k in required
-        ):
-            error(422, "缺少必填信息：" + "、".join(required))
-        if sub.kind == "paper":
-            try:
-                form = canonicalize_paper_form(form)
-            except ValueError as exc:
-                error(422, str(exc))
-            state = form["publication_status"]
-            if state not in ("submitted", "accepted", "published"):
-                error(422, "论文状态无效")
-            key = {
-                "submitted": "submission_date",
-                "accepted": "acceptance_date",
-                "published": "publication_date",
-            }[state]
-            try:
-                datetime.strptime(form.get(key, ""), "%Y-%m-%d")
-            except (ValueError, TypeError):
-                error(422, f"请填写有效的 {key}")
         ids = list(dict.fromkeys(draft.get("file_ids", [])))
-        if not ids:
-            error(422, "至少提供一份证明或报告附件")
+        form, requirements = _prepare_submission(sub, form, ids, task)
         for fid in ids:
             row = session.get(File, fid)
             if (
@@ -800,12 +879,6 @@ def create_app(database_url=None, storage=None):
                     "form": version.snapshot["form"],
                 }
             )
-        task = session.get(Task, sub.task_id) if sub.task_id else None
-        requirements = (
-            task.requirements
-            if task
-            else {"version": "paper-1", "review_policy": "manual_all"}
-        )
         from .db import Correction
 
         correction = session.scalar(
@@ -828,7 +901,9 @@ def create_app(database_url=None, storage=None):
                 "correction_id": correction.id if correction else None,
                 "form": form,
                 "file_ids": ids,
-                "file_roles": normalize_file_roles(ids, draft.get("file_roles")),
+                "file_roles": normalize_file_roles(
+                    ids, draft.get("file_roles"), kind=sub.kind
+                ),
                 "references": refs,
                 "requirements": requirements,
                 "period": task.period if task else None,

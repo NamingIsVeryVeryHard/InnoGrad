@@ -1,0 +1,15 @@
+{
+  "competition_metadata_version": 1,
+  "competition_name": "全国研究生数学建模竞赛",
+  "organizer": "中国学位与研究生教育学会",
+  "award_level": "国家级一等奖",
+  "award_date": "2026-10-15",
+  "team_members": [
+    {"name": "演示学生一", "order": 1, "is_self": true},
+    {"name": "合成队友二", "order": 2},
+    {"name": "合成队友三", "order": 3}
+  ],
+  "my_role": "队长，负责核心建模与实验验证",
+  "publicity_url": "https://example.org/innograd/awards/2026-001",
+  "description": "团队共同完成赛题模型求解、消融实验与论文撰写。"
+}

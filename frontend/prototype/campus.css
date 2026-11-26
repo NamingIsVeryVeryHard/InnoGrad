@@ -1847,3 +1847,16 @@ dialog::backdrop {
   background: #fff5ed;
   color: #e69754;
 }
+.summary-chip strong,
+.field-heading,
+.mode-card strong {
+  color: #24324b;
+}
+.mode-card.active {
+  border-color: #a51f35;
+  background: #fdf6f7;
+  box-shadow: 0 0 0 2px #f4d6dc;
+}
+.member-chip em {
+  color: #a51f35;
+}

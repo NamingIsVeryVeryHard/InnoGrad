@@ -1,0 +1,70 @@
+[
+  {
+    "case": "missing_award_level",
+    "form": {
+      "competition_metadata_version": 1,
+      "competition_name": "竞赛负例一",
+      "organizer": "主办方",
+      "award_level": "",
+      "award_date": "2026-10-15",
+      "team_members": "演示学生一",
+      "my_role": "队长",
+      "publicity_url": "https://example.org/awards/1"
+    }
+  },
+  {
+    "case": "invalid_date",
+    "form": {
+      "competition_metadata_version": 1,
+      "competition_name": "竞赛负例二",
+      "organizer": "主办方",
+      "award_level": "一等奖",
+      "award_date": "2026/10/15",
+      "team_members": "演示学生一",
+      "my_role": "队长",
+      "publicity_url": "https://example.org/awards/2"
+    }
+  },
+  {
+    "case": "invalid_publicity_url",
+    "form": {
+      "competition_metadata_version": 1,
+      "competition_name": "竞赛负例三",
+      "organizer": "主办方",
+      "award_level": "一等奖",
+      "award_date": "2026-10-15",
+      "team_members": "演示学生一",
+      "my_role": "队长",
+      "publicity_url": "ftp://example.org/awards/3"
+    }
+  },
+  {
+    "case": "duplicate_member_order",
+    "form": {
+      "competition_metadata_version": 1,
+      "competition_name": "竞赛负例四",
+      "organizer": "主办方",
+      "award_level": "一等奖",
+      "award_date": "2026-10-15",
+      "team_members": [
+        {"name": "张三", "order": 1},
+        {"name": "李四", "order": 1}
+      ],
+      "my_role": "队长",
+      "publicity_url": "https://example.org/awards/4"
+    }
+  },
+  {
+    "case": "invalid_metadata_version",
+    "form": {
+      "competition_metadata_version": 99,
+      "competition_name": "竞赛负例五",
+      "organizer": "主办方",
+      "award_level": "一等奖",
+      "award_date": "2026-10-15",
+      "team_members": "演示学生一",
+      "my_role": "队长",
+      "publicity_url": "https://example.org/awards/5"
+    }
+  }
+]

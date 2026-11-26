@@ -14,6 +14,18 @@ const states = {
   approved: "已通过 · 等待归档",
   archived: "已归档",
 };
+const kindShortLabels = {
+  paper: "论文申报",
+  annual: "年度报告",
+  competition: "竞赛与获奖",
+  exchange: "学术交流",
+};
+const kindFullLabels = {
+  paper: "论文成果申报",
+  annual: "年度培养材料",
+  competition: "竞赛与获奖申报",
+  exchange: "学术交流申报",
+};
 const el = (tag, text, cls) => {
   const n = document.createElement(tag);
   if (text != null) n.textContent = text;
@@ -26,6 +38,16 @@ function message(text, error = false) {
   $("message").style.display = "block";
   setTimeout(() => ($("message").style.display = "none"), 6000);
 }
+const randomId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const b = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (v) => v.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
 async function api(path, options = {}) {
   options.signal?.throwIfAborted();
   const requestUser = me;
@@ -33,7 +55,7 @@ async function api(path, options = {}) {
   if (options.body && !(options.body instanceof FormData))
     headers["Content-Type"] = "application/json";
   if (options.method === "POST")
-    headers["Idempotency-Key"] = options.key || crypto.randomUUID();
+    headers["Idempotency-Key"] = options.key || randomId();
   const r = await fetch("/api/v1" + path, { ...options, headers });
   const data = await r.json();
   options.signal?.throwIfAborted();
@@ -123,8 +145,11 @@ function render() {
     ...records.map((r) => {
       const title =
         r.draft?.form?.title ||
+        r.draft?.form?.competition_name ||
+        r.draft?.form?.activity_name ||
         r.versions.at(-1)?.snapshot.form.title ||
-        (r.kind === "annual" ? "年度报告" : "论文申报");
+        kindShortLabels[r.kind] ||
+        "材料申报";
       const n = el(
         "button",
         title,
@@ -198,7 +223,7 @@ async function openRecord(id, fromChat = false) {
     el("span", states[r.status] || r.status, "pill"),
     el(
       "h2",
-      (r.kind === "paper" ? "论文成果申报" : "年度培养材料") +
+      (kindFullLabels[r.kind] || "培养材料") +
         " · " +
         person(r.student_id),
     ),
@@ -227,14 +252,55 @@ async function openRecord(id, fromChat = false) {
             ["publication_date", "发表日期 YYYY-MM-DD"],
             ["contribution", "本人贡献"],
           ]
-        : [["summary", "本学年进展与总结"]];
+        : r.kind === "competition"
+          ? [
+              ["competition_name", "竞赛名称"],
+              ["organizer", "主办方"],
+              ["award_level", "奖项"],
+              ["award_date", "获奖日期 YYYY-MM-DD"],
+              ["team_members", "团队成员（每行或逗号分隔）"],
+              ["my_role", "本人角色"],
+              ["publicity_url", "公示链接（与附件至少填一项）"],
+              ["description", "补充说明（选填）"],
+            ]
+          : r.kind === "exchange"
+            ? [
+                ["activity_name", "会议或实践项目名称"],
+                ["activity_date", "活动日期 YYYY-MM-DD"],
+                ["end_date", "结束日期（选填 YYYY-MM-DD）"],
+                [
+                  "participation_mode",
+                  "参与方式：attend / talk / poster / practice_task",
+                ],
+                ["location_or_organizer", "主办单位 / 地点（选填）"],
+                ["presentation_title", "报告或海报题目（talk / poster 必填）"],
+                [
+                  "practice_task_description",
+                  "承担的具体实践任务（practice_task 必填）",
+                ],
+                ["reference_url", "活动链接（选填）"],
+                ["participation_summary", "参与说明（选填）"],
+              ]
+            : [["summary", "本学年进展与总结"]];
+    const textareaFields = new Set([
+      "contribution",
+      "summary",
+      "team_members",
+      "description",
+      "practice_task_description",
+      "participation_summary",
+    ]);
     for (const [name, label] of fields) {
       const l = el("label", label);
-      const input = el(
-        ["contribution", "summary"].includes(name) ? "textarea" : "input",
-      );
+      const input = el(textareaFields.has(name) ? "textarea" : "input");
       input.name = name;
-      input.value = values[name] || "";
+      const rawValue = values[name];
+      input.value =
+        name === "team_members" && Array.isArray(rawValue)
+          ? rawValue
+              .map((m) => (typeof m === "string" ? m : m.name))
+              .join("\n")
+          : rawValue || "";
       l.append(input);
       form.append(l);
     }
@@ -275,12 +341,23 @@ async function openRecord(id, fromChat = false) {
     let lock = r.lock_version;
     const save = async () => {
       const values = Object.fromEntries(new FormData(form));
+      if (r.kind === "competition") {
+        values.title = values.competition_name;
+        values.team_members = String(values.team_members || "")
+          .split(/[\r\n,，、]+/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name, index) => ({ name, order: index + 1 }));
+      } else if (r.kind === "exchange") {
+        values.title = values.activity_name;
+      }
       const x = await api("/submissions/" + id + "/draft", {
         method: "PATCH",
         body: JSON.stringify({
           expected_lock_version: lock,
           form: values,
           file_ids: attached,
+          file_roles: data.file_roles || {},
           reference_ids: data.reference_ids || [],
         }),
       });
@@ -326,7 +403,11 @@ async function openRecord(id, fromChat = false) {
           new Date(v.created_at).toLocaleString(),
       ),
     );
-    if (fromChat && r.kind === "paper") {
+    if (
+      (fromChat && r.kind === "paper") ||
+      r.kind === "competition" ||
+      r.kind === "exchange"
+    ) {
       const fields = el("dl");
       for (const [field, value] of Object.entries(v.snapshot.form)) {
         if (Object.hasOwn(fieldLabels, field) && value)
@@ -436,17 +517,22 @@ $("loginForm").onsubmit = (e) => {
   });
 };
 $("refresh").onclick = () => guard(refresh);
-$("createPaper").onclick = () =>
+const createStandalone = (kind) =>
   guard(async () => {
     const teacher = people.find((p) => p.role === "teacher");
     if (!teacher) throw Error("尚无有效指导教师");
     const r = await api("/submissions", {
       method: "POST",
-      body: JSON.stringify({ kind: "paper", reviewer_id: teacher.id }),
+      body: JSON.stringify({ kind, reviewer_id: teacher.id }),
     });
     selected = r.id;
     await refresh();
   });
+$("createPaper").onclick = () => createStandalone("paper");
+if ($("createCompetition"))
+  $("createCompetition").onclick = () => createStandalone("competition");
+if ($("createExchange"))
+  $("createExchange").onclick = () => createStandalone("exchange");
 $("taskForm").onsubmit = (e) => {
   e.preventDefault();
   guard(async () => {

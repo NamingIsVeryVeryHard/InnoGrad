@@ -1,0 +1,61 @@
+[
+  {
+    "case": "missing_talk_title",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例一",
+      "activity_date": "2026-11-10",
+      "participation_mode": "talk",
+      "presentation_title": ""
+    }
+  },
+  {
+    "case": "missing_poster_title",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例二",
+      "activity_date": "2026-11-10",
+      "participation_mode": "poster",
+      "presentation_title": ""
+    }
+  },
+  {
+    "case": "missing_practice_task",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例三",
+      "activity_date": "2026-11-10",
+      "participation_mode": "practice_task",
+      "practice_task_description": ""
+    }
+  },
+  {
+    "case": "end_before_start",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例四",
+      "activity_date": "2026-11-10",
+      "end_date": "2026-11-01",
+      "participation_mode": "attend"
+    }
+  },
+  {
+    "case": "invalid_mode",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例五",
+      "activity_date": "2026-11-10",
+      "participation_mode": "keynote"
+    }
+  },
+  {
+    "case": "invalid_url",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "学术交流负例六",
+      "activity_date": "2026-11-10",
+      "participation_mode": "attend",
+      "reference_url": "not-a-url"
+    }
+  }
+]

@@ -1,0 +1,63 @@
+[
+  {
+    "mode": "attend",
+    "expected_file_role": "attendance_proof",
+    "expected_dimension": "exchange",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "全国智能教育学术年会",
+      "activity_date": "2026-10-18",
+      "end_date": "2026-10-20",
+      "participation_mode": "attend",
+      "location_or_organizer": "上海 · 华东师范大学",
+      "participation_summary": "参加大模型教育评测专题研讨。",
+      "reference_url": "https://example.org/conf/attend"
+    }
+  },
+  {
+    "mode": "talk",
+    "expected_file_role": "presentation_proof",
+    "expected_dimension": "exchange",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "教育人工智能青年学者论坛",
+      "activity_date": "2026-10-25",
+      "participation_mode": "talk",
+      "location_or_organizer": "北京",
+      "presentation_title": "基于证据链的研究生培养材料智能核验",
+      "participation_summary": "完成 15 分钟分组口头报告并回答提问。",
+      "reference_url": "https://example.org/conf/talk"
+    }
+  },
+  {
+    "mode": "poster",
+    "expected_file_role": "poster_proof",
+    "expected_dimension": "exchange",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "国际学习分析研讨会",
+      "activity_date": "2026-11-02",
+      "participation_mode": "poster",
+      "location_or_organizer": "杭州",
+      "presentation_title": "跨学期成长轨迹可视化原型设计",
+      "participation_summary": "在大会 Poster Session 展示研究海报。",
+      "reference_url": "https://example.org/conf/poster"
+    }
+  },
+  {
+    "mode": "practice_task",
+    "expected_file_role": "practice_task_proof",
+    "expected_dimension": "practice",
+    "form": {
+      "exchange_metadata_version": 1,
+      "activity_name": "中小学智慧课堂试点实践项目",
+      "activity_date": "2026-09-01",
+      "end_date": "2026-11-01",
+      "participation_mode": "practice_task",
+      "location_or_organizer": "上海附属学校联合实验基地",
+      "practice_task_description": "负责课堂互动数据采集脚本开发、标注规范编写及教师端试用反馈收集。",
+      "participation_summary": "完成两轮校本教学场景验证并提交实践报告。",
+      "reference_url": "https://example.org/conf/practice"
+    }
+  }
+]
